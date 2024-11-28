@@ -5,6 +5,27 @@ Leaderboard.__index = Leaderboard
 local Players = game:GetService("Players")
 local Camera = workspace.CurrentCamera
 
+-- Utility: Generates the RogueName string based on player attributes
+local function getRogueName(player)
+    -- Default values for missing attributes
+    local firstName = tostring(player:GetAttribute("FirstName") or "Unknown")
+    local lastName = tostring(player:GetAttribute("LastName") or "Unknown")
+    local houseRank = tostring(player:GetAttribute("HouseRank") or "")
+
+    -- Determine the formatted name based on house rank
+    if houseRank == "Owner" then
+        return string.format("Lord %s %s", firstName, lastName)
+    elseif houseRank == "Member" then
+        return string.format("%s %s", firstName, lastName)
+    elseif houseRank == "" then
+        return firstName
+    end
+
+    -- Fallback for undefined house ranks
+    return string.format("[RogueName: %s %s]", firstName, lastName)
+end
+
+
 -- Constructor
 function Leaderboard.new()
     local self = setmetatable({}, Leaderboard)
@@ -13,11 +34,15 @@ function Leaderboard.new()
     self.leaderboardGui = self:createLeaderboardGui()
     self.scrollingFrame = self.leaderboardGui:FindFirstChild("LeaderboardScrollingFrame", true)
 
+    -- State
+    self.isActive = true -- Start with custom leaderboard active
+
     -- Observed Player
     self.observedPlayer = nil
 
     -- Initialize
     self:rebuildLeaderboard()
+    self:toggleNativeLeaderboard(false) -- Disable native leaderboard
 
     -- Event Listeners
     Players.PlayerAdded:Connect(function()
@@ -29,6 +54,34 @@ function Leaderboard.new()
 
     return self
 end
+
+function Leaderboard:toggleNativeLeaderboard(state)
+    local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    local nativeLeaderboard = playerGui:FindFirstChild("LeaderboardGui")
+    if nativeLeaderboard then
+        nativeLeaderboard.Enabled = state
+    end
+end
+
+function Leaderboard:toggleLeaderboard()
+    self.isActive = not self.isActive -- Toggle the state
+
+    if self.isActive then
+        -- Activate custom leaderboard
+        self.leaderboardGui.Enabled = true
+        self:toggleNativeLeaderboard(false) -- Disable native leaderboard
+        print("[DEBUG] Custom leaderboard activated.")
+    else
+        -- Deactivate custom leaderboard
+        self.leaderboardGui.Enabled = false
+        self:toggleNativeLeaderboard(true) -- Enable native leaderboard
+        print("[DEBUG] Custom leaderboard deactivated.")
+    end
+end
+
+
 
 -- Method: Create the Leaderboard GUI
 function Leaderboard:createLeaderboardGui()
@@ -91,7 +144,7 @@ function Leaderboard:rebuildLeaderboard()
     if self.observedPlayer then
         local observedLabel = self.scrollingFrame:FindFirstChild(self.observedPlayer.Name .. "_Label")
         if observedLabel then
-            self:updatePlayerLabelAppearance(self.observedPlayer, observedLabel)
+            self:updatePlayerLabelAppearance()
         else
             self.observedPlayer = nil
         end
@@ -105,7 +158,7 @@ function Leaderboard:createPlayerLabel(player, index)
     playerLabel.BackgroundTransparency = 1
     playerLabel.Position = UDim2.new(0, 0, 0, (index - 1) * 20)
     playerLabel.Size = UDim2.new(1, 0, 0, 20)
-    playerLabel.Text = self:getRogueName(player)
+    playerLabel.Text = getRogueName(player)
     playerLabel.TextSize = 18
     playerLabel.Font = Enum.Font.SourceSansBold
     playerLabel.TextStrokeTransparency = 0.2
@@ -113,7 +166,7 @@ function Leaderboard:createPlayerLabel(player, index)
     playerLabel.Parent = self.scrollingFrame
 
     -- Update appearance
-    self:updatePlayerLabelAppearance(player, playerLabel)
+    self:updatePlayerLabelAppearance()
 
     -- Event: Mouse hover effects
     playerLabel.MouseEnter:Connect(function()
@@ -131,64 +184,65 @@ function Leaderboard:createPlayerLabel(player, index)
     end)
 end
 
--- Method: Update Player Label Appearance
-function Leaderboard:updatePlayerLabelAppearance(player, label)
-    -- Guard clause for invalid inputs
-    if not player or not label then
-        warn("[DEBUG] Player or label is invalid")
-        return
-    end
+-- Update all player label appearances
+function Leaderboard:updatePlayerLabelAppearance()
+    -- Itera por todos os jogadores
+    for _, player in ipairs(Players:GetPlayers()) do
+        -- Localiza o rótulo correspondente no leaderboard
+        local label = self.scrollingFrame:FindFirstChild(player.Name .. "_Label")
+        
+        -- Ignora se o rótulo não for encontrado
+        if not label then
+            warn(string.format("[DEBUG] Label for %s not found", player.Name))
+            continue
+        end
 
-    -- VARIABLES
-    local isMaxEdict = player:GetAttribute("MaxEdict") or false
-    local characterExists = player.Character ~= nil
-    local backpack = player:FindFirstChild("Backpack")
-    local hasObserve = backpack and backpack:FindFirstChild("Observe")
-    local isGreaterNavaran = backpack and backpack:FindFirstChild("Jack")
+        -- VARIABLES
+        local isMaxEdict = player:GetAttribute("MaxEdict") or false
+        local characterExists = player.Character ~= nil
+        local backpack = player:FindFirstChild("Backpack")
+        local hasObserve = backpack and backpack:FindFirstChild("Observe")
+        local isGreaterNavaran = backpack and backpack:FindFirstChild("Jack")
 
-    -- Update label transparency based on character existence
-    label.TextTransparency = characterExists and 0 or 0.3
+        -- Update label transparency based on character existence
+        label.TextTransparency = characterExists and 0 or 0.3
 
-    -- FUNCTION: Determine text color based on player attributes
-    local function getTextColor()
-        if self.observedPlayer == player then
-            return Color3.fromRGB(236, 218, 16) -- Gold
-        elseif isMaxEdict then
-            return Color3.fromRGB(255, 165, 0) -- Orange
-        elseif hasObserve then
-            return Color3.fromRGB(255, 0, 0) -- Red
-        elseif isGreaterNavaran then
-            return Color3.fromRGB(75, 0, 130) -- Purple
+        -- FUNCTION: Determine text color based on player attributes
+        local function getTextColor()
+            if self.observedPlayer == player then
+                return Color3.fromRGB(236, 218, 16) -- Gold
+            elseif isMaxEdict then
+                return Color3.fromRGB(255, 165, 0) -- Orange
+            elseif hasObserve then
+                return Color3.fromRGB(255, 0, 0) -- Red
+            elseif isGreaterNavaran then
+                return Color3.fromRGB(75, 0, 130) -- Purple
+            else
+                return Color3.fromRGB(255, 255, 255) -- White (default)
+            end
+        end
+
+        -- Determine the new color
+        local newColor = getTextColor()
+
+        -- Check if the label's color is already the same
+        if label.TextColor3 ~= newColor then
+            -- Apply the new color
+            label.TextColor3 = newColor
+            print(string.format("[DEBUG] Updated label for %s with color: %s", player.Name, tostring(newColor)))
+
+            -- Play sounds only if the color changes
+            if newColor == Color3.fromRGB(255, 0, 0) then -- Red (hasObserve)
+                print("[DEBUG] Playing observe sound for:", player.Name)
+                SoundManager:playSound(OBSERVE_SOUND_ID)
+            elseif newColor == Color3.fromRGB(75, 0, 130) then -- Purple (isGreaterNavaran)
+                print("[DEBUG] Playing greater navaran sound for:", player.Name)
+                SoundManager:playSound(MOD_SOUND_ID)
+            end
         else
-            return Color3.fromRGB(255, 255, 255) -- White (default)
+            print(string.format("[DEBUG] No color change for %s. Skipping sound.", player.Name))
         end
     end
-
-    -- Determine the new color
-    local newColor = getTextColor()
-
-    -- Check if the label's color is already the same
-    if label.TextColor3 ~= newColor then
-        -- Apply the new color
-        label.TextColor3 = newColor
-        print(string.format("[DEBUG] Updated label for %s with color: %s", player.Name, tostring(newColor)))
-
-        -- Play sounds only if the color changes
-        if newColor == Color3.fromRGB(255, 0, 0) then -- Red (hasObserve)
-            print("[DEBUG] Playing observe sound for:", player.Name)
-            SoundManager:playSound(OBSERVE_SOUND_ID)
-        elseif newColor == Color3.fromRGB(75, 0, 130) then -- Purple (isGreaterNavaran)
-            print("[DEBUG] Playing greater navaran sound for:", player.Name)
-            SoundManager:playSound(MOD_SOUND_ID)
-        end
-    else
-        print(string.format("[DEBUG] No color change for %s. Skipping sound.", player.Name))
-    end
-end
-
--- Method: Get Rogue Name (example implementation)
-function Leaderboard:getRogueName(player)
-    return player.Name -- Customize as needed
 end
 
 -- Method: Toggle Spectate
@@ -208,7 +262,7 @@ function Leaderboard:toggleSpectate(player, label)
             warn(string.format("Cannot spectate %s: Character or Humanoid not found.", player.Name))
         end
     end
-    self:updatePlayerLabelAppearance(player, label)
+    self:updatePlayerLabelAppearance()
 end
 
 return Leaderboard
