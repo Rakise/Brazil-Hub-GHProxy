@@ -25,7 +25,6 @@ local function getRogueName(player)
     return string.format("[RogueName: %s %s]", firstName, lastName)
 end
 
-
 -- Constructor
 function Leaderboard.new()
     local self = setmetatable({}, Leaderboard)
@@ -55,6 +54,7 @@ function Leaderboard.new()
     return self
 end
 
+-- Toggles the native leaderboard
 function Leaderboard:toggleNativeLeaderboard(state)
     local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
     if not playerGui then return end
@@ -65,6 +65,7 @@ function Leaderboard:toggleNativeLeaderboard(state)
     end
 end
 
+-- Toggles the custom leaderboard
 function Leaderboard:toggleLeaderboard()
     self.isActive = not self.isActive -- Toggle the state
 
@@ -81,9 +82,7 @@ function Leaderboard:toggleLeaderboard()
     end
 end
 
-
-
--- Method: Create the Leaderboard GUI
+-- Creates the GUI for the custom leaderboard
 function Leaderboard:createLeaderboardGui()
     local leaderboardGui = Instance.new("ScreenGui")
     leaderboardGui.Name = "SuperLeaderBoard"
@@ -117,7 +116,7 @@ function Leaderboard:createLeaderboardGui()
     return leaderboardGui
 end
 
--- Method: Rebuild Leaderboard
+-- Rebuilds the leaderboard
 function Leaderboard:rebuildLeaderboard()
     -- Clear existing labels
     for _, child in ipairs(self.scrollingFrame:GetChildren()) do
@@ -151,7 +150,7 @@ function Leaderboard:rebuildLeaderboard()
     end
 end
 
--- Method: Create Player Label
+-- Creates player labels in the leaderboard
 function Leaderboard:createPlayerLabel(player, index)
     local playerLabel = Instance.new("TextButton")
     playerLabel.Name = player.Name .. "_Label"
@@ -167,99 +166,41 @@ function Leaderboard:createPlayerLabel(player, index)
 
     -- Update appearance
     self:updatePlayerLabelAppearance()
-
-    -- Event: Mouse hover effects
-    playerLabel.MouseEnter:Connect(function()
-        playerLabel.TextTransparency = 0.3
-        playerLabel.Text = player.Name
-    end)
-    playerLabel.MouseLeave:Connect(function()
-        playerLabel.TextTransparency = player.Character and 0 or 0.3
-        playerLabel.Text = self:getRogueName(player)
-    end)
-
-    -- Event: Spectate functionality
-    playerLabel.MouseButton2Click:Connect(function()
-        self:toggleSpectate(player, playerLabel)
-    end)
 end
 
--- Update all player label appearances
+-- Updates all player label appearances
 function Leaderboard:updatePlayerLabelAppearance()
-    -- Itera por todos os jogadores
     for _, player in ipairs(Players:GetPlayers()) do
-        -- Localiza o rótulo correspondente no leaderboard
         local label = self.scrollingFrame:FindFirstChild(player.Name .. "_Label")
-        
-        -- Ignora se o rótulo não for encontrado
         if not label then
             warn(string.format("[DEBUG] Label for %s not found", player.Name))
             continue
         end
 
-        -- VARIABLES
-        local isMaxEdict = player:GetAttribute("MaxEdict") or false
-        local characterExists = player.Character ~= nil
-        local backpack = player:FindFirstChild("Backpack")
-        local hasObserve = backpack and backpack:FindFirstChild("Observe")
-        local isGreaterNavaran = backpack and backpack:FindFirstChild("Jack")
-
-        -- Update label transparency based on character existence
-        label.TextTransparency = characterExists and 0 or 0.3
-
-        -- FUNCTION: Determine text color based on player attributes
         local function getTextColor()
             if self.observedPlayer == player then
                 return Color3.fromRGB(236, 218, 16) -- Gold
-            elseif isMaxEdict then
-                return Color3.fromRGB(255, 165, 0) -- Orange
-            elseif hasObserve then
-                return Color3.fromRGB(255, 0, 0) -- Red
-            elseif isGreaterNavaran then
-                return Color3.fromRGB(75, 0, 130) -- Purple
-            else
-                return Color3.fromRGB(255, 255, 255) -- White (default)
             end
+            return Color3.fromRGB(255, 255, 255) -- Default: White
         end
 
-        -- Determine the new color
-        local newColor = getTextColor()
-
-        -- Check if the label's color is already the same
-        if label.TextColor3 ~= newColor then
-            -- Apply the new color
-            label.TextColor3 = newColor
-            print(string.format("[DEBUG] Updated label for %s with color: %s", player.Name, tostring(newColor)))
-
-            -- Play sounds only if the color changes
-            if newColor == Color3.fromRGB(255, 0, 0) then -- Red (hasObserve)
-                print("[DEBUG] Playing observe sound for:", player.Name)
-                SoundManager:playSound(OBSERVE_SOUND_ID)
-            elseif newColor == Color3.fromRGB(75, 0, 130) then -- Purple (isGreaterNavaran)
-                print("[DEBUG] Playing greater navaran sound for:", player.Name)
-                SoundManager:playSound(MOD_SOUND_ID)
-            end
-        else
-            print(string.format("[DEBUG] No color change for %s. Skipping sound.", player.Name))
-        end
+        label.TextColor3 = getTextColor()
     end
 end
 
--- Method: Toggle Spectate
-function Leaderboard:toggleSpectate(player, label)
+-- Toggles spectating a player
+function Leaderboard:toggleSpectate(player)
     if self.observedPlayer == player then
-        -- Stop spectating
         self.observedPlayer = nil
         Camera.CameraType = Enum.CameraType.Custom
-        Camera.CameraSubject = Players.LocalPlayer.Character:FindFirstChild("Humanoid")
+        Camera.CameraSubject = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("Humanoid")
     else
-        -- Start spectating
+        self.observedPlayer = player
         if player.Character and player.Character:FindFirstChild("Humanoid") then
-            self.observedPlayer = player
             Camera.CameraType = Enum.CameraType.Follow
             Camera.CameraSubject = player.Character:FindFirstChild("Humanoid")
         else
-            warn(string.format("Cannot spectate %s: Character or Humanoid not found.", player.Name))
+            warn(string.format("[DEBUG] Cannot spectate %s: No Humanoid found.", player.Name))
         end
     end
     self:updatePlayerLabelAppearance()
