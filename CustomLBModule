@@ -7,10 +7,26 @@ local Camera = workspace.CurrentCamera
 
 -- Utility: Generates the RogueName string based on player attributes
 local function getRogueName(player)
+    -- Fetch attributes safely
+    local firstName = player:GetAttribute("FirstName")
+    local lastName = player:GetAttribute("LastName")
+    local houseRank = player:GetAttribute("HouseRank")
+
     -- Default values for missing attributes
-    local firstName = tostring(player:GetAttribute("FirstName") or "Unknown")
-    local lastName = tostring(player:GetAttribute("LastName") or "Unknown")
-    local houseRank = tostring(player:GetAttribute("HouseRank") or "")
+    if not firstName or firstName == "" then
+        firstName = "Unknown"
+        warn(string.format("[DEBUG] Player %s is missing FirstName attribute. Defaulting to 'Unknown'.", player.Name))
+    end
+
+    if not lastName or lastName == "" then
+        lastName = "Unknown"
+        warn(string.format("[DEBUG] Player %s is missing LastName attribute. Defaulting to 'Unknown'.", player.Name))
+    end
+
+    if not houseRank then
+        houseRank = ""
+        warn(string.format("[DEBUG] Player %s is missing HouseRank attribute. Defaulting to ''.", player.Name))
+    end
 
     -- Determine the formatted name based on house rank
     if houseRank == "Owner" then
@@ -24,6 +40,7 @@ local function getRogueName(player)
     -- Fallback for undefined house ranks
     return string.format("[RogueName: %s %s]", firstName, lastName)
 end
+
 
 -- Constructor
 function Leaderboard.new()
