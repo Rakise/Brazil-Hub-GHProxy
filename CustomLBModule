@@ -115,25 +115,24 @@ function SuperLeaderboard:toggle(state)
     self.enabled = state
     self.gui.Enabled = state
 
-    -- Gerencia o estado do GUI legado
     local legacyGui = Players.LocalPlayer.PlayerGui:FindFirstChild("LeaderboardGui")
 
     if legacyGui then
-        -- Se o SuperLeaderboard estiver ativado, desativa o Legacy GUI
         if state then
             if legacyGui.Enabled then
                 print("[DEBUG] Deactivating Legacy Leaderboard GUI as SuperLeaderboard is enabled.")
             end
             legacyGui.Enabled = false
         else
-            -- Se o SuperLeaderboard estiver desativado, ativa o Legacy GUI
             if not legacyGui.Enabled then
                 print("[DEBUG] Activating Legacy Leaderboard GUI as SuperLeaderboard is disabled.")
             end
             legacyGui.Enabled = true
         end
+
+        -- Inicia monitoramento do Legacy GUI
+        self:monitorLegacyGui(legacyGui)
     else
-        -- Caso o Legacy GUI não exista
         if not state then
             warn("[DEBUG] Legacy Leaderboard GUI not found. No alternative leaderboard available.")
         end
@@ -142,6 +141,30 @@ function SuperLeaderboard:toggle(state)
     print(string.format("[DEBUG] SuperLeaderboard %s.", state and "enabled" or "disabled"))
 end
 
+-- Monitoramento de mudanças no Legacy GUI
+function SuperLeaderboard:monitorLegacyGui(legacyGui)
+    if not self.legacyGuiConnection then
+        self.legacyGuiConnection = legacyGui:GetPropertyChangedSignal("Enabled"):Connect(function()
+            if self.enabled and legacyGui.Enabled then
+                -- Sincroniza desativando o Legacy GUI quando o SuperLeaderboard está ativo
+                print("[DEBUG] Detected manual activation of Legacy GUI. Disabling it as SuperLeaderboard is active.")
+                legacyGui.Enabled = false
+            elseif not self.enabled and not legacyGui.Enabled then
+                -- Sincroniza ativando o Legacy GUI quando o SuperLeaderboard está desativado
+                print("[DEBUG] Detected manual deactivation of Legacy GUI. Activating it as SuperLeaderboard is inactive.")
+                legacyGui.Enabled = true
+            end
+        end)
+    end
+end
+
+-- Cleanup para desconectar o monitoramento do Legacy GUI
+function SuperLeaderboard:cleanupLegacyGui()
+    if self.legacyGuiConnection then
+        self.legacyGuiConnection:Disconnect()
+        self.legacyGuiConnection = nil
+    end
+end
 
 -- PLAYER MANAGEMENT
 function SuperLeaderboard:initializePlayers()
