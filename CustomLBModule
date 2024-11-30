@@ -106,22 +106,42 @@ end
 
 -- TOGGLE FUNCTIONALITY
 function SuperLeaderboard:toggle(state)
-	if not self.gui then
-		warn("[DEBUG] Leaderboard GUI is not initialized.")
-		return
-	end
+    if not self.gui then
+        warn("[DEBUG] Leaderboard GUI is not initialized.")
+        return
+    end
 
-	self.enabled = state
-	self.gui.Enabled = state
+    -- Atualiza o estado do SuperLeaderboard
+    self.enabled = state
+    self.gui.Enabled = state
 
-	-- Handle legacy GUI
-	local legacyGui = Players.LocalPlayer.PlayerGui:FindFirstChild("LeaderboardGui")
-	if legacyGui then
-		legacyGui.Enabled = not state
-	end
+    -- Gerencia o estado do GUI legado
+    local legacyGui = Players.LocalPlayer.PlayerGui:FindFirstChild("LeaderboardGui")
 
-	print(string.format("[DEBUG] SuperLeaderboard %s.", state and "enabled" or "disabled"))
+    if legacyGui then
+        -- Se o SuperLeaderboard estiver ativado, desativa o Legacy GUI
+        if state then
+            if legacyGui.Enabled then
+                print("[DEBUG] Deactivating Legacy Leaderboard GUI as SuperLeaderboard is enabled.")
+            end
+            legacyGui.Enabled = false
+        else
+            -- Se o SuperLeaderboard estiver desativado, ativa o Legacy GUI
+            if not legacyGui.Enabled then
+                print("[DEBUG] Activating Legacy Leaderboard GUI as SuperLeaderboard is disabled.")
+            end
+            legacyGui.Enabled = true
+        end
+    else
+        -- Caso o Legacy GUI não exista
+        if not state then
+            warn("[DEBUG] Legacy Leaderboard GUI not found. No alternative leaderboard available.")
+        end
+    end
+
+    print(string.format("[DEBUG] SuperLeaderboard %s.", state and "enabled" or "disabled"))
 end
+
 
 -- PLAYER MANAGEMENT
 function SuperLeaderboard:initializePlayers()
