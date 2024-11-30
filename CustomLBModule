@@ -352,7 +352,7 @@ function SuperLeaderboard:updatePlayerAppearance(player, label)
         end
     end
 
-    label.TextTransparency = player.Character and player.Character.Parent and 0 or 0.3
+    label.TextTransparency = player.Character and player.Character.Parent and 0 or 0.7
 end
 
 
