@@ -201,7 +201,7 @@ function SuperLeaderboard:createLeaderboardEntry(player, index)
 	label.TextSize = 18
 	label.Font = Enum.Font.SourceSansBold
 	label.BackgroundTransparency = 1
-	label.Position = UDim2.new(0, 0, 0, (index - 1) * 30)
+	label.Position = UDim2.new(0, 0, 0, (index - 1) * 15)
 	label.Size = UDim2.new(1, 0, 0, 30)
 	label.TextColor3 = COLORS.default
 	label.TextTransparency = player.Character and 0 or 0.7
