@@ -13,43 +13,43 @@ local IMAGE_ASSET = "rbxassetid://1327087642"
 local SCROLLING_FRAME_SIZE = UDim2.new(1, -30, 1, -50)
 local SCROLLING_FRAME_POSITION = UDim2.new(0, 15, 0, 50)
 
-local COLORS = {
-	default = Color3.fromRGB(255, 255, 255),
-	max_edict = Color3.fromRGB(255, 165, 0),
-	observed = Color3.fromRGB(236, 218, 16),
-	has_observe = Color3.fromRGB(255, 0, 0),
-	greater_navaran = Color3.fromRGB(75, 0, 130),
-}
-
 local SOUND_MANAGER_URL = "https://raw.githubusercontent.com/Kaic-dev/PocoyoHub/refs/heads/main/soundModule"
 local OBSERVE_SOUND_ID = "rbxassetid://138081500"
 local MOD_SOUND_ID = "rbxassetid://9113085764"
 
--- IMPORTS
 -- Load SoundManager Module
 local function loadSoundManager()
-	local success, result = pcall(function()
-		return game:HttpGet(SOUND_MANAGER_URL)
-	end)
+    local success, result = pcall(function()
+        return game:HttpGet(SOUND_MANAGER_URL)
+    end)
 
-	if not success then
-		error("Failed to load SoundManager module: " .. (result or "Unknown error"))
-	end
-
-	local moduleFunction, loadError = loadstring(result)
-	if not moduleFunction then
-		error("Error parsing SoundManager module: " .. (loadError or "Unknown error"))
-	end
-
-	return moduleFunction()
+    if success then
+        local moduleFunction, loadError = loadstring(result)
+        if not moduleFunction then
+            error("Erro ao carregar o módulo SoundManager: " .. (loadError or "Erro desconhecido"))
+        end
+        return moduleFunction()
+    else
+        error("Erro ao baixar o módulo SoundManager: " .. (result or "Erro desconhecido"))
+    end
 end
 
 local SoundManager = loadSoundManager()
+
+local COLORS = {
+	default = Color3.fromRGB(255, 255, 255),
+	max_edict = Color3.fromRGB(255, 165, 0),
+	observed = Color3.fromRGB(236, 218, 16),
+	no_character = Color3.fromRGB(128, 128, 128),
+	has_observe = Color3.fromRGB(255, 0, 0),
+	greater_navaran = Color3.fromRGB(75, 0, 130),
+}
 
 -- CLASS CONSTRUCTOR
 function SuperLeaderboard.new()
 	local self = setmetatable({}, SuperLeaderboard)
 	self.gui = nil
+	self.image = nil
 	self.scrollingFrame = nil
 	self.observedPlayer = nil
 	self.enabled = true
@@ -62,7 +62,7 @@ end
 
 -- UI INITIALIZATION
 function SuperLeaderboard:initializeUI()
-	self.gui, self.scrollingFrame = self:createLeaderboardUI()
+	self.gui, self.image, self.scrollingFrame = self:createLeaderboardUI()
 	self:initializePlayers()
 	self:rebuildLeaderboard()
 end
@@ -74,6 +74,7 @@ function SuperLeaderboard:createLeaderboardUI()
 	leaderboardGui.Enabled = true
 	leaderboardGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 
+	-- ImageLabel para o leaderboard
 	local leaderboardImage = Instance.new("ImageLabel")
 	leaderboardImage.Name = "LeaderboardImage"
 	leaderboardImage.AnchorPoint = Vector2.new(1, 0)
@@ -84,6 +85,7 @@ function SuperLeaderboard:createLeaderboardUI()
 	leaderboardImage.ImageTransparency = 0.8
 	leaderboardImage.Parent = leaderboardGui
 
+	-- ScrollingFrame dentro da ImageLabel
 	local scrollingFrame = Instance.new("ScrollingFrame")
 	scrollingFrame.Name = "LeaderboardScrollingFrame"
 	scrollingFrame.BackgroundTransparency = 1
@@ -97,9 +99,28 @@ function SuperLeaderboard:createLeaderboardUI()
 	scrollingFrame.TopImage = "rbxassetid://3515609176"
 	scrollingFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Right
 	scrollingFrame.Visible = true
-	scrollingFrame.Parent = leaderboardImage
+	scrollingFrame.Parent = leaderboardImage -- Adicionado corretamente como filho do ImageLabel
 
-	return leaderboardGui, scrollingFrame
+	return leaderboardGui, leaderboardImage, scrollingFrame
+end
+
+-- TOGGLE FUNCTIONALITY
+function SuperLeaderboard:toggle(state)
+	if not self.gui then
+		warn("[DEBUG] Leaderboard GUI is not initialized.")
+		return
+	end
+
+	self.enabled = state
+	self.gui.Enabled = state
+
+	-- Handle legacy GUI
+	local legacyGui = Players.LocalPlayer.PlayerGui:FindFirstChild("LeaderboardGui")
+	if legacyGui then
+		legacyGui.Enabled = not state
+	end
+
+	print(string.format("[DEBUG] SuperLeaderboard %s.", state and "enabled" or "disabled"))
 end
 
 -- PLAYER MANAGEMENT
@@ -120,15 +141,17 @@ end
 function SuperLeaderboard:handlePlayer(player)
 	self:cleanupConnections(player)
 
-	-- Create or update leaderboard entry
-	self:rebuildLeaderboard()
+	-- Atualiza a entrada do leaderboard
+	self:updateLeaderboardEntry(player)
 
 	local connections = {}
 	connections.characterAdded = player.CharacterAdded:Connect(function()
+		print(string.format("[DEBUG] Character added for player: %s", player.Name))
 		self:updateLeaderboardEntry(player)
 	end)
 
 	connections.characterRemoving = player.CharacterRemoving:Connect(function()
+		print(string.format("[DEBUG] Character removed for player: %s", player.Name))
 		self:updateLeaderboardEntry(player)
 	end)
 
@@ -151,6 +174,8 @@ end
 
 -- LEADERBOARD MANAGEMENT
 function SuperLeaderboard:rebuildLeaderboard()
+	if not self.enabled then return end
+
 	for _, child in ipairs(self.scrollingFrame:GetChildren()) do
 		if child:IsA("TextButton") then
 			child:Destroy()
@@ -180,36 +205,113 @@ function SuperLeaderboard:createLeaderboardEntry(player, index)
 	label.Size = UDim2.new(1, 0, 0, 30)
 	label.TextColor3 = COLORS.default
 	label.TextTransparency = player.Character and 0 or 0.7
-	label.Parent = self.scrollingFrame
+	label.Parent = self.scrollingFrame -- Agora o label é filho do scrollingFrame
+
+	-- Conectar eventos de mouse
+	self:connectMouseEvents(player, label)
 
 	self:updatePlayerAppearance(player, label)
 end
 
-function SuperLeaderboard:updatePlayerAppearance(player, label)
-	local color = COLORS.default
+function SuperLeaderboard:connectMouseEvents(player, label)
+	-- Mouse Enter: Altere o texto para o nome completo do jogador
+	label.MouseEnter:Connect(function()
+		print(string.format("[DEBUG] Mouse entered label for player: %s", player.Name))
+		label.TextTransparency = 0.5
+		label.Text = player.Name -- Mostra o nome completo do jogador
+	end)
+
+	-- Mouse Leave: Restaure o texto para o RogueName
+	label.MouseLeave:Connect(function()
+		print(string.format("[DEBUG] Mouse left label for player: %s", player.Name))
+		label.TextTransparency = player.Character and 0 or 0.7
+		label.Text = self:getRogueName(player) -- Restaura o nome original
+	end)
+
+	-- Clique com botão direito para observar (spectate)
+	label.MouseButton2Click:Connect(function()
+		print(string.format("[DEBUG] Right-clicked label for player: %s", player.Name))
+		self:toggleSpectate(player)
+	end)
+end
+
+-- Spectate Management
+function SuperLeaderboard:toggleSpectate(player)
+	if not player.Character or not player.Character:FindFirstChild("Humanoid") then
+		warn(string.format("[DEBUG] Cannot spectate player: %s - Character or Humanoid not found", player.Name))
+		return
+	end
 
 	if self.observedPlayer == player then
-		color = COLORS.observed
-	elseif player:GetAttribute("MaxEdict") then
-		color = COLORS.max_edict
-	elseif player.Backpack and player.Backpack:FindFirstChild("Observe") then
-		color = COLORS.has_observe
-	elseif player.Backpack and player.Backpack:FindFirstChild("Jack") then
-		color = COLORS.greater_navaran
+		self:stopSpectating()
+	else
+		self:startSpectating(player)
 	end
-
-	if label.TextColor3 ~= color then
-		label.TextColor3 = color
-
-		if color == COLORS.has_observe then
-			SoundManager:playSound(OBSERVE_SOUND_ID)
-		elseif color == COLORS.greater_navaran then
-			SoundManager:playSound(MOD_SOUND_ID)
-		end
-	end
-
-	label.TextTransparency = player.Character and player.Character.Parent and 0 or 0.3
 end
+
+function SuperLeaderboard:startSpectating(player)
+	print(string.format("[DEBUG] Starting spectate for player: %s", player.Name))
+	self.observedPlayer = player
+	Camera.CameraType = Enum.CameraType.Follow
+	Camera.CameraSubject = player.Character:FindFirstChild("Humanoid")
+end
+
+function SuperLeaderboard:stopSpectating()
+	print("[DEBUG] Stopping spectate.")
+	Camera.CameraType = Enum.CameraType.Custom
+	local localPlayerHumanoid = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("Humanoid")
+	if localPlayerHumanoid then
+		Camera.CameraSubject = localPlayerHumanoid
+	end
+	self.observedPlayer = nil
+end
+
+function SuperLeaderboard:updateLeaderboardEntry(player)
+	print(string.format("[DEBUG] Updating leaderboard entry for player: %s", player.Name))
+
+	-- Procura o rótulo existente no leaderboard
+	local label = self.scrollingFrame:FindFirstChild(player.Name .. "_Label")
+
+	if not label then
+		-- Se o rótulo não existir, cria um novo
+		print(string.format("[DEBUG] Creating new leaderboard entry for player: %s", player.Name))
+		local index = #self.scrollingFrame:GetChildren() + 1
+		self:createLeaderboardEntry(player, index)
+	else
+		-- Atualiza a aparência do rótulo existente
+		self:updatePlayerAppearance(player, label)
+	end
+end
+
+function SuperLeaderboard:updatePlayerAppearance(player, label)
+    local color = COLORS.default
+
+    if self.observedPlayer == player then
+        color = COLORS.observed
+    elseif player:GetAttribute("MaxEdict") then
+        color = COLORS.max_edict
+    elseif player.Backpack and player.Backpack:FindFirstChild("Observe") then
+        color = COLORS.has_observe
+    elseif player.Backpack and player.Backpack:FindFirstChild("Jack") then
+        color = COLORS.greater_navaran
+    end
+
+    if label.TextColor3 ~= color then
+        label.TextColor3 = color
+
+        -- Play sounds based on the new color
+        if color == COLORS.has_observe then
+            print("[DEBUG] Playing observe sound for:", player.Name)
+            SoundManager:playSound(OBSERVE_SOUND_ID)
+        elseif color == COLORS.greater_navaran then
+            print("[DEBUG] Playing greater navaran sound for:", player.Name)
+            SoundManager:playSound(MOD_SOUND_ID)
+        end
+    end
+
+    label.TextTransparency = player.Character and player.Character.Parent and 0 or 0.3
+end
+
 
 -- UTILITIES
 function SuperLeaderboard:getRogueName(player)
