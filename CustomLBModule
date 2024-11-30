@@ -1,226 +1,231 @@
-local Leaderboard = {}
-Leaderboard.__index = Leaderboard
+-- ModuleScript: SuperLeaderboardModule
+local SuperLeaderboard = {}
+SuperLeaderboard.__index = SuperLeaderboard
 
--- Services
+-- SERVICES
 local Players = game:GetService("Players")
 local Camera = workspace.CurrentCamera
 
--- Utility: Generates the RogueName string based on player attributes
-local function getRogueName(player)
-    -- Fetch attributes safely
-    local firstName = player:GetAttribute("FirstName")
-    local lastName = player:GetAttribute("LastName")
-    local houseRank = player:GetAttribute("HouseRank")
+-- CONSTANTS
+local IMAGE_SIZE = UDim2.new(0.05, 150, 0, 240)
+local IMAGE_POSITION = UDim2.new(1, -10, 0, 10)
+local IMAGE_ASSET = "rbxassetid://1327087642"
+local SCROLLING_FRAME_SIZE = UDim2.new(1, -30, 1, -50)
+local SCROLLING_FRAME_POSITION = UDim2.new(0, 15, 0, 50)
 
-    -- Default values for missing attributes
-    if not firstName or firstName == "" then
-        firstName = "Unknown"
-        warn(string.format("[DEBUG] Player %s is missing FirstName attribute. Defaulting to 'Unknown'.", player.Name))
-    end
+local COLORS = {
+	default = Color3.fromRGB(255, 255, 255),
+	max_edict = Color3.fromRGB(255, 165, 0),
+	observed = Color3.fromRGB(236, 218, 16),
+	has_observe = Color3.fromRGB(255, 0, 0),
+	greater_navaran = Color3.fromRGB(75, 0, 130),
+}
 
-    if not lastName or lastName == "" then
-        lastName = "Unknown"
-        warn(string.format("[DEBUG] Player %s is missing LastName attribute. Defaulting to 'Unknown'.", player.Name))
-    end
+local SOUND_MANAGER_URL = "https://raw.githubusercontent.com/Kaic-dev/PocoyoHub/refs/heads/main/soundModule"
+local OBSERVE_SOUND_ID = "rbxassetid://138081500"
+local MOD_SOUND_ID = "rbxassetid://9113085764"
 
-    if not houseRank then
-        houseRank = ""
-        warn(string.format("[DEBUG] Player %s is missing HouseRank attribute. Defaulting to ''.", player.Name))
-    end
+-- IMPORTS
+-- Load SoundManager Module
+local function loadSoundManager()
+	local success, result = pcall(function()
+		return game:HttpGet(SOUND_MANAGER_URL)
+	end)
 
-    -- Determine the formatted name based on house rank
-    if houseRank == "Owner" then
-        return string.format("Lord %s %s", firstName, lastName)
-    elseif houseRank == "Member" then
-        return string.format("%s %s", firstName, lastName)
-    elseif houseRank == "" then
-        return firstName
-    end
+	if not success then
+		error("Failed to load SoundManager module: " .. (result or "Unknown error"))
+	end
 
-    -- Fallback for undefined house ranks
-    return string.format("[RogueName: %s %s]", firstName, lastName)
+	local moduleFunction, loadError = loadstring(result)
+	if not moduleFunction then
+		error("Error parsing SoundManager module: " .. (loadError or "Unknown error"))
+	end
+
+	return moduleFunction()
 end
 
+local SoundManager = loadSoundManager()
 
--- Constructor
-function Leaderboard.new()
-    local self = setmetatable({}, Leaderboard)
+-- CLASS CONSTRUCTOR
+function SuperLeaderboard.new()
+	local self = setmetatable({}, SuperLeaderboard)
+	self.gui = nil
+	self.scrollingFrame = nil
+	self.observedPlayer = nil
+	self.enabled = true
+	self.connections = {}
 
-    -- GUI Elements
-    self.leaderboardGui = self:createLeaderboardGui()
-    self.scrollingFrame = self.leaderboardGui:FindFirstChild("LeaderboardScrollingFrame", true)
-
-    -- State
-    self.isActive = true -- Start with custom leaderboard active
-
-    -- Observed Player
-    self.observedPlayer = nil
-
-    -- Initialize
-    self:rebuildLeaderboard()
-    self:toggleNativeLeaderboard(false) -- Disable native leaderboard
-
-    -- Event Listeners
-    Players.PlayerAdded:Connect(function()
-        self:rebuildLeaderboard()
-    end)
-    Players.PlayerRemoving:Connect(function()
-        self:rebuildLeaderboard()
-    end)
-
-    return self
+	self:initializeUI()
+	print("[DEBUG] SuperLeaderboard initialized.")
+	return self
 end
 
--- Toggles the native leaderboard
-function Leaderboard:toggleNativeLeaderboard(state)
-    local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-
-    local nativeLeaderboard = playerGui:FindFirstChild("LeaderboardGui")
-    if nativeLeaderboard then
-        nativeLeaderboard.Enabled = state
-    end
+-- UI INITIALIZATION
+function SuperLeaderboard:initializeUI()
+	self.gui, self.scrollingFrame = self:createLeaderboardUI()
+	self:initializePlayers()
+	self:rebuildLeaderboard()
 end
 
--- Toggles the custom leaderboard
-function Leaderboard:toggleLeaderboard()
-    self.isActive = not self.isActive -- Toggle the state
+function SuperLeaderboard:createLeaderboardUI()
+	local leaderboardGui = Instance.new("ScreenGui")
+	leaderboardGui.Name = "SuperLeaderBoard"
+	leaderboardGui.ResetOnSpawn = false
+	leaderboardGui.Enabled = true
+	leaderboardGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 
-    if self.isActive then
-        -- Activate custom leaderboard
-        self.leaderboardGui.Enabled = true
-        self:toggleNativeLeaderboard(false) -- Disable native leaderboard
-        print("[DEBUG] Custom leaderboard activated.")
-    else
-        -- Deactivate custom leaderboard
-        self.leaderboardGui.Enabled = false
-        self:toggleNativeLeaderboard(true) -- Enable native leaderboard
-        print("[DEBUG] Custom leaderboard deactivated.")
-    end
+	local leaderboardImage = Instance.new("ImageLabel")
+	leaderboardImage.Name = "LeaderboardImage"
+	leaderboardImage.AnchorPoint = Vector2.new(1, 0)
+	leaderboardImage.BackgroundTransparency = 1
+	leaderboardImage.Position = IMAGE_POSITION
+	leaderboardImage.Size = IMAGE_SIZE
+	leaderboardImage.Image = IMAGE_ASSET
+	leaderboardImage.ImageTransparency = 0.8
+	leaderboardImage.Parent = leaderboardGui
+
+	local scrollingFrame = Instance.new("ScrollingFrame")
+	scrollingFrame.Name = "LeaderboardScrollingFrame"
+	scrollingFrame.BackgroundTransparency = 1
+	scrollingFrame.Position = SCROLLING_FRAME_POSITION
+	scrollingFrame.Size = SCROLLING_FRAME_SIZE
+	scrollingFrame.BottomImage = "rbxassetid://3515608177"
+	scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 220)
+	scrollingFrame.MidImage = "rbxassetid://3515608813"
+	scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(245, 197, 130)
+	scrollingFrame.ScrollBarThickness = 10
+	scrollingFrame.TopImage = "rbxassetid://3515609176"
+	scrollingFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Right
+	scrollingFrame.Visible = true
+	scrollingFrame.Parent = leaderboardImage
+
+	return leaderboardGui, scrollingFrame
 end
 
--- Creates the GUI for the custom leaderboard
-function Leaderboard:createLeaderboardGui()
-    local leaderboardGui = Instance.new("ScreenGui")
-    leaderboardGui.Name = "SuperLeaderBoard"
-    leaderboardGui.ResetOnSpawn = false
-    leaderboardGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+-- PLAYER MANAGEMENT
+function SuperLeaderboard:initializePlayers()
+	for _, player in ipairs(Players:GetPlayers()) do
+		self:handlePlayer(player)
+	end
 
-    local imageButton = Instance.new("ImageButton")
-    imageButton.Name = "LeaderboardButton"
-    imageButton.AnchorPoint = Vector2.new(1, 0)
-    imageButton.BackgroundTransparency = 1
-    imageButton.Position = UDim2.new(1, 0, 0, 0)
-    imageButton.Size = UDim2.new(0.05, 150, 0, 240)
-    imageButton.Image = "rbxassetid://1327087642"
-    imageButton.ImageTransparency = 0.8
-    imageButton.Parent = leaderboardGui
+	Players.PlayerAdded:Connect(function(player)
+		self:handlePlayer(player)
+	end)
 
-    local scrollingFrame = Instance.new("ScrollingFrame")
-    scrollingFrame.Name = "LeaderboardScrollingFrame"
-    scrollingFrame.BackgroundTransparency = 1
-    scrollingFrame.Position = UDim2.new(0, 15, 0, 10)
-    scrollingFrame.Size = UDim2.new(1, -30, 1, 20)
-    scrollingFrame.BottomImage = "rbxassetid://3515608177"
-    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 220)
-    scrollingFrame.MidImage = "rbxassetid://3515608813"
-    scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(245, 197, 130)
-    scrollingFrame.ScrollBarThickness = 10
-    scrollingFrame.TopImage = "rbxassetid://3515609176"
-    scrollingFrame.VerticalScrollBarPosition = Enum.VerticalScrollBarPosition.Right
-    scrollingFrame.Parent = imageButton
-
-    return leaderboardGui
+	Players.PlayerRemoving:Connect(function(player)
+		self:cleanupPlayer(player)
+	end)
 end
 
--- Rebuilds the leaderboard
-function Leaderboard:rebuildLeaderboard()
-    -- Clear existing labels
-    for _, child in ipairs(self.scrollingFrame:GetChildren()) do
-        if child:IsA("TextButton") then
-            child:Destroy()
-        end
-    end
+function SuperLeaderboard:handlePlayer(player)
+	self:cleanupConnections(player)
 
-    -- Get players and sort by name
-    local players = Players:GetPlayers()
-    table.sort(players, function(a, b)
-        return a.Name:lower() < b.Name:lower()
-    end)
+	-- Create or update leaderboard entry
+	self:rebuildLeaderboard()
 
-    -- Create labels
-    for index, player in ipairs(players) do
-        self:createPlayerLabel(player, index)
-    end
+	local connections = {}
+	connections.characterAdded = player.CharacterAdded:Connect(function()
+		self:updateLeaderboardEntry(player)
+	end)
 
-    -- Update canvas size
-    self.scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #players * 20)
+	connections.characterRemoving = player.CharacterRemoving:Connect(function()
+		self:updateLeaderboardEntry(player)
+	end)
 
-    -- Update observed player appearance
-    if self.observedPlayer then
-        local observedLabel = self.scrollingFrame:FindFirstChild(self.observedPlayer.Name .. "_Label")
-        if observedLabel then
-            self:updatePlayerLabelAppearance()
-        else
-            self.observedPlayer = nil
-        end
-    end
+	self.connections[player] = connections
 end
 
--- Creates player labels in the leaderboard
-function Leaderboard:createPlayerLabel(player, index)
-    local playerLabel = Instance.new("TextButton")
-    playerLabel.Name = player.Name .. "_Label"
-    playerLabel.BackgroundTransparency = 1
-    playerLabel.Position = UDim2.new(0, 0, 0, (index - 1) * 20)
-    playerLabel.Size = UDim2.new(1, 0, 0, 20)
-    playerLabel.Text = getRogueName(player)
-    playerLabel.TextSize = 18
-    playerLabel.Font = Enum.Font.SourceSansBold
-    playerLabel.TextStrokeTransparency = 0.2
-    playerLabel.TextXAlignment = Enum.TextXAlignment.Left
-    playerLabel.Parent = self.scrollingFrame
-
-    -- Update appearance
-    self:updatePlayerLabelAppearance()
+function SuperLeaderboard:cleanupPlayer(player)
+	self:cleanupConnections(player)
+	self:rebuildLeaderboard()
 end
 
--- Updates all player label appearances
-function Leaderboard:updatePlayerLabelAppearance()
-    for _, player in ipairs(Players:GetPlayers()) do
-        local label = self.scrollingFrame:FindFirstChild(player.Name .. "_Label")
-        if not label then
-            warn(string.format("[DEBUG] Label for %s not found", player.Name))
-            continue
-        end
-
-        local function getTextColor()
-            if self.observedPlayer == player then
-                return Color3.fromRGB(236, 218, 16) -- Gold
-            end
-            return Color3.fromRGB(255, 255, 255) -- Default: White
-        end
-
-        label.TextColor3 = getTextColor()
-    end
+function SuperLeaderboard:cleanupConnections(player)
+	if self.connections[player] then
+		for _, connection in pairs(self.connections[player]) do
+			connection:Disconnect()
+		end
+		self.connections[player] = nil
+	end
 end
 
--- Toggles spectating a player
-function Leaderboard:toggleSpectate(player)
-    if self.observedPlayer == player then
-        self.observedPlayer = nil
-        Camera.CameraType = Enum.CameraType.Custom
-        Camera.CameraSubject = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("Humanoid")
-    else
-        self.observedPlayer = player
-        if player.Character and player.Character:FindFirstChild("Humanoid") then
-            Camera.CameraType = Enum.CameraType.Follow
-            Camera.CameraSubject = player.Character:FindFirstChild("Humanoid")
-        else
-            warn(string.format("[DEBUG] Cannot spectate %s: No Humanoid found.", player.Name))
-        end
-    end
-    self:updatePlayerLabelAppearance()
+-- LEADERBOARD MANAGEMENT
+function SuperLeaderboard:rebuildLeaderboard()
+	for _, child in ipairs(self.scrollingFrame:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	local players = Players:GetPlayers()
+	table.sort(players, function(a, b)
+		return a.Name:lower() < b.Name:lower()
+	end)
+
+	for index, player in ipairs(players) do
+		self:createLeaderboardEntry(player, index)
+	end
+
+	self.scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #players * 30)
 end
 
-return Leaderboard
+function SuperLeaderboard:createLeaderboardEntry(player, index)
+	local label = Instance.new("TextButton")
+	label.Name = player.Name .. "_Label"
+	label.Text = self:getRogueName(player)
+	label.TextSize = 18
+	label.Font = Enum.Font.SourceSansBold
+	label.BackgroundTransparency = 1
+	label.Position = UDim2.new(0, 0, 0, (index - 1) * 30)
+	label.Size = UDim2.new(1, 0, 0, 30)
+	label.TextColor3 = COLORS.default
+	label.TextTransparency = player.Character and 0 or 0.7
+	label.Parent = self.scrollingFrame
+
+	self:updatePlayerAppearance(player, label)
+end
+
+function SuperLeaderboard:updatePlayerAppearance(player, label)
+	local color = COLORS.default
+
+	if self.observedPlayer == player then
+		color = COLORS.observed
+	elseif player:GetAttribute("MaxEdict") then
+		color = COLORS.max_edict
+	elseif player.Backpack and player.Backpack:FindFirstChild("Observe") then
+		color = COLORS.has_observe
+	elseif player.Backpack and player.Backpack:FindFirstChild("Jack") then
+		color = COLORS.greater_navaran
+	end
+
+	if label.TextColor3 ~= color then
+		label.TextColor3 = color
+
+		if color == COLORS.has_observe then
+			SoundManager:playSound(OBSERVE_SOUND_ID)
+		elseif color == COLORS.greater_navaran then
+			SoundManager:playSound(MOD_SOUND_ID)
+		end
+	end
+
+	label.TextTransparency = player.Character and player.Character.Parent and 0 or 0.3
+end
+
+-- UTILITIES
+function SuperLeaderboard:getRogueName(player)
+	local firstName = player:GetAttribute("FirstName") or "Unknown"
+	local lastName = player:GetAttribute("LastName") or "Unknown"
+	local houseRank = player:GetAttribute("HouseRank") or ""
+
+	if houseRank == "Owner" then
+		return string.format("Lord %s %s", firstName, lastName)
+	elseif houseRank == "Member" then
+		return string.format("%s %s", firstName, lastName)
+	elseif houseRank == "" then
+		return firstName
+	end
+
+	return "[RogueName]"
+end
+
+return SuperLeaderboard
