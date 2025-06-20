@@ -12,6 +12,8 @@ end
 local PlayerESP = {}
 PlayerESP.__index = PlayerESP
 
+PlayerESP.defaultTextSize = 14
+
 function PlayerESP.new()
     local self = setmetatable({}, PlayerESP)
     self.enabled = false
@@ -286,6 +288,17 @@ function PlayerESP:cleanup()
     self.updateConnection = nil
     for player, _ in pairs(self.espBillboards) do
         self:removeBillboard(player)
+    end
+end
+
+function PlayerESP:setTextSize(size)
+    self.defaultTextSize = size
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.TextSize = size end
+        if data.rogueLabel then data.rogueLabel.TextSize = size end
+        if data.edictLabel then data.edictLabel.TextSize = size end
+        if data.hpLabel then data.hpLabel.TextSize = size end
+        if data.hpPercLabel then data.hpPercLabel.TextSize = size end
     end
 end
 
