@@ -42,7 +42,7 @@ function PlayerESP:createBillboard(player)
     billboard.Name = "PlayerESP"
     billboard.Size = UDim2.new(0, 120, 0, 60)
     billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 150
+    billboard.MaxDistance = 100000000000000
     billboard.Adornee = adornee
     billboard.Parent = character
 
