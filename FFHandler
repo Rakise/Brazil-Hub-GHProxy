@@ -1,1 +1,224 @@
+-- FFHandler.lua
+-- Módulo OOP para detecção e gerenciamento de ForceFields em personagens Roblox
 
+local Players = game:GetService('Players')
+local RunService = game:GetService('RunService')
+
+local FF_DURATION = 120
+local BILLBOARD_SIZE = UDim2.new(0, 80, 0, 24)
+local BILLBOARD_OFFSET = Vector3.new(0, 2.2, 0)
+local getTime = time or tick
+
+local function getBestAdornee(character)
+    return character:FindFirstChild('Head')
+        or character:FindFirstChild('UpperTorso')
+        or character:FindFirstChild('Torso')
+        or character:FindFirstChildWhichIsA('BasePart')
+end
+
+local FFDetector = {}
+FFDetector.__index = FFDetector
+
+function FFDetector.new()
+    local self = setmetatable({}, FFDetector)
+    self.enabled = false
+    self.connections = {}
+    self.updateConnection = nil
+    self.billboards = {} -- [character] = {billboard, label, lastTimeLeft}
+    self.ffData = {} -- [character] = {ff, startTime}
+    self.billboardMaxDistance = 125
+    self.billboardTextSize = 18
+    return self
+end
+
+function FFDetector:getFFColor(timeLeft)
+    if timeLeft > 60 then
+        return Color3.fromRGB(0, 255, 0)
+    elseif timeLeft > 20 then
+        return Color3.fromRGB(255, 255, 0)
+    else
+        return Color3.fromRGB(255, 0, 0)
+    end
+end
+
+function FFDetector:updateBillboardDistance()
+    for _, data in pairs(self.billboards) do
+        if data.billboard then
+            data.billboard.MaxDistance = self.billboardMaxDistance
+        end
+    end
+end
+
+function FFDetector:updateBillboardTextSize()
+    for _, data in pairs(self.billboards) do
+        if data.label then
+            data.label.TextSize = self.billboardTextSize
+        end
+    end
+end
+
+function FFDetector:createBillboard(character, ff, startTime)
+    if not character or not ff then return end
+    if character:FindFirstChild('FFBillboard') then return end
+    local elapsed = getTime() - startTime
+    local timeLeft = math.max(0, FF_DURATION - elapsed)
+    local billboard = Instance.new('BillboardGui')
+    billboard.Name = 'FFBillboard'
+    billboard.Size = BILLBOARD_SIZE
+    billboard.StudsOffset = BILLBOARD_OFFSET
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = self.billboardMaxDistance
+    billboard.Adornee = getBestAdornee(character)
+    billboard.Parent = character
+    local label = Instance.new('TextLabel')
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = self:getFFColor(timeLeft)
+    label.TextStrokeTransparency = 0.5
+    label.TextScaled = false
+    label.TextSize = self.billboardTextSize
+    label.Font = Enum.Font.SourceSansBold
+    label.Text = string.format('%.1f s until FF is out', timeLeft)
+    label.Parent = billboard
+    self.billboards[character] = {
+        billboard = billboard,
+        label = label,
+        lastTimeLeft = timeLeft
+    }
+end
+
+function FFDetector:removeBillboard(character)
+    local data = self.billboards[character]
+    if data and data.billboard then
+        data.billboard:Destroy()
+    end
+    self.billboards[character] = nil
+end
+
+function FFDetector:clearCharacterData(character)
+    self:removeBillboard(character)
+    self.ffData[character] = nil
+end
+
+function FFDetector:cleanup()
+    for _, conn in ipairs(self.connections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
+    end
+    self.connections = {}
+    if self.updateConnection and self.updateConnection.Disconnect then
+        self.updateConnection:Disconnect()
+    end
+    self.updateConnection = nil
+    for character, _ in pairs(self.billboards) do
+        self:removeBillboard(character)
+    end
+end
+
+function FFDetector:onForceFieldAdded(character, ff)
+    if self.ffData[character] and self.ffData[character].ff == ff then return end
+    self.ffData[character] = {ff = ff, startTime = getTime()}
+    self:createBillboard(character, ff, self.ffData[character].startTime)
+    table.insert(self.connections, ff.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            self:clearCharacterData(character)
+        end
+    end))
+end
+
+function FFDetector:registerCharacterFF(character)
+    for _, ff in ipairs(character:GetChildren()) do
+        if ff:IsA('ForceField') then
+            if not self.ffData[character] then
+                self.ffData[character] = {ff = ff, startTime = getTime()}
+            end
+            self:createBillboard(character, ff, self.ffData[character].startTime)
+        end
+    end
+    table.insert(self.connections, character.ChildAdded:Connect(function(child)
+        if child:IsA('ForceField') then
+            self:onForceFieldAdded(character, child)
+        end
+    end))
+    table.insert(self.connections, character.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            self:clearCharacterData(character)
+        end
+    end))
+end
+
+function FFDetector:registerPlayer(player)
+    if player.Character then
+        self:registerCharacterFF(player.Character)
+    end
+    table.insert(self.connections, player.CharacterAdded:Connect(function(character)
+        if self.enabled then
+            self:registerCharacterFF(character)
+        end
+    end))
+    table.insert(self.connections, player.AncestryChanged:Connect(function(_, parent)
+        if not parent then
+            if player.Character then
+                self:clearCharacterData(player.Character)
+            end
+        end
+    end))
+end
+
+function FFDetector:updateBillboards()
+    for _, player in ipairs(Players:GetPlayers()) do
+        local character = player.Character
+        if character then
+            local data = self.ffData[character]
+            if data and data.ff and data.ff.Parent == character then
+                local elapsed = getTime() - data.startTime
+                local timeLeft = math.max(0, FF_DURATION - elapsed)
+                local bdata = self.billboards[character]
+                if not bdata then
+                    self:createBillboard(character, data.ff, data.startTime)
+                else
+                    if math.abs((bdata.lastTimeLeft or 0) - timeLeft) > 0.09 then
+                        bdata.label.Text = string.format('%.1f s until FF is out', timeLeft)
+                        bdata.label.TextColor3 = self:getFFColor(timeLeft)
+                        bdata.billboard.MaxDistance = self.billboardMaxDistance
+                        bdata.lastTimeLeft = timeLeft
+                    end
+                end
+            else
+                if self.billboards[character] then
+                    self:clearCharacterData(character)
+                end
+            end
+        end
+    end
+end
+
+function FFDetector:enable()
+    self.enabled = true
+    self:cleanup()
+    for _, player in ipairs(Players:GetPlayers()) do
+        self:registerPlayer(player)
+    end
+    table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
+        self:registerPlayer(player)
+    end))
+    self.updateConnection = RunService.RenderStepped:Connect(function()
+        self:updateBillboards()
+    end)
+end
+
+function FFDetector:disable()
+    self.enabled = false
+    self:cleanup()
+end
+
+function FFDetector:setBillboardMaxDistance(value)
+    self.billboardMaxDistance = value
+    self:updateBillboardDistance()
+end
+
+function FFDetector:setBillboardTextSize(value)
+    self.billboardTextSize = value
+    self:updateBillboardTextSize()
+end
+
+return FFDetector 
