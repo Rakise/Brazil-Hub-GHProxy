@@ -38,74 +38,129 @@ function PlayerESP:createBillboard(player)
         return
     end
 
+    -- BillboardGui
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "PlayerESP"
-    billboard.Size = UDim2.new(0, 500,0, 100)
-    billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 999999999999999999999999999999999
+    billboard.LightInfluence = 1
+    billboard.Active = true
     billboard.Adornee = adornee
-    billboard.Parent = character.Head
+    billboard.ClipsDescendants = true
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 500, 0, 100)
+    billboard.Parent = adornee
 
+    -- UIListLayout (vertical)
     local layout = Instance.new("UIListLayout")
-    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 3)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = billboard
 
-    -- RobloxName
+    -- TextLabel: [PlayerName]
     local nameLabel = Instance.new("TextLabel")
-    nameLabel.Size = UDim2.new(1, 0,0.1, 0)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.TextColor3 = Color3.fromRGB(255,255,255)
+    nameLabel.FontSize = Enum.FontSize.Size14
+    nameLabel.TextColor3 = Color3.new(1,1,1)
+    nameLabel.BorderColor3 = Color3.new(0,0,0)
+    nameLabel.Text = "[" .. player.Name .. "]"
     nameLabel.TextStrokeTransparency = 0.5
     nameLabel.Font = Enum.Font.SourceSansSemibold
-    nameLabel.TextSize = 16
-    nameLabel.Text = player.Name
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextSize = 14
+    nameLabel.Size = UDim2.new(1,0,0.1,0)
+    nameLabel.BorderSizePixel = 0
+    nameLabel.BackgroundColor3 = Color3.new(1,1,1)
     nameLabel.Parent = billboard
 
-    -- Frame (RogueName + Edict)
+    -- Frame: RogueName + Edict
     local infoFrame = Instance.new("Frame")
     infoFrame.BackgroundTransparency = 1
-    infoFrame.Size = UDim2.new(1, 0,0.1, 0)
+    infoFrame.BorderColor3 = Color3.new(0,0,0)
+    infoFrame.Size = UDim2.new(1,0,0.1,0)
+    infoFrame.BorderSizePixel = 0
+    infoFrame.BackgroundColor3 = Color3.new(1,1,1)
     infoFrame.Parent = billboard
 
-    local UIListLayout2 = Instance.new("UIListLayout")
-    UIListLayout2.FillDirection = Enum.FillDirection.Horizontal
-    UIListLayout2.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    UIListLayout2.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout2.Parent = infoFrame
+    local infoLayout = Instance.new("UIListLayout")
+    infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    infoLayout.FillDirection = Enum.FillDirection.Horizontal
+    infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    infoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    infoLayout.Parent = infoFrame
 
+    -- TextLabel: [Lord Abadon Terrified]
     local rogueLabel = Instance.new("TextLabel")
-    rogueLabel.Size = UDim2.new(0, 0,0.1, 0)
-    rogueLabel.BackgroundTransparency = 1
-    rogueLabel.TextColor3 = Color3.fromRGB(200,200,255)
+    rogueLabel.FontSize = Enum.FontSize.Size14
+    rogueLabel.TextColor3 = Color3.new(1,1,1)
+    rogueLabel.BorderColor3 = Color3.new(0,0,0)
+    rogueLabel.Text = "[Lord Abadon Terrified]"
     rogueLabel.TextStrokeTransparency = 0.5
     rogueLabel.Font = Enum.Font.SourceSansSemibold
-    rogueLabel.AutomaticSize = Enum.AutomaticSize.X
-    rogueLabel.TextSize = 12
-    rogueLabel.Text = "[RogueName]" -- Substitua pela lógica real
+    rogueLabel.BackgroundTransparency = 1
+    rogueLabel.TextSize = 14
+    rogueLabel.Size = UDim2.new(0,0,0.1,0)
+    rogueLabel.BorderSizePixel = 0
+    rogueLabel.BackgroundColor3 = Color3.new(1,1,1)
     rogueLabel.Parent = infoFrame
 
+    -- TextLabel: [Healer]
     local edictLabel = Instance.new("TextLabel")
-    edictLabel.Size = UDim2.new(0, 0,0.1, 0)
-    edictLabel.BackgroundTransparency = 1
-    edictLabel.TextColor3 = Color3.fromRGB(255,220,180)
+    edictLabel.FontSize = Enum.FontSize.Size14
+    edictLabel.TextColor3 = Color3.new(1,1,1)
+    edictLabel.BorderColor3 = Color3.new(0,0,0)
+    edictLabel.Text = "[Healer]"
     edictLabel.TextStrokeTransparency = 0.5
-    rogueLabel.Font = Enum.Font.SourceSansSemibold
-    rogueLabel.AutomaticSize = Enum.AutomaticSize.X
-    edictLabel.TextSize = 12
-    edictLabel.Text = "[Edict]" -- Substitua pela lógica real
+    edictLabel.Font = Enum.Font.SourceSansSemibold
+    edictLabel.BackgroundTransparency = 1
+    edictLabel.TextSize = 14
+    edictLabel.Size = UDim2.new(0,0,0.1,0)
+    edictLabel.BorderSizePixel = 0
+    edictLabel.BackgroundColor3 = Color3.new(1,1,1)
     edictLabel.Parent = infoFrame
 
-    -- HP
+    -- Frame: HP
+    local hpFrame = Instance.new("Frame")
+    hpFrame.BackgroundTransparency = 1
+    hpFrame.BorderColor3 = Color3.new(0,0,0)
+    hpFrame.Size = UDim2.new(1,0,0.1,0)
+    hpFrame.BorderSizePixel = 0
+    hpFrame.BackgroundColor3 = Color3.new(1,1,1)
+    hpFrame.Parent = billboard
+
+    local hpLayout = Instance.new("UIListLayout")
+    hpLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    hpLayout.FillDirection = Enum.FillDirection.Horizontal
+    hpLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    hpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    hpLayout.Parent = hpFrame
+
+    -- TextLabel: [100/100]
     local hpLabel = Instance.new("TextLabel")
-    hpLabel.Size = UDim2.new(1, 0,0.1, 0)
-    hpLabel.BackgroundTransparency = 1
-    hpLabel.TextColor3 = Color3.fromRGB(180,255,180)
+    hpLabel.FontSize = Enum.FontSize.Size14
+    hpLabel.TextColor3 = Color3.new(1,1,1)
+    hpLabel.BorderColor3 = Color3.new(0,0,0)
+    hpLabel.Text = "[100/100]"
     hpLabel.TextStrokeTransparency = 0.5
-    hpLabel.Font = Enum.Font.SourceSans
-    hpLabel.TextSize = 12
-    hpLabel.Text = "[100/100][100%]" -- Substitua pela lógica real
-    hpLabel.Parent = billboard
+    hpLabel.Font = Enum.Font.SourceSansSemibold
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.TextSize = 14
+    hpLabel.Size = UDim2.new(0,0,0.1,0)
+    hpLabel.BorderSizePixel = 0
+    hpLabel.BackgroundColor3 = Color3.new(1,1,1)
+    hpLabel.Parent = hpFrame
+
+    -- TextLabel: [100%]
+    local hpPercLabel = Instance.new("TextLabel")
+    hpPercLabel.FontSize = Enum.FontSize.Size14
+    hpPercLabel.TextColor3 = Color3.new(1,1,1)
+    hpPercLabel.BorderColor3 = Color3.new(0,0,0)
+    hpPercLabel.Text = "[100%]"
+    hpPercLabel.TextStrokeTransparency = 0.5
+    hpPercLabel.Font = Enum.Font.SourceSansSemibold
+    hpPercLabel.BackgroundTransparency = 1
+    hpPercLabel.TextSize = 14
+    hpPercLabel.Size = UDim2.new(0,0,0.1,0)
+    hpPercLabel.BorderSizePixel = 0
+    hpPercLabel.BackgroundColor3 = Color3.new(1,1,1)
+    hpPercLabel.Parent = hpFrame
 
     print("[PlayerESP] Billboard criado para:", player.Name)
     self.espBillboards[player] = {
@@ -113,7 +168,8 @@ function PlayerESP:createBillboard(player)
         nameLabel = nameLabel,
         rogueLabel = rogueLabel,
         edictLabel = edictLabel,
-        hpLabel = hpLabel
+        hpLabel = hpLabel,
+        hpPercLabel = hpPercLabel
     }
 end
 
