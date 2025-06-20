@@ -41,7 +41,7 @@ function AutoAim:visualizeRay(origin, hitPos, isVisible)
     part.Transparency = 0.2
     part.Parent = Workspace
 
-    Debris:AddItem(part, 1.5)
+    Debris:AddItem(part, .5)
 end
 
 --- Verifica se há linha de visão entre o jogador e a posição alvo
