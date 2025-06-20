@@ -1,0 +1,173 @@
+-- autoaim.lua
+-- Handler OOP de Auto-Aim para integração com toggle externo
+-- Uso: local AutoAim = require(path); local autoAim = AutoAim.new(); autoAim:enable()/autoAim:disable()
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Debris = game:GetService("Debris")
+
+local TOOL_NAMES = {
+    ["Fimbulvetr"] = true,
+    ["Perflora"] = true,
+}
+
+local LIVE_FOLDER = Workspace:WaitForChild("Live")
+local MAX_RANGE = 200
+
+local AutoAim = {}
+AutoAim.__index = AutoAim
+
+--- Cria uma nova instância do AutoAim
+function AutoAim.new()
+    local self = setmetatable({}, AutoAim)
+    self.enabled = false
+    self.oldOnClientInvoke = nil
+    return self
+end
+
+--- Visualiza o raycast com uma linha (Part)
+function AutoAim:visualizeRay(origin, hitPos)
+    local direction = (hitPos - origin)
+    local distance = direction.Magnitude
+    local center = origin + direction * 0.5
+
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.CanCollide = false
+    part.Size = Vector3.new(0.1, 0.1, distance)
+    part.CFrame = CFrame.new(center, hitPos)
+    part.Color = Color3.new(0, 1, 0)
+    part.Material = Enum.Material.Neon
+    part.Transparency = 0.2
+    part.Parent = Workspace
+
+    Debris:AddItem(part, 1.5)
+end
+
+--- Verifica se há linha de visão entre o jogador e a posição alvo
+function AutoAim:isVisible(fromPos, targetPos, localChar)
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    rayParams.FilterDescendantsInstances = {localChar}
+    rayParams.IgnoreWater = true
+
+    local direction = targetPos - fromPos
+    local result = Workspace:Raycast(fromPos, direction, rayParams)
+
+    if result then
+        self:visualizeRay(fromPos, result.Position)
+        return (result.Position - targetPos).Magnitude <= 2, result.Instance
+    else
+        self:visualizeRay(fromPos, targetPos)
+        return true, nil
+    end
+end
+
+--- Busca o NPC mais próximo e visível
+function AutoAim:getBestNPC(localChar)
+    if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
+
+    local origin = localChar.HumanoidRootPart.Position
+    local closestNPC, shortestDistance = nil, math.huge
+
+    for _, model in ipairs(LIVE_FOLDER:GetChildren()) do
+        local hrp = model:FindFirstChild("HumanoidRootPart")
+        local head = model:FindFirstChild("Head")
+        local knocked = model:FindFirstChild("Knocked")
+        local enoughhealth = model:FindFirstChild("Humanoid") and model.Humanoid.Health > 5
+
+        if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughhealth then
+            local distance = (origin - hrp.Position).Magnitude
+            if distance <= MAX_RANGE then
+                local headPos = head.Position + Vector3.new(0, 1, 0)
+                local visible, _ = self:isVisible(origin, headPos, localChar)
+                if visible and distance < shortestDistance then
+                    closestNPC = model
+                    shortestDistance = distance
+                end
+            end
+        end
+    end
+
+    return closestNPC
+end
+
+--- Ativa o auto-aim (substitui RemoteFunction.OnClientInvoke)
+function AutoAim:enable()
+    if self.enabled then return end
+    self.enabled = true
+    local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+    local Mouse = LocalPlayer:GetMouse()
+    local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
+    self.oldOnClientInvoke = RemoteFunction.OnClientInvoke
+    local selfRef = self
+    RemoteFunction.OnClientInvoke = function()
+        local character = LocalPlayer.Character
+        if not character then return end
+
+        local equippedTool = character:FindFirstChildOfClass("Tool")
+        if equippedTool then
+            print("Equipped Tool:", equippedTool.Name)
+        end
+
+        local areaMarkers = Workspace:FindFirstChild("AreaMarkers")
+        if areaMarkers then
+            Mouse.TargetFilter = areaMarkers:FindFirstChild("The Arena")
+        end
+
+        if equippedTool and TOOL_NAMES[equippedTool.Name] then
+            local targetNPC = selfRef:getBestNPC(character)
+            if targetNPC and targetNPC:FindFirstChild("HumanoidRootPart") then
+                local npcHRP = targetNPC.HumanoidRootPart
+                local npcHead = targetNPC:FindFirstChild("Head")
+
+                if npcHead then
+                    local velocity = npcHRP.Velocity
+                    local timeToHit = 0.15
+                    local predictedPos = npcHead.Position + velocity * timeToHit
+                    local hitPosition = predictedPos + Vector3.new(0, -2, 0)
+
+                    local marker = Instance.new("Part")
+                    marker.Anchored = true
+                    marker.CanCollide = false
+                    marker.Size = Vector3.new(0.5, 0.5, 0.5)
+                    marker.Color = Color3.new(0, 1, 0)
+                    marker.Material = Enum.Material.Neon
+                    marker.Position = hitPosition
+                    marker.Parent = Workspace
+                    Debris:AddItem(marker, 2)
+
+                    selfRef:visualizeRay(character.HumanoidRootPart.Position, hitPosition)
+
+                    return {
+                        Hit = CFrame.new(hitPosition),
+                        Target = targetNPC,
+                        UnitRay = Mouse.UnitRay,
+                        X = Mouse.X,
+                        Y = Mouse.Y
+                    }
+                end
+            end
+        end
+
+        return {
+            Hit = Mouse.Hit,
+            Target = Mouse.Target,
+            UnitRay = Mouse.UnitRay,
+            X = Mouse.X,
+            Y = Mouse.Y
+        }
+    end
+end
+
+--- Desativa o auto-aim (restaura RemoteFunction.OnClientInvoke)
+function AutoAim:disable()
+    if not self.enabled then return end
+    self.enabled = false
+    local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
+    RemoteFunction.OnClientInvoke = self.oldOnClientInvoke
+    self.oldOnClientInvoke = nil
+end
+
+return AutoAim 
