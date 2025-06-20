@@ -98,7 +98,7 @@ function PlayerESP:createBillboard(player)
 
     -- HP
     local hpLabel = Instance.new("TextLabel")
-    hpLabel.Size = UDim2.new(1, 0, 0, 14)
+    hpLabel.Size = UDim2.new(1, 0,0.1, 0)
     hpLabel.BackgroundTransparency = 1
     hpLabel.TextColor3 = Color3.fromRGB(180,255,180)
     hpLabel.TextStrokeTransparency = 0.5
