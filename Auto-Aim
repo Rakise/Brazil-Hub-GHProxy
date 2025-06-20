@@ -7,11 +7,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
 
-local TOOL_NAMES = {
-    ["Fimbulvetr"] = true,
-    ["Perflora"] = true,
-}
-
 local LIVE_FOLDER = Workspace:WaitForChild("Live")
 local MAX_RANGE = 200
 
