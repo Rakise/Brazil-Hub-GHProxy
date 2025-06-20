@@ -25,44 +25,6 @@ function AutoAim.new()
     return self
 end
 
---- Visualiza o raycast com uma linha (Part)
-function AutoAim:visualizeRay(origin, hitPos, isVisible)
-    local direction = (hitPos - origin)
-    local distance = direction.Magnitude
-    local center = origin + direction * 0.5
-
-    local part = Instance.new("Part")
-    part.Anchored = true
-    part.CanCollide = false
-    part.Size = Vector3.new(0.1, 0.1, distance)
-    part.CFrame = CFrame.new(center, hitPos)
-    part.Color = isVisible == false and Color3.new(1, 0, 0) or Color3.new(0, 1, 0)
-    part.Material = Enum.Material.Neon
-    part.Transparency = 0.2
-    part.Parent = Workspace
-
-    Debris:AddItem(part, .5)
-end
-
---- Verifica se há linha de visão entre o jogador e a posição alvo
-function AutoAim:isVisible(fromPos, targetPos, localChar)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {localChar}
-    rayParams.IgnoreWater = true
-
-    local direction = targetPos - fromPos
-    local result = Workspace:Raycast(fromPos, direction, rayParams)
-
-    if result then
-        self:visualizeRay(fromPos, result.Position, false)
-        return (result.Position - targetPos).Magnitude <= 2, result.Instance
-    else
-        self:visualizeRay(fromPos, targetPos, true)
-        return true, nil
-    end
-end
-
 --- Busca o NPC mais próximo e visível
 function AutoAim:getBestNPC(localChar)
     if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
@@ -79,9 +41,7 @@ function AutoAim:getBestNPC(localChar)
         if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughhealth then
             local distance = (origin - hrp.Position).Magnitude
             if distance <= MAX_RANGE then
-                local headPos = head.Position + Vector3.new(0, 1, 0)
-                local visible, _ = self:isVisible(origin, headPos, localChar)
-                if visible and distance < shortestDistance then
+                if distance < shortestDistance then
                     closestNPC = model
                     shortestDistance = distance
                 end
@@ -134,8 +94,6 @@ function AutoAim:enable()
                     marker.Position = hitPosition
                     marker.Parent = Workspace
                     Debris:AddItem(marker, 2)
-
-                    self:visualizeRay(character.HumanoidRootPart.Position, hitPosition)
 
                     return {
                         Hit = CFrame.new(hitPosition),
