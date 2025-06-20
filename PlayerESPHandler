@@ -198,8 +198,8 @@ function PlayerESP:updateBillboards()
                 -- Atualize os valores aqui (exemplo fixo, troque pela lógica real)
                 data.nameLabel.Text = player.Name
                 -- Rogue/Lord/Lady
-                local RogueName = player:GetAttribute("FirstName") or "?"
-                local LastName = player:GetAttribute("LastName") or ""
+                local RogueName = tostring(player:GetAttribute("FirstName") or "")
+                local LastName = tostring(player:GetAttribute("LastName") or "")
                 local HouseRank = player:GetAttribute("HouseRank")
                 local Gender = player:GetAttribute("Gender")
                 if HouseRank == "Owner" and LastName ~= "" then
@@ -209,7 +209,7 @@ function PlayerESP:updateBillboards()
                         data.rogueLabel.Text = string.format("[Lady %s %s]", RogueName, LastName)
                     end
                 else
-                    data.rogueLabel.Text = string.format("[%s %d]", RogueName, LastName)
+                    data.rogueLabel.Text = string.format("[%s %s]", RogueName, LastName)
                 end
                 -- Edict (placeholder, pronto para lógica futura)
                 data.edictLabel.Text = "[Healer]"
