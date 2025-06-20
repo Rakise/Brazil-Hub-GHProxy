@@ -24,20 +24,16 @@ function PlayerESP.new()
 end
 
 function PlayerESP:createBillboard(player)
-    print("[PlayerESP] Tentando criar Billboard para:", player.Name)
     local character = player.Character
     if not character then
-        print("[PlayerESP] Character não existe para:", player.Name)
         return
     end
     if character:FindFirstChild("PlayerESP") then
-        print("[PlayerESP] Já existe Billboard para:", player.Name)
         return
     end
 
     local adornee = getBestAdornee(character)
     if not adornee then
-        print("[PlayerESP] Nenhum Adornee válido para:", player.Name)
         return
     end
 
@@ -169,7 +165,6 @@ function PlayerESP:createBillboard(player)
     hpPercLabel.BackgroundColor3 = Color3.new(1,1,1)
     hpPercLabel.Parent = hpFrame
 
-    print("[PlayerESP] Billboard criado para:", player.Name)
     self.espBillboards[player] = {
         billboard = billboard,
         nameLabel = nameLabel,
@@ -183,7 +178,6 @@ end
 function PlayerESP:removeBillboard(player)
     local data = self.espBillboards[player]
     if data and data.billboard then
-        print("[PlayerESP] Removendo Billboard de:", player.Name)
         data.billboard:Destroy()
     end
     self.espBillboards[player] = nil
@@ -226,44 +220,30 @@ function PlayerESP:updateBillboards()
                     local max = math.floor(humanoid.MaxHealth)
                     local perc = math.floor((hp/max)*100)
                     data.hpLabel.Text = string.format("[%d/%d][%d%%]", hp, max, perc)
-                    print(string.format("[PlayerESP] Atualizando HP de %s: [%d/%d][%d%%]", player.Name, hp, max, perc))
                 else
                     data.hpLabel.Text = "[?/?][?%]"
-                    print("[PlayerESP] Humanoid não encontrado para:", player.Name)
                 end
-            end
-        else
-            if player == Players.LocalPlayer then
-                print("[PlayerESP] Ignorando LocalPlayer:", player.Name)
-            elseif not player.Character then
-                print("[PlayerESP] Player sem Character:", player.Name)
             end
         end
     end
 end
 
 function PlayerESP:enable()
-    print("[PlayerESP] ENABLE chamado")
     self.enabled = true
     self:cleanup()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Players.LocalPlayer then
-            print("[PlayerESP] enable: criando Billboard para:", player.Name)
             self:createBillboard(player)
         else
-            print("[PlayerESP] enable: ignorando LocalPlayer:", player.Name)
         end
     end
     table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
         if player ~= Players.LocalPlayer then
-            print("[PlayerESP] PlayerAdded: criando Billboard para:", player.Name)
             self:createBillboard(player)
         else
-            print("[PlayerESP] PlayerAdded: ignorando LocalPlayer:", player.Name)
         end
     end))
     table.insert(self.connections, Players.PlayerRemoving:Connect(function(player)
-        print("[PlayerESP] PlayerRemoving:", player.Name)
         self:removeBillboard(player)
     end))
     self.updateConnection = RunService.RenderStepped:Connect(function()
@@ -272,13 +252,11 @@ function PlayerESP:enable()
 end
 
 function PlayerESP:disable()
-    print("[PlayerESP] DISABLE chamado")
     self.enabled = false
     self:cleanup()
 end
 
 function PlayerESP:cleanup()
-    print("[PlayerESP] Cleanup chamado")
     for _, conn in ipairs(self.connections) do
         if conn and conn.Disconnect then conn:Disconnect() end
     end
