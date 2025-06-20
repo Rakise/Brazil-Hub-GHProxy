@@ -197,8 +197,22 @@ function PlayerESP:updateBillboards()
             if data then
                 -- Atualize os valores aqui (exemplo fixo, troque pela lógica real)
                 data.nameLabel.Text = player.Name
-                data.rogueLabel.Text = "[Lord Abadon]" -- TODO: lógica real
-                data.edictLabel.Text = "[Healer]"      -- TODO: lógica real
+                -- Rogue/Lord/Lady
+                local RogueName = player:GetAttribute("FirstName") or "?"
+                local LastName = player:GetAttribute("LastName") or ""
+                local HouseRank = player:GetAttribute("HouseRank")
+                local Gender = player:GetAttribute("Gender")
+                if HouseRank == "Owner" and LastName ~= "" then
+                    if Gender == "Male" then
+                        data.rogueLabel.Text = string.format("[Lord %s %s]", RogueName, LastName)
+                    elseif Gender == "Female" then
+                        data.rogueLabel.Text = string.format("[Lady %s %s]", RogueName, LastName)
+                    end
+                else
+                    data.rogueLabel.Text = string.format("[%s]", RogueName)
+                end
+                -- Edict (placeholder, pronto para lógica futura)
+                data.edictLabel.Text = "[Healer]"
                 local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
                 if humanoid then
                     local hp = math.floor(humanoid.Health)
