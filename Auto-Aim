@@ -22,7 +22,7 @@ AutoAim.__index = AutoAim
 function AutoAim.new()
     local self = setmetatable({}, AutoAim)
     self.enabled = false
-    self.oldOnClientInvoke = nil
+    self.wasHandler = false -- indica se já havia handler
     return self
 end
 
@@ -100,8 +100,7 @@ function AutoAim:enable()
     local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
     local Mouse = LocalPlayer:GetMouse()
     local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
-    self.oldOnClientInvoke = RemoteFunction.OnClientInvoke
-    local selfRef = self
+    self.wasHandler = RemoteFunction.OnClientInvoke ~= nil
     RemoteFunction.OnClientInvoke = function()
         local character = LocalPlayer.Character
         if not character then return end
@@ -117,7 +116,7 @@ function AutoAim:enable()
         end
 
         if equippedTool and TOOL_NAMES[equippedTool.Name] then
-            local targetNPC = selfRef:getBestNPC(character)
+            local targetNPC = self:getBestNPC(character)
             if targetNPC and targetNPC:FindFirstChild("HumanoidRootPart") then
                 local npcHRP = targetNPC.HumanoidRootPart
                 local npcHead = targetNPC:FindFirstChild("Head")
@@ -138,7 +137,7 @@ function AutoAim:enable()
                     marker.Parent = Workspace
                     Debris:AddItem(marker, 2)
 
-                    selfRef:visualizeRay(character.HumanoidRootPart.Position, hitPosition)
+                    self:visualizeRay(character.HumanoidRootPart.Position, hitPosition)
 
                     return {
                         Hit = CFrame.new(hitPosition),
@@ -166,8 +165,8 @@ function AutoAim:disable()
     if not self.enabled then return end
     self.enabled = false
     local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
-    RemoteFunction.OnClientInvoke = self.oldOnClientInvoke
-    self.oldOnClientInvoke = nil
+    RemoteFunction.OnClientInvoke = nil
+    self.wasHandler = false
 end
 
 return AutoAim 
