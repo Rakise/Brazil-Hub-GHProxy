@@ -35,7 +35,26 @@ end
 
 --- Define as ferramentas que ativam o auto-aim
 function AutoAim:setTools(toolTable)
-    self.toolNames = toolTable or {}
+    -- Aceita tanto array (lista) quanto dicionário
+    local hash = {}
+    if type(toolTable) == "table" then
+        local isArray = false
+        local count = 0
+        for k, v in pairs(toolTable) do
+            count = count + 1
+            if type(k) == "number" then isArray = true end
+        end
+        if isArray then
+            -- Array: converte para hash
+            for _, tool in ipairs(toolTable) do
+                hash[tool] = true
+            end
+        else
+            -- Já é hash
+            hash = toolTable
+        end
+    end
+    self.toolNames = hash
 end
 
 --- Busca o NPC mais próximo e visível
