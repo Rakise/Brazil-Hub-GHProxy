@@ -13,6 +13,7 @@ local PlayerESP = {}
 PlayerESP.__index = PlayerESP
 
 PlayerESP.defaultTextSize = 14
+PlayerESP.defaultTextColor = Color3.new(1,1,1)
 
 function PlayerESP.new()
     local self = setmetatable({}, PlayerESP)
@@ -299,6 +300,17 @@ function PlayerESP:setTextSize(size)
         if data.edictLabel then data.edictLabel.TextSize = size end
         if data.hpLabel then data.hpLabel.TextSize = size end
         if data.hpPercLabel then data.hpPercLabel.TextSize = size end
+    end
+end
+
+function PlayerESP:setTextColor(color)
+    self.defaultTextColor = color
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.TextColor3 = color end
+        if data.rogueLabel then data.rogueLabel.TextColor3 = color end
+        if data.edictLabel then data.edictLabel.TextColor3 = color end
+        if data.hpLabel then data.hpLabel.TextColor3 = color end
+        if data.hpPercLabel then data.hpPercLabel.TextColor3 = color end
     end
 end
 
