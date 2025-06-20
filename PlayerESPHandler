@@ -1,0 +1,175 @@
+-- PlayerESPHandler.lua
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local function getBestAdornee(character)
+    return character:FindFirstChild("Head")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChildWhichIsA("BasePart")
+end
+
+local PlayerESP = {}
+PlayerESP.__index = PlayerESP
+
+function PlayerESP.new()
+    local self = setmetatable({}, PlayerESP)
+    self.enabled = false
+    self.connections = {}
+    self.espBillboards = {}
+    return self
+end
+
+function PlayerESP:createBillboard(player)
+    local character = player.Character
+    if not character or character:FindFirstChild("PlayerESP") then return end
+
+    local adornee = getBestAdornee(character)
+    if not adornee then return end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlayerESP"
+    billboard.Size = UDim2.new(0, 120, 0, 60)
+    billboard.AlwaysOnTop = true
+    billboard.MaxDistance = 150
+    billboard.Adornee = adornee
+    billboard.Parent = character
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = billboard
+
+    -- RobloxName
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 0, 18)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(255,255,255)
+    nameLabel.TextStrokeTransparency = 0.5
+    nameLabel.Font = Enum.Font.SourceSansBold
+    nameLabel.TextSize = 16
+    nameLabel.Text = player.Name
+    nameLabel.Parent = billboard
+
+    -- Frame (RogueName + Edict)
+    local infoFrame = Instance.new("Frame")
+    infoFrame.BackgroundTransparency = 1
+    infoFrame.Size = UDim2.new(1, 0, 0, 24)
+    infoFrame.Parent = billboard
+
+    local rogueLabel = Instance.new("TextLabel")
+    rogueLabel.Size = UDim2.new(1, 0, 0, 12)
+    rogueLabel.BackgroundTransparency = 1
+    rogueLabel.TextColor3 = Color3.fromRGB(200,200,255)
+    rogueLabel.TextStrokeTransparency = 0.5
+    rogueLabel.Font = Enum.Font.SourceSans
+    rogueLabel.TextSize = 12
+    rogueLabel.Text = "[Lord Abadon]" -- Substitua pela lógica real
+    rogueLabel.Parent = infoFrame
+
+    local edictLabel = Instance.new("TextLabel")
+    edictLabel.Size = UDim2.new(1, 0, 0, 12)
+    edictLabel.BackgroundTransparency = 1
+    edictLabel.TextColor3 = Color3.fromRGB(255,220,180)
+    edictLabel.TextStrokeTransparency = 0.5
+    edictLabel.Font = Enum.Font.SourceSans
+    edictLabel.TextSize = 12
+    edictLabel.Text = "[Healer]" -- Substitua pela lógica real
+    edictLabel.Parent = infoFrame
+
+    -- HP
+    local hpLabel = Instance.new("TextLabel")
+    hpLabel.Size = UDim2.new(1, 0, 0, 14)
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.TextColor3 = Color3.fromRGB(180,255,180)
+    hpLabel.TextStrokeTransparency = 0.5
+    hpLabel.Font = Enum.Font.SourceSans
+    hpLabel.TextSize = 12
+    hpLabel.Text = "[100/100][100%]" -- Substitua pela lógica real
+    hpLabel.Parent = billboard
+
+    self.espBillboards[player] = {
+        billboard = billboard,
+        nameLabel = nameLabel,
+        rogueLabel = rogueLabel,
+        edictLabel = edictLabel,
+        hpLabel = hpLabel
+    }
+end
+
+function PlayerESP:removeBillboard(player)
+    local data = self.espBillboards[player]
+    if data and data.billboard then
+        data.billboard:Destroy()
+    end
+    self.espBillboards[player] = nil
+end
+
+function PlayerESP:updateBillboards()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer and player.Character then
+            local data = self.espBillboards[player]
+            if not data then
+                self:createBillboard(player)
+                data = self.espBillboards[player]
+            end
+            if data then
+                -- Atualize os valores aqui (exemplo fixo, troque pela lógica real)
+                data.nameLabel.Text = player.Name
+                data.rogueLabel.Text = "[Lord Abadon]" -- TODO: lógica real
+                data.edictLabel.Text = "[Healer]"      -- TODO: lógica real
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    local hp = math.floor(humanoid.Health)
+                    local max = math.floor(humanoid.MaxHealth)
+                    local perc = math.floor((hp/max)*100)
+                    data.hpLabel.Text = string.format("[%d/%d][%d%%]", hp, max, perc)
+                else
+                    data.hpLabel.Text = "[?/?][?%]"
+                end
+            end
+        end
+    end
+end
+
+function PlayerESP:enable()
+    self.enabled = true
+    self:cleanup()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            self:createBillboard(player)
+        end
+    end
+    table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
+        if player ~= Players.LocalPlayer then
+            self:createBillboard(player)
+        end
+    end))
+    table.insert(self.connections, Players.PlayerRemoving:Connect(function(player)
+        self:removeBillboard(player)
+    end))
+    self.updateConnection = RunService.RenderStepped:Connect(function()
+        self:updateBillboards()
+    end)
+end
+
+function PlayerESP:disable()
+    self.enabled = false
+    self:cleanup()
+end
+
+function PlayerESP:cleanup()
+    for _, conn in ipairs(self.connections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
+    end
+    self.connections = {}
+    if self.updateConnection and self.updateConnection.Disconnect then
+        self.updateConnection:Disconnect()
+    end
+    self.updateConnection = nil
+    for player, _ in pairs(self.espBillboards) do
+        self:removeBillboard(player)
+    end
+end
+
+return PlayerESP
