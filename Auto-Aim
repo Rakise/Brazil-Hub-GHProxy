@@ -19,7 +19,7 @@ function AutoAim.new()
     self.enabled = false
     self.maxRange = 200
     self.timeToHit = 0.15
-    self.toolNames = { ["Fimbulvetr"] = true, ["Perflora"] = true }
+    self.toolNames = { ["Fimbulvetr"] = true, ["Perflora"] = true, ["Armis"] = true }
     return self
 end
 
