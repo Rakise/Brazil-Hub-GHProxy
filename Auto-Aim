@@ -26,7 +26,7 @@ function AutoAim.new()
 end
 
 --- Visualiza o raycast com uma linha (Part)
-function AutoAim:visualizeRay(origin, hitPos)
+function AutoAim:visualizeRay(origin, hitPos, isVisible)
     local direction = (hitPos - origin)
     local distance = direction.Magnitude
     local center = origin + direction * 0.5
@@ -36,7 +36,7 @@ function AutoAim:visualizeRay(origin, hitPos)
     part.CanCollide = false
     part.Size = Vector3.new(0.1, 0.1, distance)
     part.CFrame = CFrame.new(center, hitPos)
-    part.Color = Color3.new(0, 1, 0)
+    part.Color = isVisible == false and Color3.new(1, 0, 0) or Color3.new(0, 1, 0)
     part.Material = Enum.Material.Neon
     part.Transparency = 0.2
     part.Parent = Workspace
@@ -55,10 +55,10 @@ function AutoAim:isVisible(fromPos, targetPos, localChar)
     local result = Workspace:Raycast(fromPos, direction, rayParams)
 
     if result then
-        self:visualizeRay(fromPos, result.Position)
+        self:visualizeRay(fromPos, result.Position, false)
         return (result.Position - targetPos).Magnitude <= 2, result.Instance
     else
-        self:visualizeRay(fromPos, targetPos)
+        self:visualizeRay(fromPos, targetPos, true)
         return true, nil
     end
 end
