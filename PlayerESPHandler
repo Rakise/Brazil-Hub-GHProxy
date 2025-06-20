@@ -93,6 +93,7 @@ function PlayerESP:createBillboard(player)
     rogueLabel.BorderColor3 = Color3.new(0,0,0)
     rogueLabel.Text = "[Lord Abadon Terrified]"
     rogueLabel.TextStrokeTransparency = 0.5
+    rogueLabel.AutomaticSize = Enum.AutomaticSize.X
     rogueLabel.Font = Enum.Font.SourceSansSemibold
     rogueLabel.BackgroundTransparency = 1
     rogueLabel.TextSize = 14
@@ -110,6 +111,7 @@ function PlayerESP:createBillboard(player)
     edictLabel.TextStrokeTransparency = 0.5
     edictLabel.Font = Enum.Font.SourceSansSemibold
     edictLabel.BackgroundTransparency = 1
+    edictLabel.AutomaticSize = Enum.AutomaticSize.X
     edictLabel.TextSize = 14
     edictLabel.Size = UDim2.new(0,0,0.1,0)
     edictLabel.BorderSizePixel = 0
@@ -141,6 +143,7 @@ function PlayerESP:createBillboard(player)
     hpLabel.TextStrokeTransparency = 0.5
     hpLabel.Font = Enum.Font.SourceSansSemibold
     hpLabel.BackgroundTransparency = 1
+    hpLabel.AutomaticSize = Enum.AutomaticSize.X
     hpLabel.TextSize = 14
     hpLabel.Size = UDim2.new(0,0,0.1,0)
     hpLabel.BorderSizePixel = 0
@@ -156,6 +159,7 @@ function PlayerESP:createBillboard(player)
     hpPercLabel.TextStrokeTransparency = 0.5
     hpPercLabel.Font = Enum.Font.SourceSansSemibold
     hpPercLabel.BackgroundTransparency = 1
+    hpPercLabel.AutomaticSize = Enum.AutomaticSize.X
     hpPercLabel.TextSize = 14
     hpPercLabel.Size = UDim2.new(0,0,0.1,0)
     hpPercLabel.BorderSizePixel = 0
