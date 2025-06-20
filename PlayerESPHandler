@@ -72,7 +72,7 @@ function PlayerESP:createBillboard(player)
     UIListLayout2.FillDirection = Enum.FillDirection.Horizontal
     UIListLayout2.HorizontalAlignment = Enum.HorizontalAlignment.Center
     UIListLayout2.SortOrder = Enum.SortOrder.LayoutOrder
-    UIListLayout2.Parent = billboard
+    UIListLayout2.Parent = infoFrame
 
     local rogueLabel = Instance.new("TextLabel")
     rogueLabel.Size = UDim2.new(0, 0,0.1, 0)
