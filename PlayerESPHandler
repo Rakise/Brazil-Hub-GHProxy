@@ -209,7 +209,11 @@ function PlayerESP:updateBillboards()
                         data.rogueLabel.Text = string.format("[Lady %s %s]", RogueName, LastName)
                     end
                 else
-                    data.rogueLabel.Text = string.format("[%s %s]", RogueName, LastName)
+                    if LastName ~= "" then
+                        data.rogueLabel.Text = string.format("[%s %s]", RogueName, LastName)
+                    else
+                        data.rogueLabel.Text = string.format("[%s]", RogueName)
+                    end
                 end
                 -- Edict (placeholder, pronto para lógica futura)
                 data.edictLabel.Text = "[Healer]"
