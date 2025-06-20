@@ -22,7 +22,25 @@ AutoAim.__index = AutoAim
 function AutoAim.new()
     local self = setmetatable({}, AutoAim)
     self.enabled = false
+    self.maxRange = 200
+    self.timeToHit = 0.15
+    self.toolNames = { ["Fimbulvetr"] = true, ["Perflora"] = true }
     return self
+end
+
+--- Define o alcance máximo do auto-aim
+function AutoAim:setRange(range)
+    self.maxRange = range
+end
+
+--- Define o tempo de previsão do auto-aim
+function AutoAim:setTimeToHit(time)
+    self.timeToHit = time
+end
+
+--- Define as ferramentas que ativam o auto-aim
+function AutoAim:setTools(toolTable)
+    self.toolNames = toolTable or {}
 end
 
 --- Busca o NPC mais próximo e visível
@@ -40,7 +58,7 @@ function AutoAim:getBestNPC(localChar)
 
         if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughhealth then
             local distance = (origin - hrp.Position).Magnitude
-            if distance <= MAX_RANGE then
+            if distance <= (self.maxRange or 200) then
                 if distance < shortestDistance then
                     closestNPC = model
                     shortestDistance = distance
@@ -73,7 +91,7 @@ function AutoAim:enable()
             Mouse.TargetFilter = areaMarkers:FindFirstChild("The Arena")
         end
 
-        if equippedTool and TOOL_NAMES[equippedTool.Name] then
+        if equippedTool and self.toolNames[equippedTool.Name] then
             local targetNPC = self:getBestNPC(character)
             if targetNPC and targetNPC:FindFirstChild("HumanoidRootPart") then
                 local npcHRP = targetNPC.HumanoidRootPart
@@ -81,7 +99,7 @@ function AutoAim:enable()
 
                 if npcHead then
                     local velocity = npcHRP.Velocity
-                    local timeToHit = 0.15
+                    local timeToHit = self.timeToHit or 0.15
                     local predictedPos = npcHead.Position + velocity * timeToHit
                     local hitPosition = predictedPos + Vector3.new(0, -2, 0)
 
