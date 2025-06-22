@@ -2,6 +2,10 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+-- Carrega o módulo Utils
+local Utils = require("utils")
+local utils = Utils.new()
+
 local function getBestAdornee(character)
     return character:FindFirstChild("Head")
         or character:FindFirstChild("UpperTorso")
@@ -192,37 +196,13 @@ function PlayerESP:updateBillboards()
                 data = self.espBillboards[player]
             end
             if data then
-                -- Atualize os valores aqui (exemplo fixo, troque pela lógica real)
-                data.nameLabel.Text = player.Name
-                -- Rogue/Lord/Lady
-                local RogueName = tostring(player:GetAttribute("FirstName") or "")
-                local LastName = tostring(player:GetAttribute("LastName") or "")
-                local HouseRank = player:GetAttribute("HouseRank")
-                local Gender = player:GetAttribute("Gender")
-                if HouseRank == "Owner" and LastName ~= "" then
-                    if Gender == "Male" then
-                        data.rogueLabel.Text = string.format("[Lord %s %s]", RogueName, LastName)
-                    elseif Gender == "Female" then
-                        data.rogueLabel.Text = string.format("[Lady %s %s]", RogueName, LastName)
-                    end
-                else
-                    if LastName ~= "" then
-                        data.rogueLabel.Text = string.format("[%s %s]", RogueName, LastName)
-                    else
-                        data.rogueLabel.Text = string.format("[%s]", RogueName)
-                    end
-                end
-                -- Edict (placeholder, pronto para lógica futura)
-                data.edictLabel.Text = "[Healer]"
-                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    local hp = math.floor(humanoid.Health)
-                    local max = math.floor(humanoid.MaxHealth)
-                    local perc = math.floor((hp/max)*100)
-                    data.hpLabel.Text = string.format("[%d/%d][%d%%]", hp, max, perc)
-                else
-                    data.hpLabel.Text = "[?/?][?%]"
-                end
+                -- Usa o módulo Utils para obter dados
+                data.nameLabel.Text = "[" .. player.Name .. "]"
+                data.rogueLabel.Text = utils:getPlayerRogueDisplay(player)
+                data.edictLabel.Text = utils:getPlayerEdictDisplay(player)
+                local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
+                data.hpLabel.Text = healthDisplay
+                data.hpPercLabel.Text = healthPercentDisplay
             end
         end
     end
