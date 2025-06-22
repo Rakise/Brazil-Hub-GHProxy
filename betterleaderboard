@@ -1,0 +1,210 @@
+-- betterleaderboard.lua
+-- Handler OOP para criar um leaderboard customizado
+-- Uso: local BetterLeaderboard = require(path); local leaderboard = BetterLeaderboard.new(); leaderboard:enable()/leaderboard:disable()
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local BetterLeaderboard = {}
+BetterLeaderboard.__index = BetterLeaderboard
+
+--- Cria uma nova instância do BetterLeaderboard
+function BetterLeaderboard.new()
+    local self = setmetatable({}, BetterLeaderboard)
+    self.enabled = false
+    self.connections = {}
+    self.originalLeaderboardGui = nil
+    self.customLeaderboardGui = nil
+    return self
+end
+
+--- Encontra o LeaderboardGui original no PlayerGui
+function BetterLeaderboard:findOriginalLeaderboardGui()
+    local playerGui = Players.LocalPlayer.PlayerGui
+    return playerGui:FindFirstChild("LeaderboardGui")
+end
+
+--- Cria o leaderboard customizado baseado na estrutura fornecida
+function BetterLeaderboard:createCustomLeaderboard()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "BetterLeaderboardGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- ImageButton raiz (Leaderboard)
+    local leaderboardButton = Instance.new("ImageButton")
+    leaderboardButton.Name = "Leaderboard"
+    leaderboardButton.ScaleType = Enum.ScaleType.Slice
+    leaderboardButton.ImageTransparency = 0.8
+    leaderboardButton.Size = UDim2.new(0.05, 150, 0, 240)
+    leaderboardButton.AnchorPoint = Vector2.new(1, 0)
+    leaderboardButton.Image = "rbxassetid://1327087642"
+    leaderboardButton.BackgroundTransparency = 1
+    leaderboardButton.Position = UDim2.new(1, 0, 0, 0)
+    leaderboardButton.BackgroundColor3 = Color3.new(1, 1, 1)
+    leaderboardButton.BorderSizePixel = 0
+    leaderboardButton.SliceCenter = Rect.new(Vector2.new(20, 20), Vector2.new(190, 190))
+    leaderboardButton.Parent = screenGui
+    
+    -- ScrollingFrame
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.ScrollBarImageColor3 = Color3.new(49/51, 197/255, 26/51)
+    scrollingFrame.MidImage = "rbxassetid://3515608813"
+    scrollingFrame.Active = true
+    scrollingFrame.ScrollBarThickness = 10
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+    scrollingFrame.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+    scrollingFrame.Position = UDim2.new(-0.07, 0, 0.04, 0)
+    scrollingFrame.TopImage = "rbxassetid://3515609176"
+    scrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+    scrollingFrame.Size = UDim2.new(1.05, -10, 1, -20)
+    scrollingFrame.BottomImage = "rbxassetid://3515608177"
+    scrollingFrame.BorderSizePixel = 0
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 330)
+    scrollingFrame.Parent = leaderboardButton
+    
+    -- UIListLayout
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = scrollingFrame
+    
+    screenGui.Parent = game.Players.LocalPlayer.PlayerGui
+    
+    return screenGui, scrollingFrame
+end
+
+--- Cria um frame de jogador para o leaderboard
+function BetterLeaderboard:createPlayerFrame(player, rank)
+    local frame = Instance.new("Frame")
+    frame.BackgroundTransparency = 1
+    frame.BorderColor3 = Color3.new(0, 0, 0)
+    frame.SizeConstraint = Enum.SizeConstraint.RelativeXX
+    frame.Size = UDim2.new(1, 0, 0.1, 0)
+    frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
+    
+    -- TextButton Prestige
+    local prestigeButton = Instance.new("TextButton")
+    prestigeButton.FontSize = Enum.FontSize.Size18
+    prestigeButton.TextColor3 = Color3.new(1, 1, 1)
+    prestigeButton.TextTransparency = 0.2
+    prestigeButton.Text = "#" .. rank
+    prestigeButton.TextStrokeTransparency = 0.5
+    prestigeButton.Size = UDim2.new(0, 35, 0, 20)
+    prestigeButton.Font = Enum.Font.SourceSansSemibold
+    prestigeButton.BackgroundTransparency = 1
+    prestigeButton.TextXAlignment = Enum.TextXAlignment.Left
+    prestigeButton.Name = "Prestige"
+    prestigeButton.TextSize = 16
+    prestigeButton.BorderSizePixel = 0
+    prestigeButton.BackgroundColor3 = Color3.new(1, 1, 1)
+    prestigeButton.Parent = frame
+    
+    -- TextButton PlayerLabel
+    local playerLabel = Instance.new("TextButton")
+    playerLabel.FontSize = Enum.FontSize.Size18
+    playerLabel.TextColor3 = Color3.new(1, 1, 1)
+    playerLabel.BorderColor3 = Color3.new(0, 0, 0)
+    playerLabel.Text = player.Name
+    playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playerLabel.TextStrokeTransparency = 0.5
+    playerLabel.Size = UDim2.new(1.5, 0, 0, 20)
+    playerLabel.Font = Enum.Font.SourceSansSemibold
+    playerLabel.BackgroundTransparency = 1
+    playerLabel.Position = UDim2.new(0, 30, 0, 0)
+    playerLabel.TextSize = 18
+    playerLabel.Name = "PlayerLabel"
+    playerLabel.BorderSizePixel = 0
+    playerLabel.BackgroundColor3 = Color3.new(1, 1, 1)
+    playerLabel.Parent = frame
+    
+    return frame
+end
+
+--- Atualiza a lista de jogadores no leaderboard
+function BetterLeaderboard:updatePlayerList()
+    if not self.customLeaderboardGui then return end
+    
+    local scrollingFrame = self.customLeaderboardGui.Leaderboard.ScrollingFrame
+    local players = Players:GetPlayers()
+    
+    -- Limpa a lista atual
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
+    
+    -- Adiciona jogadores
+    for i, player in ipairs(players) do
+        local playerFrame = self:createPlayerFrame(player, i)
+        playerFrame.Parent = scrollingFrame
+    end
+end
+
+--- Ativa o Better Leaderboard
+function BetterLeaderboard:enable()
+    if self.enabled then return end
+    self.enabled = true
+    
+    -- Esconde o leaderboard original
+    self.originalLeaderboardGui = self:findOriginalLeaderboardGui()
+    if self.originalLeaderboardGui then
+        self.originalLeaderboardGui.Enabled = false
+    end
+    
+    -- Cria o leaderboard customizado
+    self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
+    self:updatePlayerList()
+    
+    -- Conecta eventos
+    table.insert(self.connections, Players.PlayerAdded:Connect(function()
+        self:updatePlayerList()
+    end))
+    
+    table.insert(self.connections, Players.PlayerRemoving:Connect(function()
+        self:updatePlayerList()
+    end))
+    
+    -- Atualiza quando character entrar/sair
+    table.insert(self.connections, Players.LocalPlayer.CharacterAdded:Connect(function(character)
+        if self.enabled then
+            task.wait(1)
+            self:updatePlayerList()
+        end
+    end))
+    
+    table.insert(self.connections, Players.LocalPlayer.CharacterRemoving:Connect(function(character)
+        -- Limpa referências se necessário
+    end))
+end
+
+--- Desativa o Better Leaderboard
+function BetterLeaderboard:disable()
+    if not self.enabled then return end
+    self.enabled = false
+    
+    -- Remove o leaderboard customizado
+    if self.customLeaderboardGui then
+        self.customLeaderboardGui:Destroy()
+        self.customLeaderboardGui = nil
+        self.scrollingFrame = nil
+    end
+    
+    -- Mostra o leaderboard original
+    if self.originalLeaderboardGui then
+        self.originalLeaderboardGui.Enabled = true
+        self.originalLeaderboardGui = nil
+    end
+    
+    -- Desconecta eventos
+    for _, connection in ipairs(self.connections) do
+        if connection and connection.Disconnect then
+            connection:Disconnect()
+        end
+    end
+    self.connections = {}
+end
+
+return BetterLeaderboard 
