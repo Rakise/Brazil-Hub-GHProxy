@@ -1,0 +1,172 @@
+-- utils.lua
+-- Módulo Utils OOP para obtenção de dados de jogadores (APENAS LEITURA)
+-- Uso: local Utils = require(path); local utils = Utils.new(); utils:getPlayerData(player)
+
+local Players = game:GetService("Players")
+
+local Utils = {}
+Utils.__index = Utils
+
+--- Cria uma nova instância do Utils
+function Utils.new()
+    local self = setmetatable({}, Utils)
+    return self
+end
+
+--- Obtém dados básicos do jogador (nome, rogue, etc.)
+function Utils:getPlayerBasicData(player)
+    if not player then return {} end
+    
+    local data = {
+        name = player.Name,
+        displayName = player.DisplayName,
+        userId = player.UserId,
+        accountAge = player.AccountAge,
+        firstTime = player:GetAttribute("FirstTime") or false
+    }
+    
+    return data
+end
+
+--- Obtém dados de rogue do jogador
+function Utils:getPlayerRogueData(player)
+    if not player then return {} end
+    
+    local firstName = tostring(player:GetAttribute("FirstName") or "")
+    local lastName = tostring(player:GetAttribute("LastName") or "")
+    local houseRank = player:GetAttribute("HouseRank")
+    local gender = player:GetAttribute("Gender")
+    
+    local rogueName = ""
+    local fullRogueName = ""
+    
+    -- Monta o nome completo do rogue
+    if houseRank == "Owner" and lastName ~= "" then
+        if gender == "Male" then
+            rogueName = string.format("Lord %s %s", firstName, lastName)
+        elseif gender == "Female" then
+            rogueName = string.format("Lady %s %s", firstName, lastName)
+        end
+    else
+        if lastName ~= "" then
+            rogueName = string.format("%s %s", firstName, lastName)
+        else
+            rogueName = firstName
+        end
+    end
+    
+    fullRogueName = string.format("[%s]", rogueName)
+    
+    return {
+        firstName = firstName,
+        lastName = lastName,
+        houseRank = houseRank,
+        gender = gender,
+        rogueName = rogueName,
+        fullRogueName = fullRogueName
+    }
+end
+
+--- Obtém dados de edict do jogador
+function Utils:getPlayerEdictData(player)
+    if not player then return {} end
+    
+    local edict = player:GetAttribute("Edict") or "None"
+    
+    return {
+        edict = edict,
+        edictDisplay = string.format("[%s]", edict)
+    }
+end
+
+--- Obtém dados de vida do jogador
+function Utils:getPlayerHealthData(player)
+    if not player or not player.Character then return {} end
+    
+    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return {} end
+    
+    local health = math.floor(humanoid.Health)
+    local maxHealth = math.floor(humanoid.MaxHealth)
+    local healthPercent = math.floor((health / maxHealth) * 100)
+    
+    return {
+        health = health,
+        maxHealth = maxHealth,
+        healthPercent = healthPercent,
+        healthDisplay = string.format("[%d/%d]", health, maxHealth),
+        healthPercentDisplay = string.format("[%d%%]", healthPercent)
+    }
+end
+
+--- Obtém dados completos do jogador
+function Utils:getPlayerFullData(player)
+    if not player then return {} end
+    
+    return {
+        basic = self:getPlayerBasicData(player),
+        rogue = self:getPlayerRogueData(player),
+        edict = self:getPlayerEdictData(player),
+        health = self:getPlayerHealthData(player)
+    }
+end
+
+--- Obtém dados de rogue formatados para display
+function Utils:getPlayerRogueDisplay(player)
+    local rogueData = self:getPlayerRogueData(player)
+    return rogueData.fullRogueName
+end
+
+--- Obtém dados de edict formatados para display
+function Utils:getPlayerEdictDisplay(player)
+    local edictData = self:getPlayerEdictData(player)
+    return edictData.edictDisplay
+end
+
+--- Obtém dados de vida formatados para display
+function Utils:getPlayerHealthDisplay(player)
+    local healthData = self:getPlayerHealthData(player)
+    return healthData.healthDisplay, healthData.healthPercentDisplay
+end
+
+--- Verifica se o jogador tem ForceField
+function Utils:hasForceField(player)
+    if not player or not player.Character then return false end
+    
+    for _, child in ipairs(player.Character:GetChildren()) do
+        if child:IsA("ForceField") then
+            return true
+        end
+    end
+    
+    return false
+end
+
+--- Obtém o tempo restante do ForceField (em segundos)
+function Utils:getForceFieldTimeLeft(player)
+    if not player or not player.Character then return 0 end
+    
+    for _, child in ipairs(player.Character:GetChildren()) do
+        if child:IsA("ForceField") then
+            -- Assumindo que o ForceField dura 120 segundos
+            local startTime = child:GetAttribute("StartTime") or tick()
+            local elapsed = tick() - startTime
+            return math.max(0, 120 - elapsed)
+        end
+    end
+    
+    return 0
+end
+
+--- Obtém a cor baseada no tempo restante do ForceField
+function Utils:getForceFieldColor(timeLeft)
+    if timeLeft > 60 then
+        return Color3.fromRGB(0, 255, 0) -- Verde
+    elseif timeLeft > 20 then
+        return Color3.fromRGB(255, 255, 0) -- Amarelo
+    else
+        return Color3.fromRGB(255, 0, 0) -- Vermelho
+    end
+end
+
+return Utils 
