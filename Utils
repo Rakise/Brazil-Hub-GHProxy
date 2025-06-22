@@ -79,6 +79,15 @@ function Utils:getPlayerEdictData(player)
     }
 end
 
+function Utils:getPlayerPrestigeData(player)
+    if not player then return {} end
+    local prestige = player:GetAttribute("Prestige")
+
+    return {
+        PrestigeData = prestige
+    }
+end
+
 --- Obtém dados de vida do jogador
 function Utils:getPlayerHealthData(player)
     if not player or not player.Character then return {} end
