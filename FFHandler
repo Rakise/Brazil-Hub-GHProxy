@@ -4,6 +4,10 @@
 local Players = game:GetService('Players')
 local RunService = game:GetService('RunService')
 
+-- Carrega o módulo Utils
+local Utils = require("utils")
+local utils = Utils.new()
+
 local FF_DURATION = 120
 local BILLBOARD_SIZE = UDim2.new(0, 80, 0, 24)
 local BILLBOARD_OFFSET = Vector3.new(0, 2.2, 0)
@@ -32,13 +36,7 @@ function FFDetector.new()
 end
 
 function FFDetector:getFFColor(timeLeft)
-    if timeLeft > 60 then
-        return Color3.fromRGB(0, 255, 0)
-    elseif timeLeft > 20 then
-        return Color3.fromRGB(255, 255, 0)
-    else
-        return Color3.fromRGB(255, 0, 0)
-    end
+    return utils:getForceFieldColor(timeLeft)
 end
 
 function FFDetector:updateBillboardDistance()
@@ -60,8 +58,10 @@ end
 function FFDetector:createBillboard(character, ff, startTime)
     if not character or not ff then return end
     if character:FindFirstChild('FFBillboard') then return end
-    local elapsed = getTime() - startTime
-    local timeLeft = math.max(0, FF_DURATION - elapsed)
+    
+    local player = Players:GetPlayerFromCharacter(character)
+    local timeLeft = utils:getForceFieldTimeLeft(player)
+    
     local billboard = Instance.new('BillboardGui')
     billboard.Name = 'FFBillboard'
     billboard.Size = BILLBOARD_SIZE
@@ -170,8 +170,7 @@ function FFDetector:updateBillboards()
         if character then
             local data = self.ffData[character]
             if data and data.ff and data.ff.Parent == character then
-                local elapsed = getTime() - data.startTime
-                local timeLeft = math.max(0, FF_DURATION - elapsed)
+                local timeLeft = utils:getForceFieldTimeLeft(player)
                 local bdata = self.billboards[character]
                 if not bdata then
                     self:createBillboard(character, data.ff, data.startTime)
