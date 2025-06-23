@@ -21,7 +21,6 @@ local COLORS = {
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
---- Cria uma nova instância do BetterLeaderboard
 function BetterLeaderboard.new()
     local self = setmetatable({}, BetterLeaderboard)
     self.enabled = false
@@ -36,33 +35,31 @@ function BetterLeaderboard.new()
     self.currentCameraTarget = nil
     self.originalCameraSubject = nil
     self.cameraConnections = {}
-    self.playerFrames = {} -- Cache de frames por player
+    self.playerFrames = {}
     self.lastColorUpdate = 0
-    self.colorUpdateInterval = 1 -- Atualiza cores a cada 1 segundo
+    self.colorUpdateInterval = 1
     return self
 end
 
---- Encontra o LeaderboardGui original no PlayerGui
+function BetterLeaderboard:getPlayerGui()
+    local player = Players.LocalPlayer
+    return player:FindFirstChildOfClass("PlayerGui") or player:WaitForChild("PlayerGui", 5)
+end
+
 function BetterLeaderboard:findOriginalLeaderboardGui()
-    local playerGui = Players.LocalPlayer.PlayerGui
-    return playerGui:FindFirstChild("LeaderboardGui")
+    local playerGui = self:getPlayerGui()
+    return playerGui and playerGui:FindFirstChild("LeaderboardGui")
 end
 
---- Verifica se o leaderboard customizado existe e está válido
 function BetterLeaderboard:isCustomLeaderboardValid()
-    return self.customLeaderboardGui and 
-           self.customLeaderboardGui.Parent and 
-           self.customLeaderboardGui:FindFirstChild("Leaderboard") and 
-           self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame")
+    return self.customLeaderboardGui and self.customLeaderboardGui.Parent and self.customLeaderboardGui:FindFirstChild("Leaderboard") and self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame")
 end
 
---- Agenda uma atualização do leaderboard (evita múltiplas atualizações simultâneas)
 function BetterLeaderboard:scheduleUpdate()
     if self.updateScheduled then return end
     self.updateScheduled = true
-    
     task.spawn(function()
-        task.wait(2) -- Aumentado para 2 segundos para reduzir frequência
+        task.wait(2)
         if self.enabled then
             self:updatePlayerList()
         end
@@ -70,56 +67,41 @@ function BetterLeaderboard:scheduleUpdate()
     end)
 end
 
---- Troca a câmera para um jogador específico
 function BetterLeaderboard:switchCameraToPlayer(player)
     local camera = workspace.CurrentCamera
     if not camera then return end
-    
-    -- Se já está observando este jogador, volta para o jogador local
     if self.currentCameraTarget == player then
         self:resetCameraToLocalPlayer()
         return
     end
-    
-    -- Salva o subject original se ainda não foi salvo
     if not self.originalCameraSubject then
         self.originalCameraSubject = camera.CameraSubject
     end
-    
-    -- Verifica se o jogador tem character
     if not player.Character then return end
-    
     local humanoid = player.Character:FindFirstChild("Humanoid")
     if not humanoid then return end
-    
-    -- Troca a câmera para o jogador
     self.currentCameraTarget = player
     camera.CameraSubject = humanoid
-    
-    -- Conecta evento para resetar câmera se o jogador sair
     local connection = player.CharacterRemoving:Connect(function()
         if self.currentCameraTarget == player then
             self:resetCameraToLocalPlayer()
         end
         connection:Disconnect()
     end)
-    
     table.insert(self.cameraConnections, connection)
 end
 
---- Reseta a câmera para o jogador local
 function BetterLeaderboard:resetCameraToLocalPlayer()
     local camera = workspace.CurrentCamera
     if not camera then return end
-    
-    -- Reseta para o subject original
-    if self.originalCameraSubject then
-        camera.CameraSubject = game.Players.LocalPlayer.Character.Humanoid
+    local character = Players.LocalPlayer.Character
+    if character then
+        local humanoid = character:FindFirstChild("Humanoid")
+        if humanoid then
+            camera.CameraSubject = humanoid
+        end
     end
-    
     self.currentCameraTarget = nil
-    
-    -- Desconecta todas as conexões de câmera
     for _, connection in ipairs(self.cameraConnections) do
         if connection and connection.Disconnect then
             connection:Disconnect()
@@ -128,20 +110,16 @@ function BetterLeaderboard:resetCameraToLocalPlayer()
     self.cameraConnections = {}
 end
 
---- Cria o leaderboard customizado baseado na estrutura fornecida
 function BetterLeaderboard:createCustomLeaderboard()
-    -- Remove leaderboard existente se houver
     if self.customLeaderboardGui then
         self.customLeaderboardGui:Destroy()
         self.customLeaderboardGui = nil
     end
-    
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "BetterLeaderboardGui"
     screenGui.ResetOnSpawn = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    -- ImageButton raiz (Leaderboard)
+
     local leaderboardButton = Instance.new("ImageButton")
     leaderboardButton.Name = "Leaderboard"
     leaderboardButton.ScaleType = Enum.ScaleType.Slice
@@ -155,8 +133,7 @@ function BetterLeaderboard:createCustomLeaderboard()
     leaderboardButton.BorderSizePixel = 0
     leaderboardButton.SliceCenter = Rect.new(Vector2.new(20, 20), Vector2.new(190, 190))
     leaderboardButton.Parent = screenGui
-    
-    -- ScrollingFrame
+
     local scrollingFrame = Instance.new("ScrollingFrame")
     scrollingFrame.ScrollBarImageColor3 = COLORS.GREEN
     scrollingFrame.MidImage = "rbxassetid://3515608813"
@@ -172,20 +149,22 @@ function BetterLeaderboard:createCustomLeaderboard()
     scrollingFrame.BottomImage = "rbxassetid://3515608177"
     scrollingFrame.BorderSizePixel = 0
     scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 330)
+    scrollingFrame.Name = "ScrollingFrame"
     scrollingFrame.Parent = leaderboardButton
-    
-    -- UIListLayout
+
     local listLayout = Instance.new("UIListLayout")
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     listLayout.Parent = scrollingFrame
-    
-    screenGui.Parent = game.Players.LocalPlayer.PlayerGui
-    
+
+    local playerGui = self:getPlayerGui()
+    if playerGui then
+        screenGui.Parent = playerGui
+    end
     return screenGui, scrollingFrame
 end
 
---- Cria um frame de jogador para o leaderboard
 function BetterLeaderboard:createPlayerFrame(player)
+    if not player or not player:IsDescendantOf(Players) then return end
     local frame = Instance.new("Frame")
     frame.BackgroundTransparency = 1
     frame.BorderColor3 = COLORS.BLACK
@@ -193,319 +172,60 @@ function BetterLeaderboard:createPlayerFrame(player)
     frame.Size = UDim2.new(1, 0, 0.1, 0)
     frame.BorderSizePixel = 0
     frame.BackgroundColor3 = COLORS.WHITE
-    
-    -- Verifica se o jogador tem character
+
     local hasCharacter = player.Character ~= nil
     local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
-    
-    -- TextButton Prestige
+
     local prestigeData = utils:getPlayerPrestigeData(player)
     local prestigeLevel = prestigeData.level or 0
 
     local prestigeButton = Instance.new("TextButton")
-    prestigeButton.FontSize = Enum.FontSize.Size18
+    prestigeButton.Font = Enum.Font.SourceSansSemibold
     prestigeButton.TextColor3 = textColor
     prestigeButton.TextTransparency = 0.2
     prestigeButton.Text = "#" .. prestigeLevel
     prestigeButton.TextStrokeTransparency = 0.5
     prestigeButton.Size = UDim2.new(0, 35, 0, 20)
-    prestigeButton.Font = Enum.Font.SourceSansSemibold
     prestigeButton.BackgroundTransparency = 1
     prestigeButton.TextXAlignment = Enum.TextXAlignment.Left
     prestigeButton.Name = "Prestige"
     prestigeButton.TextSize = 16
     prestigeButton.BorderSizePixel = 0
-    prestigeButton.BackgroundColor3 = COLORS.WHITE
     prestigeButton.Visible = prestigeLevel > 0
     prestigeButton.Parent = frame
-    
-    -- TextButton PlayerLabel (usando dados do Utils)
+
     local playerLabel = Instance.new("TextButton")
-    playerLabel.FontSize = Enum.FontSize.Size18
+    playerLabel.Font = Enum.Font.SourceSansSemibold
     playerLabel.TextColor3 = textColor
     playerLabel.BorderColor3 = COLORS.BLACK
     playerLabel.Text = utils:getPlayerRogueDisplay(player) or player.Name
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
     playerLabel.TextStrokeTransparency = 0.5
     playerLabel.Size = UDim2.new(1.5, 0, 0, 20)
-    playerLabel.Font = Enum.Font.SourceSansSemibold
     playerLabel.BackgroundTransparency = 1
     playerLabel.Position = UDim2.new(0, 30, 0, 0)
     playerLabel.TextSize = 18
     playerLabel.Name = "PlayerLabel"
     playerLabel.BorderSizePixel = 0
-    playerLabel.BackgroundColor3 = COLORS.WHITE
     playerLabel.Parent = frame
-    
-    -- Armazena referências para atualização dinâmica
-    frame.PlayerLabel = playerLabel
-    frame.Prestige = prestigeButton
-    frame.Player = player
-    frame.HasCharacter = hasCharacter
-    
-    -- Adiciona funcionalidade de clique para trocar câmera
+
     local function onPlayerLabelClick()
-        if self.enabled and hasCharacter then -- Só permite clique se tem character
+        if self.enabled and hasCharacter then
             self:switchCameraToPlayer(player)
         end
     end
-    
+
     playerLabel.MouseButton1Click:Connect(onPlayerLabelClick)
-    
-    -- Também adiciona funcionalidade ao frame inteiro para facilitar o clique
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 and hasCharacter then
             onPlayerLabelClick()
         end
     end)
-    
-    -- Armazena no cache
+
+    frame.PlayerLabel = playerLabel
+    frame.Prestige = prestigeButton
+    frame.Player = player
+    frame.HasCharacter = hasCharacter
     self.playerFrames[player] = frame
-    
     return frame
 end
-
---- Atualiza as cores dos frames baseado no estado dos characters
-function BetterLeaderboard:updatePlayerColors()
-    if not self.enabled or not self.customLeaderboardGui then return end
-    
-    local currentTime = tick()
-    if currentTime - self.lastColorUpdate < self.colorUpdateInterval then return end
-    self.lastColorUpdate = currentTime
-    
-    local updatedCount = 0
-    local maxUpdates = 5 -- Limita o número de atualizações por vez
-    
-    for player, frame in pairs(self.playerFrames) do
-        if updatedCount >= maxUpdates then break end -- Evita muitas atualizações de uma vez
-        
-        if frame and frame.Parent and player and player.Parent then
-            local hasCharacter = player.Character ~= nil
-            
-            -- Só atualiza se a cor mudou
-            if frame.HasCharacter ~= hasCharacter then
-                local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
-                
-                frame.PlayerLabel.TextColor3 = textColor
-                
-                if frame.Prestige.Visible then
-                    frame.Prestige.TextColor3 = textColor
-                end
-                
-                frame.HasCharacter = hasCharacter
-                updatedCount = updatedCount + 1
-            end
-        else
-            -- Remove frames inválidos do cache
-            self.playerFrames[player] = nil
-        end
-    end
-end
-
---- Atualiza a lista de jogadores no leaderboard
-function BetterLeaderboard:updatePlayerList()
-    if not self:isCustomLeaderboardValid() then return end
-    
-    local scrollingFrame = self.customLeaderboardGui.Leaderboard.ScrollingFrame
-    local players = Players:GetPlayers()
-    
-    -- Verifica se a lista mudou antes de atualizar
-    local currentPlayerCount = #players
-    local frameCount = 0
-    for _ in pairs(self.playerFrames) do
-        frameCount = frameCount + 1
-    end
-    
-    -- Só atualiza se o número de players mudou
-    if currentPlayerCount == frameCount then
-        -- Verifica se os players são os mesmos
-        local shouldUpdate = false
-        for _, player in ipairs(players) do
-            if not self.playerFrames[player] then
-                shouldUpdate = true
-                break
-            end
-        end
-        
-        if not shouldUpdate then return end
-    end
-    
-    -- Limpa a lista atual
-    for _, child in ipairs(scrollingFrame:GetChildren()) do
-        if child:IsA("Frame") then
-            child:Destroy()
-        end
-    end
-    
-    -- Limpa cache de frames
-    self.playerFrames = {}
-    
-    -- Adiciona jogadores
-    for i, player in ipairs(players) do
-        if player and player.Parent then -- Verifica se o player ainda existe
-            local playerFrame = self:createPlayerFrame(player)
-            playerFrame.Parent = scrollingFrame
-        end
-    end
-end
-
---- Gerencia o estado do leaderboard quando character entra
-function BetterLeaderboard:onCharacterAdded(character)
-    if not self.enabled then return end
-    
-    -- Aguarda um pouco para garantir que tudo foi carregado
-    task.wait(0.5) -- Reduzido de 1 para 0.5 segundos
-    
-    -- Verifica se o leaderboard customizado ainda é válido
-    if not self:isCustomLeaderboardValid() then
-        -- Recria o leaderboard se necessário
-        self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
-    end
-    
-    -- Desabilita o leaderboard original se existir
-    local originalGui = self:findOriginalLeaderboardGui()
-    if originalGui and originalGui.Enabled then
-        originalGui.Enabled = false
-        self.originalLeaderboardGui = originalGui
-    end
-    
-    -- Atualiza a lista de jogadores
-    self:scheduleUpdate()
-end
-
---- Gerencia o estado do leaderboard quando character sai
-function BetterLeaderboard:onCharacterRemoving(character)
-    if not self.enabled then return end
-    
-    -- Atualiza a lista de jogadores
-    self:scheduleUpdate()
-    
-    -- Habilita o leaderboard original se existir
-    local originalGui = self:findOriginalLeaderboardGui()
-    if originalGui and not originalGui.Enabled then
-        originalGui.Enabled = true
-    end
-end
-
---- Ativa o Better Leaderboard
-function BetterLeaderboard:enable()
-    if self.enabled then return end
-    self.enabled = true
-    
-    -- Esconde o leaderboard original
-    self.originalLeaderboardGui = self:findOriginalLeaderboardGui()
-    if self.originalLeaderboardGui then
-        self.originalLeaderboardGui.Enabled = false
-    end
-    
-    -- Cria o leaderboard customizado
-    self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
-    self:updatePlayerList()
-    
-    -- Conecta eventos de players
-    self.playerAddedConnection = Players.PlayerAdded:Connect(function()
-        if self.enabled then
-            self:scheduleUpdate()
-        end
-    end)
-    
-    self.playerRemovingConnection = Players.PlayerRemoving:Connect(function()
-        if self.enabled then
-            self:scheduleUpdate()
-        end
-    end)
-    
-    -- Conecta eventos de character
-    self.characterAddedConnection = Players.LocalPlayer.CharacterAdded:Connect(function(character)
-        self:onCharacterAdded(character)
-    end)
-    
-    self.characterRemovingConnection = Players.LocalPlayer.CharacterRemoving:Connect(function(character)
-        self:onCharacterRemoving(character)
-    end)
-    
-    -- Conecta eventos de character para todos os players (para atualizar cores)
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= Players.LocalPlayer then
-            local connection = player.CharacterAdded:Connect(function(character)
-                if self.enabled then
-                    task.wait(0.5) -- Pequeno delay para garantir que o character foi carregado
-                    self:updatePlayerColors()
-                end
-            end)
-            table.insert(self.connections, connection)
-            
-            local connection2 = player.CharacterRemoving:Connect(function(character)
-                if self.enabled then
-                    self:updatePlayerColors()
-                end
-            end)
-            table.insert(self.connections, connection2)
-        end
-    end
-    
-    -- Adiciona conexões à lista para cleanup
-    table.insert(self.connections, self.playerAddedConnection)
-    table.insert(self.connections, self.playerRemovingConnection)
-    table.insert(self.connections, self.characterAddedConnection)
-    table.insert(self.connections, self.characterRemovingConnection)
-end
-
---- Desativa o Better Leaderboard
-function BetterLeaderboard:disable()
-    if not self.enabled then return end
-    self.enabled = false
-    
-    -- Reseta a câmera para o jogador local
-    self:resetCameraToLocalPlayer()
-    
-    -- Remove o leaderboard customizado
-    if self.customLeaderboardGui then
-        self.customLeaderboardGui:Destroy()
-        self.customLeaderboardGui = nil
-        self.scrollingFrame = nil
-    end
-    
-    -- Mostra o leaderboard original
-    if self.originalLeaderboardGui then
-        self.originalLeaderboardGui.Enabled = true
-        self.originalLeaderboardGui = nil
-    end
-    
-    -- Desconecta eventos específicos
-    if self.characterAddedConnection then
-        self.characterAddedConnection:Disconnect()
-        self.characterAddedConnection = nil
-    end
-    
-    if self.characterRemovingConnection then
-        self.characterRemovingConnection:Disconnect()
-        self.characterRemovingConnection = nil
-    end
-    
-    if self.playerAddedConnection then
-        self.playerAddedConnection:Disconnect()
-        self.playerAddedConnection = nil
-    end
-    
-    if self.playerRemovingConnection then
-        self.playerRemovingConnection:Disconnect()
-        self.playerRemovingConnection = nil
-    end
-    
-    -- Desconecta todos os outros eventos
-    for _, connection in ipairs(self.connections) do
-        if connection and connection.Disconnect then
-            connection:Disconnect()
-        end
-    end
-    self.connections = {}
-    
-    -- Limpa cache
-    self.playerFrames = {}
-    
-    -- Reseta estado de atualização
-    self.updateScheduled = false
-end
-
-return BetterLeaderboard 
