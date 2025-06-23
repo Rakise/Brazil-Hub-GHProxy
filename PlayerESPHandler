@@ -198,11 +198,11 @@ function PlayerESP:updateBillboards()
             if data then
                 -- Usa o módulo Utils para obter dados
                 data.nameLabel.Text = "[" .. player.Name .. "]"
-                data.rogueLabel.Text = utils:getPlayerRogueDisplay(player)
-                data.edictLabel.Text = utils:getPlayerEdictDisplay(player)
+                data.rogueLabel.Text = "[" .. utils:getPlayerRogueDisplay(player) .. "]"
+                data.edictLabel.Text = "[" .. utils:getPlayerEdictDisplay(player) .. "]"
                 local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-                data.hpLabel.Text = healthDisplay
-                data.hpPercLabel.Text = healthPercentDisplay
+                data.hpLabel.Text = "[" .. healthDisplay .. "]"
+                data.hpPercLabel.Text = "[" .. healthPercentDisplay .. "]"
             end
         end
     end
