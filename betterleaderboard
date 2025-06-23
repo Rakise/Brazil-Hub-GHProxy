@@ -184,13 +184,17 @@ function BetterLeaderboard:createPlayerFrame(player)
     frame.BorderSizePixel = 0
     frame.BackgroundColor3 = Color3.new(1, 1, 1)
     
+    -- Verifica se o jogador tem character
+    local hasCharacter = player.Character ~= nil
+    local textColor = hasCharacter and Color3.new(1, 1, 1) or Color3.new(0.5, 0.5, 0.5) -- Branco se tem character, cinza se não tem
+    
     -- TextButton Prestige
     local prestigeData = utils:getPlayerPrestigeData(player)
     local prestigeLevel = prestigeData.level or 0
 
     local prestigeButton = Instance.new("TextButton")
     prestigeButton.FontSize = Enum.FontSize.Size18
-    prestigeButton.TextColor3 = Color3.new(1, 1, 1)
+    prestigeButton.TextColor3 = textColor
     prestigeButton.TextTransparency = 0.2
     prestigeButton.Text = "#" .. prestigeLevel
     prestigeButton.TextStrokeTransparency = 0.5
@@ -208,7 +212,7 @@ function BetterLeaderboard:createPlayerFrame(player)
     -- TextButton PlayerLabel (usando dados do Utils)
     local playerLabel = Instance.new("TextButton")
     playerLabel.FontSize = Enum.FontSize.Size18
-    playerLabel.TextColor3 = Color3.new(1, 1, 1)
+    playerLabel.TextColor3 = textColor
     playerLabel.BorderColor3 = Color3.new(0, 0, 0)
     playerLabel.Text = utils:getPlayerRogueDisplay(player) or player.Name
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -223,9 +227,15 @@ function BetterLeaderboard:createPlayerFrame(player)
     playerLabel.BackgroundColor3 = Color3.new(1, 1, 1)
     playerLabel.Parent = frame
     
+    -- Armazena referências para atualização dinâmica
+    frame.PlayerLabel = playerLabel
+    frame.Prestige = prestigeButton
+    frame.Player = player
+    frame.HasCharacter = hasCharacter
+    
     -- Adiciona funcionalidade de clique para trocar câmera
     local function onPlayerLabelClick()
-        if self.enabled then
+        if self.enabled and hasCharacter then -- Só permite clique se tem character
             self:switchCameraToPlayer(player)
         end
     end
@@ -234,7 +244,7 @@ function BetterLeaderboard:createPlayerFrame(player)
     
     -- Também adiciona funcionalidade ao frame inteiro para facilitar o clique
     frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and hasCharacter then
             onPlayerLabelClick()
         end
     end)
@@ -261,6 +271,32 @@ function BetterLeaderboard:updatePlayerList()
         if player and player.Parent then -- Verifica se o player ainda existe
             local playerFrame = self:createPlayerFrame(player)
             playerFrame.Parent = scrollingFrame
+        end
+    end
+end
+
+--- Atualiza as cores dos frames baseado no estado dos characters
+function BetterLeaderboard:updatePlayerColors()
+    if not self:isCustomLeaderboardValid() then return end
+    
+    local scrollingFrame = self.customLeaderboardGui.Leaderboard.ScrollingFrame
+    
+    for _, child in ipairs(scrollingFrame:GetChildren()) do
+        if child:IsA("Frame") and child.Player and child.PlayerLabel and child.Prestige then
+            local player = child.Player
+            local hasCharacter = player.Character ~= nil
+            local textColor = hasCharacter and Color3.new(1, 1, 1) or Color3.new(0.5, 0.5, 0.5)
+            
+            -- Atualiza cor do PlayerLabel
+            child.PlayerLabel.TextColor3 = textColor
+            
+            -- Atualiza cor do Prestige se estiver visível
+            if child.Prestige.Visible then
+                child.Prestige.TextColor3 = textColor
+            end
+            
+            -- Atualiza estado
+            child.HasCharacter = hasCharacter
         end
     end
 end
@@ -339,6 +375,39 @@ function BetterLeaderboard:enable()
     self.characterRemovingConnection = Players.LocalPlayer.CharacterRemoving:Connect(function(character)
         self:onCharacterRemoving(character)
     end)
+    
+    -- Conecta eventos de character para todos os players (para atualizar cores)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            local connection = player.CharacterAdded:Connect(function(character)
+                if self.enabled then
+                    task.wait(0.5) -- Pequeno delay para garantir que o character foi carregado
+                    self:updatePlayerColors()
+                end
+            end)
+            table.insert(self.connections, connection)
+            
+            local connection2 = player.CharacterRemoving:Connect(function(character)
+                if self.enabled then
+                    self:updatePlayerColors()
+                end
+            end)
+            table.insert(self.connections, connection2)
+        end
+    end
+    
+    -- Loop para atualizar cores periodicamente (a cada segundo)
+    local updateCounter = 0
+    local colorUpdateConnection = RunService.Heartbeat:Connect(function()
+        if self.enabled and self.customLeaderboardGui then
+            updateCounter = updateCounter + 1
+            if updateCounter >= 60 then -- 60 frames = ~1 segundo (60 FPS)
+                self:updatePlayerColors()
+                updateCounter = 0
+            end
+        end
+    end)
+    table.insert(self.connections, colorUpdateConnection)
     
     -- Adiciona conexões à lista para cleanup
     table.insert(self.connections, self.playerAddedConnection)
