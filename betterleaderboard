@@ -10,6 +10,14 @@ local UserInputService = game:GetService("UserInputService")
 local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
 local utils = Utils.new()
 
+-- Cache de cores para evitar criar novos objetos
+local COLORS = {
+    WHITE = Color3.new(1, 1, 1),
+    GRAY = Color3.new(0.243137, 0.243137, 0.243137),
+    BLACK = Color3.new(0, 0, 0),
+    GREEN = Color3.new(49/51, 197/255, 26/51)
+}
+
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
@@ -28,6 +36,9 @@ function BetterLeaderboard.new()
     self.currentCameraTarget = nil
     self.originalCameraSubject = nil
     self.cameraConnections = {}
+    self.playerFrames = {} -- Cache de frames por player
+    self.lastColorUpdate = 0
+    self.colorUpdateInterval = 1 -- Atualiza cores a cada 1 segundo
     return self
 end
 
@@ -39,11 +50,10 @@ end
 
 --- Verifica se o leaderboard customizado existe e está válido
 function BetterLeaderboard:isCustomLeaderboardValid()
-    if not self.customLeaderboardGui then return false end
-    if not self.customLeaderboardGui.Parent then return false end
-    if not self.customLeaderboardGui:FindFirstChild("Leaderboard") then return false end
-    if not self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame") then return false end
-    return true
+    return self.customLeaderboardGui and 
+           self.customLeaderboardGui.Parent and 
+           self.customLeaderboardGui:FindFirstChild("Leaderboard") and 
+           self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame")
 end
 
 --- Agenda uma atualização do leaderboard (evita múltiplas atualizações simultâneas)
@@ -52,7 +62,7 @@ function BetterLeaderboard:scheduleUpdate()
     self.updateScheduled = true
     
     task.spawn(function()
-        task.wait(1) -- Pequeno delay para agrupar múltiplas atualizações
+        task.wait(1) -- Delay para agrupar múltiplas atualizações
         if self.enabled then
             self:updatePlayerList()
         end
@@ -141,19 +151,19 @@ function BetterLeaderboard:createCustomLeaderboard()
     leaderboardButton.Image = "rbxassetid://1327087642"
     leaderboardButton.BackgroundTransparency = 1
     leaderboardButton.Position = UDim2.new(1, 0, 0, 0)
-    leaderboardButton.BackgroundColor3 = Color3.new(1, 1, 1)
+    leaderboardButton.BackgroundColor3 = COLORS.WHITE
     leaderboardButton.BorderSizePixel = 0
     leaderboardButton.SliceCenter = Rect.new(Vector2.new(20, 20), Vector2.new(190, 190))
     leaderboardButton.Parent = screenGui
     
     -- ScrollingFrame
     local scrollingFrame = Instance.new("ScrollingFrame")
-    scrollingFrame.ScrollBarImageColor3 = Color3.new(49/51, 197/255, 26/51)
+    scrollingFrame.ScrollBarImageColor3 = COLORS.GREEN
     scrollingFrame.MidImage = "rbxassetid://3515608813"
     scrollingFrame.Active = true
     scrollingFrame.ScrollBarThickness = 10
     scrollingFrame.BackgroundTransparency = 1
-    scrollingFrame.BackgroundColor3 = Color3.new(1, 1, 1)
+    scrollingFrame.BackgroundColor3 = COLORS.WHITE
     scrollingFrame.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
     scrollingFrame.Position = UDim2.new(-0.07, 0, 0.04, 0)
     scrollingFrame.TopImage = "rbxassetid://3515609176"
@@ -178,15 +188,15 @@ end
 function BetterLeaderboard:createPlayerFrame(player)
     local frame = Instance.new("Frame")
     frame.BackgroundTransparency = 1
-    frame.BorderColor3 = Color3.new(0, 0, 0)
+    frame.BorderColor3 = COLORS.BLACK
     frame.SizeConstraint = Enum.SizeConstraint.RelativeXX
     frame.Size = UDim2.new(1, 0, 0.1, 0)
     frame.BorderSizePixel = 0
-    frame.BackgroundColor3 = Color3.new(1, 1, 1)
+    frame.BackgroundColor3 = COLORS.WHITE
     
     -- Verifica se o jogador tem character
     local hasCharacter = player.Character ~= nil
-    local textColor = hasCharacter and Color3.new(1, 1, 1) or Color3.new(0.243137, 0.243137, 0.243137) -- Branco se tem character, cinza se não tem
+    local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
     
     -- TextButton Prestige
     local prestigeData = utils:getPlayerPrestigeData(player)
@@ -205,7 +215,7 @@ function BetterLeaderboard:createPlayerFrame(player)
     prestigeButton.Name = "Prestige"
     prestigeButton.TextSize = 16
     prestigeButton.BorderSizePixel = 0
-    prestigeButton.BackgroundColor3 = Color3.new(1, 1, 1)
+    prestigeButton.BackgroundColor3 = COLORS.WHITE
     prestigeButton.Visible = prestigeLevel > 0
     prestigeButton.Parent = frame
     
@@ -213,7 +223,7 @@ function BetterLeaderboard:createPlayerFrame(player)
     local playerLabel = Instance.new("TextButton")
     playerLabel.FontSize = Enum.FontSize.Size18
     playerLabel.TextColor3 = textColor
-    playerLabel.BorderColor3 = Color3.new(0, 0, 0)
+    playerLabel.BorderColor3 = COLORS.BLACK
     playerLabel.Text = utils:getPlayerRogueDisplay(player) or player.Name
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
     playerLabel.TextStrokeTransparency = 0.5
@@ -224,7 +234,7 @@ function BetterLeaderboard:createPlayerFrame(player)
     playerLabel.TextSize = 18
     playerLabel.Name = "PlayerLabel"
     playerLabel.BorderSizePixel = 0
-    playerLabel.BackgroundColor3 = Color3.new(1, 1, 1)
+    playerLabel.BackgroundColor3 = COLORS.WHITE
     playerLabel.Parent = frame
     
     -- Armazena referências para atualização dinâmica
@@ -249,7 +259,40 @@ function BetterLeaderboard:createPlayerFrame(player)
         end
     end)
     
+    -- Armazena no cache
+    self.playerFrames[player] = frame
+    
     return frame
+end
+
+--- Atualiza as cores dos frames baseado no estado dos characters
+function BetterLeaderboard:updatePlayerColors()
+    if not self.enabled or not self.customLeaderboardGui then return end
+    
+    local currentTime = tick()
+    if currentTime - self.lastColorUpdate < self.colorUpdateInterval then return end
+    self.lastColorUpdate = currentTime
+    
+    for player, frame in pairs(self.playerFrames) do
+        if frame and frame.Parent and player and player.Parent then
+            local hasCharacter = player.Character ~= nil
+            local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
+            
+            -- Só atualiza se a cor mudou
+            if frame.HasCharacter ~= hasCharacter then
+                frame.PlayerLabel.TextColor3 = textColor
+                
+                if frame.Prestige.Visible then
+                    frame.Prestige.TextColor3 = textColor
+                end
+                
+                frame.HasCharacter = hasCharacter
+            end
+        else
+            -- Remove frames inválidos do cache
+            self.playerFrames[player] = nil
+        end
+    end
 end
 
 --- Atualiza a lista de jogadores no leaderboard
@@ -266,37 +309,14 @@ function BetterLeaderboard:updatePlayerList()
         end
     end
     
+    -- Limpa cache de frames
+    self.playerFrames = {}
+    
     -- Adiciona jogadores
     for i, player in ipairs(players) do
         if player and player.Parent then -- Verifica se o player ainda existe
             local playerFrame = self:createPlayerFrame(player)
             playerFrame.Parent = scrollingFrame
-        end
-    end
-end
-
---- Atualiza as cores dos frames baseado no estado dos characters
-function BetterLeaderboard:updatePlayerColors()
-    if not self:isCustomLeaderboardValid() then return end
-    
-    local scrollingFrame = self.customLeaderboardGui.Leaderboard.ScrollingFrame
-    
-    for _, child in ipairs(scrollingFrame:GetChildren()) do
-        if child:IsA("Frame") and child.Player and child.PlayerLabel and child.Prestige then
-            local player = child.Player
-            local hasCharacter = player.Character ~= nil
-            local textColor = hasCharacter and Color3.new(1, 1, 1) or Color3.new(0.5, 0.5, 0.5)
-            
-            -- Atualiza cor do PlayerLabel
-            child.PlayerLabel.TextColor3 = textColor
-            
-            -- Atualiza cor do Prestige se estiver visível
-            if child.Prestige.Visible then
-                child.Prestige.TextColor3 = textColor
-            end
-            
-            -- Atualiza estado
-            child.HasCharacter = hasCharacter
         end
     end
 end
@@ -465,6 +485,9 @@ function BetterLeaderboard:disable()
         end
     end
     self.connections = {}
+    
+    -- Limpa cache
+    self.playerFrames = {}
     
     -- Reseta estado de atualização
     self.updateScheduled = false
