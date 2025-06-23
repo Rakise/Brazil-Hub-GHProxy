@@ -5,6 +5,10 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
+-- Carrega o módulo Utils
+local Utils = require("utils")
+local utils = Utils.new()
+
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
@@ -75,7 +79,7 @@ function BetterLeaderboard:createCustomLeaderboard()
 end
 
 --- Cria um frame de jogador para o leaderboard
-function BetterLeaderboard:createPlayerFrame(player, rank)
+function BetterLeaderboard:createPlayerFrame(player)
     local frame = Instance.new("Frame")
     frame.BackgroundTransparency = 1
     frame.BorderColor3 = Color3.new(0, 0, 0)
@@ -85,11 +89,14 @@ function BetterLeaderboard:createPlayerFrame(player, rank)
     frame.BackgroundColor3 = Color3.new(1, 1, 1)
     
     -- TextButton Prestige
+    local prestigeData = utils:getPlayerPrestigeData(player)
+    local prestigeLevel = prestigeData.level or 0
+
     local prestigeButton = Instance.new("TextButton")
     prestigeButton.FontSize = Enum.FontSize.Size18
     prestigeButton.TextColor3 = Color3.new(1, 1, 1)
     prestigeButton.TextTransparency = 0.2
-    prestigeButton.Text = "#" .. rank
+    prestigeButton.Text = "#" .. prestigeLevel
     prestigeButton.TextStrokeTransparency = 0.5
     prestigeButton.Size = UDim2.new(0, 35, 0, 20)
     prestigeButton.Font = Enum.Font.SourceSansSemibold
@@ -99,14 +106,15 @@ function BetterLeaderboard:createPlayerFrame(player, rank)
     prestigeButton.TextSize = 16
     prestigeButton.BorderSizePixel = 0
     prestigeButton.BackgroundColor3 = Color3.new(1, 1, 1)
+    prestigeButton.Visible = prestigeLevel > 0
     prestigeButton.Parent = frame
     
-    -- TextButton PlayerLabel
+    -- TextButton PlayerLabel (usando dados do Utils)
     local playerLabel = Instance.new("TextButton")
     playerLabel.FontSize = Enum.FontSize.Size18
     playerLabel.TextColor3 = Color3.new(1, 1, 1)
     playerLabel.BorderColor3 = Color3.new(0, 0, 0)
-    playerLabel.Text = player.Name
+    playerLabel.Text = utils:getPlayerRogueDisplay(player) or player.Name
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
     playerLabel.TextStrokeTransparency = 0.5
     playerLabel.Size = UDim2.new(1.5, 0, 0, 20)
@@ -138,7 +146,7 @@ function BetterLeaderboard:updatePlayerList()
     
     -- Adiciona jogadores
     for i, player in ipairs(players) do
-        local playerFrame = self:createPlayerFrame(player, i)
+        local playerFrame = self:createPlayerFrame(player)
         playerFrame.Parent = scrollingFrame
     end
 end
