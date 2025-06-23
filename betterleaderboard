@@ -52,7 +52,7 @@ function BetterLeaderboard:scheduleUpdate()
     self.updateScheduled = true
     
     task.spawn(function()
-        task.wait(0.1) -- Pequeno delay para agrupar múltiplas atualizações
+        task.wait(1) -- Pequeno delay para agrupar múltiplas atualizações
         if self.enabled then
             self:updatePlayerList()
         end
