@@ -186,7 +186,7 @@ function BetterLeaderboard:createPlayerFrame(player)
     
     -- Verifica se o jogador tem character
     local hasCharacter = player.Character ~= nil
-    local textColor = hasCharacter and Color3.new(1, 1, 1) or Color3.new(0.5, 0.5, 0.5) -- Branco se tem character, cinza se não tem
+    local textColor = hasCharacter and Color3.new(1, 1, 1) or Color3.new(0.243137, 0.243137, 0.243137) -- Branco se tem character, cinza se não tem
     
     -- TextButton Prestige
     local prestigeData = utils:getPlayerPrestigeData(player)
