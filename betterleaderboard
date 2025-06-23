@@ -104,7 +104,7 @@ function BetterLeaderboard:resetCameraToLocalPlayer()
     
     -- Reseta para o subject original
     if self.originalCameraSubject then
-        camera.CameraSubject = self.originalCameraSubject
+        camera.CameraSubject = game.Players.LocalPlayer.Character.Humanoid
     end
     
     self.currentCameraTarget = nil
