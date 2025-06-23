@@ -4,6 +4,7 @@
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 -- Carrega o módulo Utils
 local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
@@ -19,6 +20,14 @@ function BetterLeaderboard.new()
     self.connections = {}
     self.originalLeaderboardGui = nil
     self.customLeaderboardGui = nil
+    self.characterAddedConnection = nil
+    self.characterRemovingConnection = nil
+    self.playerAddedConnection = nil
+    self.playerRemovingConnection = nil
+    self.updateScheduled = false
+    self.currentCameraTarget = nil
+    self.originalCameraSubject = nil
+    self.cameraConnections = {}
     return self
 end
 
@@ -28,8 +37,95 @@ function BetterLeaderboard:findOriginalLeaderboardGui()
     return playerGui:FindFirstChild("LeaderboardGui")
 end
 
+--- Verifica se o leaderboard customizado existe e está válido
+function BetterLeaderboard:isCustomLeaderboardValid()
+    if not self.customLeaderboardGui then return false end
+    if not self.customLeaderboardGui.Parent then return false end
+    if not self.customLeaderboardGui:FindFirstChild("Leaderboard") then return false end
+    if not self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame") then return false end
+    return true
+end
+
+--- Agenda uma atualização do leaderboard (evita múltiplas atualizações simultâneas)
+function BetterLeaderboard:scheduleUpdate()
+    if self.updateScheduled then return end
+    self.updateScheduled = true
+    
+    task.spawn(function()
+        task.wait(0.1) -- Pequeno delay para agrupar múltiplas atualizações
+        if self.enabled then
+            self:updatePlayerList()
+        end
+        self.updateScheduled = false
+    end)
+end
+
+--- Troca a câmera para um jogador específico
+function BetterLeaderboard:switchCameraToPlayer(player)
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    
+    -- Se já está observando este jogador, volta para o jogador local
+    if self.currentCameraTarget == player then
+        self:resetCameraToLocalPlayer()
+        return
+    end
+    
+    -- Salva o subject original se ainda não foi salvo
+    if not self.originalCameraSubject then
+        self.originalCameraSubject = camera.CameraSubject
+    end
+    
+    -- Verifica se o jogador tem character
+    if not player.Character then return end
+    
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    
+    -- Troca a câmera para o jogador
+    self.currentCameraTarget = player
+    camera.CameraSubject = humanoid
+    
+    -- Conecta evento para resetar câmera se o jogador sair
+    local connection = player.CharacterRemoving:Connect(function()
+        if self.currentCameraTarget == player then
+            self:resetCameraToLocalPlayer()
+        end
+        connection:Disconnect()
+    end)
+    
+    table.insert(self.cameraConnections, connection)
+end
+
+--- Reseta a câmera para o jogador local
+function BetterLeaderboard:resetCameraToLocalPlayer()
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    
+    -- Reseta para o subject original
+    if self.originalCameraSubject then
+        camera.CameraSubject = self.originalCameraSubject
+    end
+    
+    self.currentCameraTarget = nil
+    
+    -- Desconecta todas as conexões de câmera
+    for _, connection in ipairs(self.cameraConnections) do
+        if connection and connection.Disconnect then
+            connection:Disconnect()
+        end
+    end
+    self.cameraConnections = {}
+end
+
 --- Cria o leaderboard customizado baseado na estrutura fornecida
 function BetterLeaderboard:createCustomLeaderboard()
+    -- Remove leaderboard existente se houver
+    if self.customLeaderboardGui then
+        self.customLeaderboardGui:Destroy()
+        self.customLeaderboardGui = nil
+    end
+    
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "BetterLeaderboardGui"
     screenGui.ResetOnSpawn = false
@@ -127,12 +223,28 @@ function BetterLeaderboard:createPlayerFrame(player)
     playerLabel.BackgroundColor3 = Color3.new(1, 1, 1)
     playerLabel.Parent = frame
     
+    -- Adiciona funcionalidade de clique para trocar câmera
+    local function onPlayerLabelClick()
+        if self.enabled then
+            self:switchCameraToPlayer(player)
+        end
+    end
+    
+    playerLabel.MouseButton1Click:Connect(onPlayerLabelClick)
+    
+    -- Também adiciona funcionalidade ao frame inteiro para facilitar o clique
+    frame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            onPlayerLabelClick()
+        end
+    end)
+    
     return frame
 end
 
 --- Atualiza a lista de jogadores no leaderboard
 function BetterLeaderboard:updatePlayerList()
-    if not self.customLeaderboardGui then return end
+    if not self:isCustomLeaderboardValid() then return end
     
     local scrollingFrame = self.customLeaderboardGui.Leaderboard.ScrollingFrame
     local players = Players:GetPlayers()
@@ -146,8 +258,48 @@ function BetterLeaderboard:updatePlayerList()
     
     -- Adiciona jogadores
     for i, player in ipairs(players) do
-        local playerFrame = self:createPlayerFrame(player)
-        playerFrame.Parent = scrollingFrame
+        if player and player.Parent then -- Verifica se o player ainda existe
+            local playerFrame = self:createPlayerFrame(player)
+            playerFrame.Parent = scrollingFrame
+        end
+    end
+end
+
+--- Gerencia o estado do leaderboard quando character entra
+function BetterLeaderboard:onCharacterAdded(character)
+    if not self.enabled then return end
+    
+    -- Aguarda um pouco para garantir que tudo foi carregado
+    task.wait(1)
+    
+    -- Verifica se o leaderboard customizado ainda é válido
+    if not self:isCustomLeaderboardValid() then
+        -- Recria o leaderboard se necessário
+        self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
+    end
+    
+    -- Desabilita o leaderboard original se existir
+    local originalGui = self:findOriginalLeaderboardGui()
+    if originalGui and originalGui.Enabled then
+        originalGui.Enabled = false
+        self.originalLeaderboardGui = originalGui
+    end
+    
+    -- Atualiza a lista de jogadores
+    self:scheduleUpdate()
+end
+
+--- Gerencia o estado do leaderboard quando character sai
+function BetterLeaderboard:onCharacterRemoving(character)
+    if not self.enabled then return end
+    
+    -- Atualiza a lista de jogadores
+    self:scheduleUpdate()
+    
+    -- Habilita o leaderboard original se existir
+    local originalGui = self:findOriginalLeaderboardGui()
+    if originalGui and not originalGui.Enabled then
+        originalGui.Enabled = true
     end
 end
 
@@ -166,32 +318,42 @@ function BetterLeaderboard:enable()
     self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
     self:updatePlayerList()
     
-    -- Conecta eventos
-    table.insert(self.connections, Players.PlayerAdded:Connect(function()
-        self:updatePlayerList()
-    end))
-    
-    table.insert(self.connections, Players.PlayerRemoving:Connect(function()
-        self:updatePlayerList()
-    end))
-    
-    -- Atualiza quando character entrar/sair
-    table.insert(self.connections, Players.LocalPlayer.CharacterAdded:Connect(function(character)
+    -- Conecta eventos de players
+    self.playerAddedConnection = Players.PlayerAdded:Connect(function()
         if self.enabled then
-            task.wait(1)
-            self:updatePlayerList()
+            self:scheduleUpdate()
         end
-    end))
+    end)
     
-    table.insert(self.connections, Players.LocalPlayer.CharacterRemoving:Connect(function(character)
-        -- Limpa referências se necessário
-    end))
+    self.playerRemovingConnection = Players.PlayerRemoving:Connect(function()
+        if self.enabled then
+            self:scheduleUpdate()
+        end
+    end)
+    
+    -- Conecta eventos de character
+    self.characterAddedConnection = Players.LocalPlayer.CharacterAdded:Connect(function(character)
+        self:onCharacterAdded(character)
+    end)
+    
+    self.characterRemovingConnection = Players.LocalPlayer.CharacterRemoving:Connect(function(character)
+        self:onCharacterRemoving(character)
+    end)
+    
+    -- Adiciona conexões à lista para cleanup
+    table.insert(self.connections, self.playerAddedConnection)
+    table.insert(self.connections, self.playerRemovingConnection)
+    table.insert(self.connections, self.characterAddedConnection)
+    table.insert(self.connections, self.characterRemovingConnection)
 end
 
 --- Desativa o Better Leaderboard
 function BetterLeaderboard:disable()
     if not self.enabled then return end
     self.enabled = false
+    
+    -- Reseta a câmera para o jogador local
+    self:resetCameraToLocalPlayer()
     
     -- Remove o leaderboard customizado
     if self.customLeaderboardGui then
@@ -206,13 +368,37 @@ function BetterLeaderboard:disable()
         self.originalLeaderboardGui = nil
     end
     
-    -- Desconecta eventos
+    -- Desconecta eventos específicos
+    if self.characterAddedConnection then
+        self.characterAddedConnection:Disconnect()
+        self.characterAddedConnection = nil
+    end
+    
+    if self.characterRemovingConnection then
+        self.characterRemovingConnection:Disconnect()
+        self.characterRemovingConnection = nil
+    end
+    
+    if self.playerAddedConnection then
+        self.playerAddedConnection:Disconnect()
+        self.playerAddedConnection = nil
+    end
+    
+    if self.playerRemovingConnection then
+        self.playerRemovingConnection:Disconnect()
+        self.playerRemovingConnection = nil
+    end
+    
+    -- Desconecta todos os outros eventos
     for _, connection in ipairs(self.connections) do
         if connection and connection.Disconnect then
             connection:Disconnect()
         end
     end
     self.connections = {}
+    
+    -- Reseta estado de atualização
+    self.updateScheduled = false
 end
 
 return BetterLeaderboard 
