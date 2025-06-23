@@ -55,7 +55,7 @@ function Utils:getPlayerRogueData(player)
         end
     end
     
-    fullRogueName = string.format("[%s]", rogueName)
+    fullRogueName = rogueName
     
     return {
         firstName = firstName,
@@ -75,16 +75,19 @@ function Utils:getPlayerEdictData(player)
     
     return {
         edict = edict,
-        edictDisplay = string.format("[%s]", edict)
+        edictDisplay = edict
     }
 end
 
+--- Obtém dados de prestige do jogador
 function Utils:getPlayerPrestigeData(player)
-    if not player then return {} end
-    local prestige = player:GetAttribute("Prestige")
-
+    if not player then return { level = 0 } end
+    
+    local prestigeLevel = player:GetAttribute("Prestige") or 0
+    
     return {
-        PrestigeData = prestige
+        level = prestigeLevel,
+        hasPrestige = prestigeLevel > 0
     }
 end
 
@@ -103,8 +106,8 @@ function Utils:getPlayerHealthData(player)
         health = health,
         maxHealth = maxHealth,
         healthPercent = healthPercent,
-        healthDisplay = string.format("[%d/%d]", health, maxHealth),
-        healthPercentDisplay = string.format("[%d%%]", healthPercent)
+        healthDisplay = string.format("%d/%d", health, maxHealth),
+        healthPercentDisplay = string.format("%d%%", healthPercent)
     }
 end
 
