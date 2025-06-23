@@ -229,3 +229,5 @@ function BetterLeaderboard:createPlayerFrame(player)
     self.playerFrames[player] = frame
     return frame
 end
+
+return BetterLeaderboard
