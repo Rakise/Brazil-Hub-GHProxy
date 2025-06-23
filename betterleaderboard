@@ -62,7 +62,7 @@ function BetterLeaderboard:scheduleUpdate()
     self.updateScheduled = true
     
     task.spawn(function()
-        task.wait(1) -- Delay para agrupar múltiplas atualizações
+        task.wait(2) -- Aumentado para 2 segundos para reduzir frequência
         if self.enabled then
             self:updatePlayerList()
         end
@@ -273,13 +273,19 @@ function BetterLeaderboard:updatePlayerColors()
     if currentTime - self.lastColorUpdate < self.colorUpdateInterval then return end
     self.lastColorUpdate = currentTime
     
+    local updatedCount = 0
+    local maxUpdates = 5 -- Limita o número de atualizações por vez
+    
     for player, frame in pairs(self.playerFrames) do
+        if updatedCount >= maxUpdates then break end -- Evita muitas atualizações de uma vez
+        
         if frame and frame.Parent and player and player.Parent then
             local hasCharacter = player.Character ~= nil
-            local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
             
             -- Só atualiza se a cor mudou
             if frame.HasCharacter ~= hasCharacter then
+                local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
+                
                 frame.PlayerLabel.TextColor3 = textColor
                 
                 if frame.Prestige.Visible then
@@ -287,6 +293,7 @@ function BetterLeaderboard:updatePlayerColors()
                 end
                 
                 frame.HasCharacter = hasCharacter
+                updatedCount = updatedCount + 1
             end
         else
             -- Remove frames inválidos do cache
@@ -301,6 +308,27 @@ function BetterLeaderboard:updatePlayerList()
     
     local scrollingFrame = self.customLeaderboardGui.Leaderboard.ScrollingFrame
     local players = Players:GetPlayers()
+    
+    -- Verifica se a lista mudou antes de atualizar
+    local currentPlayerCount = #players
+    local frameCount = 0
+    for _ in pairs(self.playerFrames) do
+        frameCount = frameCount + 1
+    end
+    
+    -- Só atualiza se o número de players mudou
+    if currentPlayerCount == frameCount then
+        -- Verifica se os players são os mesmos
+        local shouldUpdate = false
+        for _, player in ipairs(players) do
+            if not self.playerFrames[player] then
+                shouldUpdate = true
+                break
+            end
+        end
+        
+        if not shouldUpdate then return end
+    end
     
     -- Limpa a lista atual
     for _, child in ipairs(scrollingFrame:GetChildren()) do
@@ -326,7 +354,7 @@ function BetterLeaderboard:onCharacterAdded(character)
     if not self.enabled then return end
     
     -- Aguarda um pouco para garantir que tudo foi carregado
-    task.wait(1)
+    task.wait(0.5) -- Reduzido de 1 para 0.5 segundos
     
     -- Verifica se o leaderboard customizado ainda é válido
     if not self:isCustomLeaderboardValid() then
@@ -415,19 +443,6 @@ function BetterLeaderboard:enable()
             table.insert(self.connections, connection2)
         end
     end
-    
-    -- Loop para atualizar cores periodicamente (a cada segundo)
-    local updateCounter = 0
-    local colorUpdateConnection = RunService.Heartbeat:Connect(function()
-        if self.enabled and self.customLeaderboardGui then
-            updateCounter = updateCounter + 1
-            if updateCounter >= 60 then -- 60 frames = ~1 segundo (60 FPS)
-                self:updatePlayerColors()
-                updateCounter = 0
-            end
-        end
-    end)
-    table.insert(self.connections, colorUpdateConnection)
     
     -- Adiciona conexões à lista para cleanup
     table.insert(self.connections, self.playerAddedConnection)
