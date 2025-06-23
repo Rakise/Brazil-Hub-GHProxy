@@ -6,7 +6,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 -- Carrega o módulo Utils
-local Utils = game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils")()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
 local utils = Utils.new()
 
 local BetterLeaderboard = {}
