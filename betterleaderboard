@@ -198,11 +198,18 @@ function BetterLeaderboard:createCustomLeaderboard()
     screenGui.Parent = playerGui
 
     -- Update canvas size when content changes
-    local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    local function updateCanvasSize()
         if scrollingFrame and scrollingFrame.Parent then
-            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
+            local contentSize = listLayout.AbsoluteContentSize
+            -- Garante que o CanvasSize seja pelo menos igual ao tamanho visível para o ScrollBar aparecer
+            local minHeight = scrollingFrame.AbsoluteWindowSize.Y
+            local canvasHeight = math.max(contentSize.Y + 10, minHeight + 1)
+            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, canvasHeight)
         end
-    end)
+    end
+    local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
+    -- Chama uma vez ao criar
+    updateCanvasSize()
     
     self.connections.canvasUpdate = canvasConnection
     self.scrollingFrame = scrollingFrame
