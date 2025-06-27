@@ -41,16 +41,12 @@ function BetterLeaderboard.new()
     local self = setmetatable({}, BetterLeaderboard)
     self.enabled = false
     self.connections = {}
+    self.frameConnections = {} -- Conexões específicas dos frames
     self.originalLeaderboardGui = nil
     self.customLeaderboardGui = nil
-    self.characterAddedConnection = nil
-    self.characterRemovingConnection = nil
-    self.playerAddedConnection = nil
-    self.playerRemovingConnection = nil
     self.updateScheduled = false
     self.currentCameraTarget = nil
     self.originalCameraSubject = nil
-    self.cameraConnections = {}
     self.playerFrames = {}
     self.lastColorUpdate = 0
     self.colorUpdateInterval = 1
@@ -61,21 +57,16 @@ end
 function BetterLeaderboard:getPlayerGui()
     local player = Players.LocalPlayer
     if not player then 
-        warn("LocalPlayer não encontrado")
         return nil 
     end
     
     local playerGui = player:FindFirstChildOfClass("PlayerGui")
     if not playerGui then
-        -- Aguarda o PlayerGui ser criado
         local success, result = pcall(function()
             return player:WaitForChild("PlayerGui", 5)
         end)
         if success then
             playerGui = result
-        else
-            warn("Timeout ao aguardar PlayerGui")
-            return nil
         end
     end
     
@@ -110,15 +101,8 @@ end
 
 function BetterLeaderboard:switchCameraToPlayer(player)
     local camera = workspace.CurrentCamera
-    if not camera then 
-        warn("CurrentCamera não encontrada")
+    if not camera or not player or not player.Parent then 
         return 
-    end
-    
-    -- Validar se o player ainda existe
-    if not player or not player.Parent or not player:IsDescendantOf(Players) then
-        warn("Player inválido para troca de câmera")
-        return
     end
     
     if self.currentCameraTarget == player then
@@ -131,34 +115,16 @@ function BetterLeaderboard:switchCameraToPlayer(player)
     end
     
     if not player.Character then 
-        warn("Player não possui Character")
         return 
     end
     
     local humanoid = player.Character:FindFirstChild("Humanoid")
     if not humanoid then 
-        warn("Humanoid não encontrado no Character do player")
         return 
     end
     
     self.currentCameraTarget = player
     camera.CameraSubject = humanoid
-    
-    -- Limpar conexões antigas antes de criar nova
-    for i = #self.cameraConnections, 1, -1 do
-        local connection = self.cameraConnections[i]
-        if connection and connection.Connected then
-            connection:Disconnect()
-        end
-        table.remove(self.cameraConnections, i)
-    end
-    
-    local connection = player.CharacterRemoving:Connect(function()
-        if self.currentCameraTarget == player then
-            self:resetCameraToLocalPlayer()
-        end
-    end)
-    table.insert(self.cameraConnections, connection)
 end
 
 function BetterLeaderboard:resetCameraToLocalPlayer()
@@ -178,27 +144,11 @@ function BetterLeaderboard:resetCameraToLocalPlayer()
     end
     
     self.currentCameraTarget = nil
-    
-    -- Limpar todas as conexões da câmera
-    for i = #self.cameraConnections, 1, -1 do
-        local connection = self.cameraConnections[i]
-        if connection and connection.Connected then
-            connection:Disconnect()
-        end
-        table.remove(self.cameraConnections, i)
-    end
 end
 
 function BetterLeaderboard:createCustomLeaderboard()
-    -- Destruir GUI existente se houver
-    if self.customLeaderboardGui and self.customLeaderboardGui.Parent then
-        self.customLeaderboardGui:Destroy()
-        self.customLeaderboardGui = nil
-    end
-    
     local playerGui = self:getPlayerGui()
     if not playerGui then
-        warn("Não foi possível obter PlayerGui para criar leaderboard customizado")
         return nil, nil
     end
     
@@ -241,12 +191,10 @@ function BetterLeaderboard:createCustomLeaderboard()
     listLayout.SortOrder = Enum.SortOrder.LayoutOrder
     listLayout.Padding = UDim.new(0, 2)
     
-    -- Definir parents na ordem correta
+    -- Parent elements in correct order
     listLayout.Parent = scrollingFrame
     scrollingFrame.Parent = leaderboardButton
     leaderboardButton.Parent = screenGui
-    
-    -- Só adicionar o ScreenGui ao PlayerGui no final
     screenGui.Parent = playerGui
 
     -- Update canvas size when content changes
@@ -256,9 +204,7 @@ function BetterLeaderboard:createCustomLeaderboard()
         end
     end)
     
-    -- Armazenar a conexão para limpeza posterior
     self.connections.canvasUpdate = canvasConnection
-    
     self.scrollingFrame = scrollingFrame
     self.customLeaderboardGui = screenGui
     
@@ -266,8 +212,7 @@ function BetterLeaderboard:createCustomLeaderboard()
 end
 
 function BetterLeaderboard:createPlayerFrame(player)
-    if not player or not player:IsDescendantOf(Players) then 
-        warn("Player inválido para criação de frame")
+    if not player or not player.Parent then 
         return nil
     end
     
@@ -314,84 +259,60 @@ function BetterLeaderboard:createPlayerFrame(player)
     playerLabel.BorderSizePixel = 0
     playerLabel.TextTruncate = Enum.TextTruncate.AtEnd
 
-    local function onPlayerLabelClick()
-        if self.enabled and hasCharacter and player:IsDescendantOf(Players) then
-            self:switchCameraToPlayer(player)
-        end
-    end
-
-    -- Definir parents na ordem correta
+    -- Parent elements
     prestigeButton.Parent = frame
     playerLabel.Parent = frame
 
-    -- Conectar eventos apenas depois que os elementos estão parented
-    local labelConnection = playerLabel.MouseButton1Click:Connect(onPlayerLabelClick)
-    local frameConnection = frame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 and hasCharacter then
-            onPlayerLabelClick()
+    -- Connect click events - store connections simply
+    local connectionKey = "player_" .. player.UserId
+    self.frameConnections[connectionKey] = {}
+    
+    self.frameConnections[connectionKey][1] = playerLabel.MouseButton1Click:Connect(function()
+        if self.enabled and hasCharacter and player.Parent then
+            self:switchCameraToPlayer(player)
         end
     end)
-
-    -- Armazenar conexões no sistema de gerenciamento
-    local frameKey = "frame_" .. player.UserId
-    if not self.connections[frameKey] then
-        self.connections[frameKey] = {}
-    end
-    self.connections[frameKey].labelClick = labelConnection
-    self.connections[frameKey].frameInput = frameConnection
-    
-    -- Usar ObjectValue para referenciar o player de forma segura
-    local playerValue = Instance.new("ObjectValue")
-    playerValue.Name = "PlayerReference"
-    playerValue.Value = player
-    playerValue.Parent = frame
-    
-    -- Usar BoolValue para hasCharacter
-    local hasCharacterValue = Instance.new("BoolValue")
-    hasCharacterValue.Name = "HasCharacter"
-    hasCharacterValue.Value = hasCharacter
-    hasCharacterValue.Parent = frame
     
     return frame
 end
 
+function BetterLeaderboard:cleanupFrameConnections()
+    for key, connections in pairs(self.frameConnections) do
+        if connections then
+            for _, connection in pairs(connections) do
+                if connection and connection.Connected then
+                    connection:Disconnect()
+                end
+            end
+        end
+    end
+    self.frameConnections = {}
+end
+
 function BetterLeaderboard:updatePlayerList()
     if not self:isCustomLeaderboardValid() then 
-        warn("Custom leaderboard inválido")
         return 
     end
     
     local scrollingFrame = self.scrollingFrame
     if not scrollingFrame or not scrollingFrame.Parent then 
-        warn("ScrollingFrame inválido")
         return 
     end
     
-    -- Limpar frames existentes com segurança
+    -- Clean up existing frames and connections
+    self:cleanupFrameConnections()
+    
     for player, frame in pairs(self.playerFrames) do
-        if frame then
-            -- Limpar conexões do frame usando o sistema de gerenciamento
-            local frameKey = "frame_" .. player.UserId
-            if self.connections[frameKey] then
-                for _, connection in pairs(self.connections[frameKey]) do
-                    if connection and connection.Connected then
-                        connection:Disconnect()
-                    end
-                end
-                self.connections[frameKey] = nil
-            end
-            
-            if frame.Parent then
-                frame:Destroy()
-            end
+        if frame and frame.Parent then
+            frame:Destroy()
         end
     end
     self.playerFrames = {}
     
-    -- Criar frames para todos os players
+    -- Create frames for all players
     local playerList = {}
     for _, player in pairs(Players:GetPlayers()) do
-        if player and player:IsDescendantOf(Players) then
+        if player and player.Parent then
             table.insert(playerList, player)
         end
     end
@@ -401,12 +322,12 @@ function BetterLeaderboard:updatePlayerList()
         local prestigeA = utils:getPlayerPrestigeData(a).level or 0
         local prestigeB = utils:getPlayerPrestigeData(b).level or 0
         if prestigeA == prestigeB then
-            return a.Name < b.Name -- Alphabetical if same prestige
+            return a.Name < b.Name
         end
         return prestigeA > prestigeB
     end)
     
-    -- Criar frames na ordem
+    -- Create frames in order
     for i, player in ipairs(playerList) do
         local frame = self:createPlayerFrame(player)
         if frame then
@@ -423,36 +344,25 @@ function BetterLeaderboard:updatePlayerColors()
     self.lastColorUpdate = currentTime
     
     for player, frame in pairs(self.playerFrames) do
-        if frame and frame.Parent and player and player:IsDescendantOf(Players) then
-            -- Obter valores usando os ObjectValue/BoolValue
-            local playerRef = frame:FindFirstChild("PlayerReference")
-            local hasCharacterRef = frame:FindFirstChild("HasCharacter")
+        if frame and frame.Parent and player and player.Parent then
+            local hasCharacter = player.Character ~= nil
+            local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
             
-            if playerRef and playerRef.Value == player then
-                local hasCharacter = player.Character ~= nil
-                local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
-                
-                local playerLabel = frame:FindFirstChild("PlayerLabel")
-                if playerLabel then
-                    playerLabel.TextColor3 = textColor
-                end
-                
-                local prestigeButton = frame:FindFirstChild("Prestige")
-                if prestigeButton then
-                    prestigeButton.TextColor3 = textColor
-                end
-                
-                -- Atualizar BoolValue
-                if hasCharacterRef then
-                    hasCharacterRef.Value = hasCharacter
-                end
+            local playerLabel = frame:FindFirstChild("PlayerLabel")
+            if playerLabel then
+                playerLabel.TextColor3 = textColor
+            end
+            
+            local prestigeButton = frame:FindFirstChild("Prestige")
+            if prestigeButton then
+                prestigeButton.TextColor3 = textColor
             end
         end
     end
 end
 
 function BetterLeaderboard:connectPlayerEvents()
-    -- Desconectar conexões existentes
+    -- Disconnect existing connections
     for key, connection in pairs(self.connections) do
         if connection and connection.Connected then
             connection:Disconnect()
@@ -460,88 +370,52 @@ function BetterLeaderboard:connectPlayerEvents()
     end
     self.connections = {}
     
-    -- Player added/removed events
+    -- Simple player events
     self.connections.playerAdded = Players.PlayerAdded:Connect(function(player)
-        if not player then return end
-        
+        task.wait(0.1)
         self:scheduleUpdate()
-        
-        -- Connect character events for this player
-        local function onCharacterAdded()
-            task.wait(0.1) -- Pequena espera para garantir que tudo esteja carregado
-            self:scheduleUpdate()
-        end
-        
-        local function onCharacterRemoving()
-            if self.currentCameraTarget == player then
-                self:resetCameraToLocalPlayer()
-            end
-            self:scheduleUpdate()
-        end
-        
-        if player.Character then
-            onCharacterAdded()
-        end
-        
-        self.connections["characterAdded_" .. player.UserId] = player.CharacterAdded:Connect(onCharacterAdded)
-        self.connections["characterRemoving_" .. player.UserId] = player.CharacterRemoving:Connect(onCharacterRemoving)
     end)
     
     self.connections.playerRemoving = Players.PlayerRemoving:Connect(function(player)
-        if not player then return end
-        
         if self.currentCameraTarget == player then
             self:resetCameraToLocalPlayer()
         end
         
-        -- Limpar frame do player
-        if self.playerFrames[player] then
-            local frame = self.playerFrames[player]
-            
-            -- Limpar conexões do frame usando o sistema de gerenciamento
-            local frameKey = "frame_" .. player.UserId
-            if self.connections[frameKey] then
-                for _, connection in pairs(self.connections[frameKey]) do
-                    if connection and connection.Connected then
-                        connection:Disconnect()
-                    end
+        -- Clean up frame connections for this player
+        local connectionKey = "player_" .. player.UserId
+        if self.frameConnections[connectionKey] then
+            for _, connection in pairs(self.frameConnections[connectionKey]) do
+                if connection and connection.Connected then
+                    connection:Disconnect()
                 end
-                self.connections[frameKey] = nil
             end
-            
-            self.playerFrames[player] = nil
+            self.frameConnections[connectionKey] = nil
         end
         
-        -- Limpar conexões específicas do player
-        if self.connections["characterAdded_" .. player.UserId] then
-            self.connections["characterAdded_" .. player.UserId]:Disconnect()
-            self.connections["characterAdded_" .. player.UserId] = nil
-        end
-        if self.connections["characterRemoving_" .. player.UserId] then
-            self.connections["characterRemoving_" .. player.UserId]:Disconnect()
-            self.connections["characterRemoving_" .. player.UserId] = nil
+        if self.playerFrames[player] then
+            self.playerFrames[player] = nil
         end
         
         self:scheduleUpdate()
     end)
     
-    -- Conectar eventos para players existentes
+    -- Character events for existing players
     for _, player in pairs(Players:GetPlayers()) do
-        if player and player:IsDescendantOf(Players) then
-            local function onCharacterAdded()
+        if player and player.Parent then
+            local characterAddedKey = "charAdded_" .. player.UserId
+            local characterRemovingKey = "charRemoving_" .. player.UserId
+            
+            self.connections[characterAddedKey] = player.CharacterAdded:Connect(function()
                 task.wait(0.1)
                 self:scheduleUpdate()
-            end
+            end)
             
-            local function onCharacterRemoving()
+            self.connections[characterRemovingKey] = player.CharacterRemoving:Connect(function()
                 if self.currentCameraTarget == player then
                     self:resetCameraToLocalPlayer()
                 end
                 self:scheduleUpdate()
-            end
-            
-            self.connections["characterAdded_" .. player.UserId] = player.CharacterAdded:Connect(onCharacterAdded)
-            self.connections["characterRemoving_" .. player.UserId] = player.CharacterRemoving:Connect(onCharacterRemoving)
+            end)
         end
     end
     
@@ -579,14 +453,7 @@ function BetterLeaderboard:enable()
         self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
     end)
     
-    if not success then
-        warn("Erro ao criar leaderboard customizado: " .. tostring(err))
-        self.enabled = false
-        return
-    end
-    
-    if not self.customLeaderboardGui then
-        warn("Falha ao criar GUI customizada")
+    if not success or not self.customLeaderboardGui then
         self.enabled = false
         return
     end
@@ -605,7 +472,7 @@ function BetterLeaderboard:disable()
     
     self.enabled = false
     
-    -- Desconectar todas as conexões
+    -- Disconnect all connections
     for key, connection in pairs(self.connections) do
         if connection and connection.Connected then
             connection:Disconnect()
@@ -613,38 +480,28 @@ function BetterLeaderboard:disable()
     end
     self.connections = {}
     
+    -- Clean up frame connections
+    self:cleanupFrameConnections()
+    
     -- Reset camera
     self:resetCameraToLocalPlayer()
     
-    -- Limpar frames de players
+    -- Clean up frames
     for player, frame in pairs(self.playerFrames) do
-        if frame then
-            -- Limpar conexões do frame usando o sistema de gerenciamento
-            local frameKey = "frame_" .. player.UserId
-            if self.connections[frameKey] then
-                for _, connection in pairs(self.connections[frameKey]) do
-                    if connection and connection.Connected then
-                        connection:Disconnect()
-                    end
-                end
-                self.connections[frameKey] = nil
-            end
-            
-            if frame.Parent then
-                frame:Destroy()
-            end
+        if frame and frame.Parent then
+            frame:Destroy()
         end
     end
     self.playerFrames = {}
     
-    -- Limpar GUI
+    -- Clean up GUI
     if self.customLeaderboardGui and self.customLeaderboardGui.Parent then
         self.customLeaderboardGui:Destroy()
     end
     self.customLeaderboardGui = nil
     self.scrollingFrame = nil
     
-    -- Mostrar leaderboard original
+    -- Show original leaderboard
     self:showOriginalLeaderboard()
     
     print("BetterLeaderboard disabled")
@@ -660,7 +517,6 @@ end
 
 function BetterLeaderboard:destroy()
     self:disable()
-    -- Não definir self como nil aqui, pois isso não funciona em Lua
 end
 
 return BetterLeaderboard
