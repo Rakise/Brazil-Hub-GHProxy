@@ -1,61 +1,93 @@
 -- utils.lua
--- Módulo Utils OOP para obtenção de dados de jogadores (APENAS LEITURA)
--- Uso: local Utils = require(path); local utils = Utils.new(); utils:getPlayerData(player)
+-- Player Data Utility Module (READ-ONLY) - OOP Implementation
+-- Usage: local Utils = require(path); local utils = Utils.new(); utils:getPlayerData(player)
 
 local Players = game:GetService("Players")
+
+-- Constants
+local CONSTANTS = {
+    FORCEFIELD_DURATION = 120,     -- ForceField duration in seconds
+    FORCEFIELD_WARNING_TIME = 60,  -- Warning threshold in seconds
+    FORCEFIELD_CRITICAL_TIME = 20, -- Critical threshold in seconds
+    
+    -- Color constants for ForceField status
+    COLORS = {
+        SAFE = Color3.fromRGB(0, 255, 0),     -- Green
+        WARNING = Color3.fromRGB(255, 255, 0), -- Yellow
+        CRITICAL = Color3.fromRGB(255, 0, 0)   -- Red
+    }
+}
 
 local Utils = {}
 Utils.__index = Utils
 
---- Cria uma nova instância do Utils
+--- Creates a new Utils instance
+-- @return Utils instance
 function Utils.new()
     local self = setmetatable({}, Utils)
     return self
 end
 
---- Obtém dados básicos do jogador (nome, rogue, etc.)
+--- Safely gets a player attribute with fallback value
+-- @param player Player - The player object
+-- @param attributeName string - Name of the attribute
+-- @param fallback any - Fallback value if attribute doesn't exist
+-- @return any - Attribute value or fallback
+function Utils:_safeGetAttribute(player, attributeName, fallback)
+    if not player then return fallback end
+    
+    local success, value = pcall(function()
+        return player:GetAttribute(attributeName)
+    end)
+    
+    return success and value or fallback
+end
+
+--- Formats a rogue name based on rank and gender
+-- @param firstName string - First name
+-- @param lastName string - Last name
+-- @param houseRank string - House rank
+-- @param gender string - Gender (Male/Female)
+-- @return string - Formatted rogue name
+function Utils:_formatRogueName(firstName, lastName, houseRank, gender)
+    local hasLastName = lastName ~= ""
+    local isOwner = houseRank == "Owner"
+    
+    if isOwner and hasLastName then
+        local title = gender == "Female" and "Lady" or "Lord"
+        return string.format("%s %s %s", title, firstName, lastName)
+    end
+    
+    return hasLastName and string.format("%s %s", firstName, lastName) or firstName
+end
+
+--- Retrieves basic player information
+-- @param player Player - The player object
+-- @return table - Basic player data
 function Utils:getPlayerBasicData(player)
     if not player then return {} end
     
-    local data = {
+    return {
         name = player.Name,
         displayName = player.DisplayName,
         userId = player.UserId,
         accountAge = player.AccountAge,
-        firstTime = player:GetAttribute("FirstTime") or false
+        firstTime = self:_safeGetAttribute(player, "FirstTime", false)
     }
-    
-    return data
 end
 
---- Obtém dados de rogue do jogador
+--- Retrieves player rogue information
+-- @param player Player - The player object
+-- @return table - Rogue data including formatted names
 function Utils:getPlayerRogueData(player)
     if not player then return {} end
     
-    local firstName = tostring(player:GetAttribute("FirstName") or "")
-    local lastName = tostring(player:GetAttribute("LastName") or "")
-    local houseRank = player:GetAttribute("HouseRank")
-    local gender = player:GetAttribute("Gender")
+    local firstName = tostring(self:_safeGetAttribute(player, "FirstName", ""))
+    local lastName = tostring(self:_safeGetAttribute(player, "LastName", ""))
+    local houseRank = self:_safeGetAttribute(player, "HouseRank", nil)
+    local gender = self:_safeGetAttribute(player, "Gender", nil)
     
-    local rogueName = ""
-    local fullRogueName = ""
-    
-    -- Monta o nome completo do rogue
-    if houseRank == "Owner" and lastName ~= "" then
-        if gender == "Male" then
-            rogueName = string.format("Lord %s %s", firstName, lastName)
-        elseif gender == "Female" then
-            rogueName = string.format("Lady %s %s", firstName, lastName)
-        end
-    else
-        if lastName ~= "" then
-            rogueName = string.format("%s %s", firstName, lastName)
-        else
-            rogueName = firstName
-        end
-    end
-    
-    fullRogueName = rogueName
+    local rogueName = self:_formatRogueName(firstName, lastName, houseRank, gender)
     
     return {
         firstName = firstName,
@@ -63,15 +95,17 @@ function Utils:getPlayerRogueData(player)
         houseRank = houseRank,
         gender = gender,
         rogueName = rogueName,
-        fullRogueName = fullRogueName
+        fullRogueName = rogueName -- Kept for backward compatibility
     }
 end
 
---- Obtém dados de edict do jogador
+--- Retrieves player edict information
+-- @param player Player - The player object
+-- @return table - Edict data
 function Utils:getPlayerEdictData(player)
     if not player then return {} end
     
-    local edict = player:GetAttribute("Edict") or "None"
+    local edict = self:_safeGetAttribute(player, "Edict", "None")
     
     return {
         edict = edict,
@@ -79,11 +113,13 @@ function Utils:getPlayerEdictData(player)
     }
 end
 
---- Obtém dados de prestige do jogador
+--- Retrieves player prestige information
+-- @param player Player - The player object
+-- @return table - Prestige data
 function Utils:getPlayerPrestigeData(player)
     if not player then return { level = 0 } end
     
-    local prestigeLevel = player:GetAttribute("Prestige") or 0
+    local prestigeLevel = self:_safeGetAttribute(player, "Prestige", 0)
     
     return {
         level = prestigeLevel,
@@ -91,7 +127,9 @@ function Utils:getPlayerPrestigeData(player)
     }
 end
 
---- Obtém dados de vida do jogador
+--- Retrieves player health information
+-- @param player Player - The player object
+-- @return table - Health data with formatted displays
 function Utils:getPlayerHealthData(player)
     if not player or not player.Character then return {} end
     
@@ -100,7 +138,7 @@ function Utils:getPlayerHealthData(player)
     
     local health = math.floor(humanoid.Health)
     local maxHealth = math.floor(humanoid.MaxHealth)
-    local healthPercent = math.floor((health / maxHealth) * 100)
+    local healthPercent = maxHealth > 0 and math.floor((health / maxHealth) * 100) or 0
     
     return {
         health = health,
@@ -111,7 +149,9 @@ function Utils:getPlayerHealthData(player)
     }
 end
 
---- Obtém dados completos do jogador
+--- Retrieves complete player data
+-- @param player Player - The player object
+-- @return table - Complete player data structure
 function Utils:getPlayerFullData(player)
     if not player then return {} end
     
@@ -119,66 +159,87 @@ function Utils:getPlayerFullData(player)
         basic = self:getPlayerBasicData(player),
         rogue = self:getPlayerRogueData(player),
         edict = self:getPlayerEdictData(player),
+        prestige = self:getPlayerPrestigeData(player),
         health = self:getPlayerHealthData(player)
     }
 end
 
---- Obtém dados de rogue formatados para display
+--- Gets formatted rogue name for display
+-- @param player Player - The player object
+-- @return string - Formatted rogue name
 function Utils:getPlayerRogueDisplay(player)
     local rogueData = self:getPlayerRogueData(player)
-    return rogueData.fullRogueName
+    return rogueData.rogueName or ""
 end
 
---- Obtém dados de edict formatados para display
+--- Gets formatted edict for display
+-- @param player Player - The player object
+-- @return string - Formatted edict display
 function Utils:getPlayerEdictDisplay(player)
     local edictData = self:getPlayerEdictData(player)
-    return edictData.edictDisplay
+    return edictData.edictDisplay or "None"
 end
 
---- Obtém dados de vida formatados para display
+--- Gets formatted health for display
+-- @param player Player - The player object
+-- @return string, string - Health display and health percent display
 function Utils:getPlayerHealthDisplay(player)
     local healthData = self:getPlayerHealthData(player)
-    return healthData.healthDisplay, healthData.healthPercentDisplay
+    return healthData.healthDisplay or "0/0", healthData.healthPercentDisplay or "0%"
 end
 
---- Verifica se o jogador tem ForceField
+--- Checks if player has ForceField
+-- @param player Player - The player object
+-- @return boolean - True if player has ForceField
 function Utils:hasForceField(player)
     if not player or not player.Character then return false end
     
-    for _, child in ipairs(player.Character:GetChildren()) do
-        if child:IsA("ForceField") then
-            return true
-        end
-    end
-    
-    return false
+    return player.Character:FindFirstChildOfClass("ForceField") ~= nil
 end
 
---- Obtém o tempo restante do ForceField (em segundos)
+--- Gets remaining ForceField time in seconds
+-- @param player Player - The player object
+-- @return number - Remaining time in seconds (0 if no ForceField)
 function Utils:getForceFieldTimeLeft(player)
     if not player or not player.Character then return 0 end
     
-    for _, child in ipairs(player.Character:GetChildren()) do
-        if child:IsA("ForceField") then
-            -- Assumindo que o ForceField dura 120 segundos
-            local startTime = child:GetAttribute("StartTime") or tick()
-            local elapsed = tick() - startTime
-            return math.max(0, 120 - elapsed)
-        end
-    end
+    local forceField = player.Character:FindFirstChildOfClass("ForceField")
+    if not forceField then return 0 end
     
-    return 0
+    local startTime = self:_safeGetAttribute(forceField, "StartTime", tick())
+    local elapsed = tick() - startTime
+    
+    return math.max(0, CONSTANTS.FORCEFIELD_DURATION - elapsed)
 end
 
---- Obtém a cor baseada no tempo restante do ForceField
+--- Gets ForceField status color based on remaining time
+-- @param timeLeft number - Remaining time in seconds
+-- @return Color3 - Color representing the ForceField status
 function Utils:getForceFieldColor(timeLeft)
-    if timeLeft > 60 then
-        return Color3.fromRGB(0, 255, 0) -- Verde
-    elseif timeLeft > 20 then
-        return Color3.fromRGB(255, 255, 0) -- Amarelo
+    if timeLeft > CONSTANTS.FORCEFIELD_WARNING_TIME then
+        return CONSTANTS.COLORS.SAFE
+    elseif timeLeft > CONSTANTS.FORCEFIELD_CRITICAL_TIME then
+        return CONSTANTS.COLORS.WARNING
     else
-        return Color3.fromRGB(255, 0, 0) -- Vermelho
+        return CONSTANTS.COLORS.CRITICAL
     end
 end
 
-return Utils 
+--- Gets comprehensive ForceField information
+-- @param player Player - The player object
+-- @return table - ForceField data including status, time, and color
+function Utils:getForceFieldData(player)
+    local hasFF = self:hasForceField(player)
+    local timeLeft = hasFF and self:getForceFieldTimeLeft(player) or 0
+    local color = self:getForceFieldColor(timeLeft)
+    
+    return {
+        hasForceField = hasFF,
+        timeLeft = timeLeft,
+        timeLeftFormatted = string.format("%.1fs", timeLeft),
+        color = color,
+        status = hasFF and "Active" or "Inactive"
+    }
+end
+
+return Utils
