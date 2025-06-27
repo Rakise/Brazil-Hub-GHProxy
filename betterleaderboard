@@ -248,8 +248,6 @@ function BetterLeaderboard:createPlayerFrame(player)
         end
     end)
 
-    frame.PlayerLabel = playerLabel
-    frame.Prestige = prestigeButton
     frame.Player = player
     frame.HasCharacter = hasCharacter
     self.playerFrames[player] = frame
