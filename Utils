@@ -89,6 +89,8 @@ function Utils:getPlayerRogueData(player)
     
     local rogueName = self:_formatRogueName(firstName, lastName, houseRank, gender)
     
+    print("[getPlayerRogueData] player:", player and player.Name or "nil", "firstName:", firstName, "lastName:", lastName, "houseRank:", houseRank, "gender:", gender, "rogueName:", rogueName)
+    
     return {
         firstName = firstName,
         lastName = lastName,
@@ -169,6 +171,7 @@ end
 -- @return string - Formatted rogue name
 function Utils:getPlayerRogueDisplay(player)
     local rogueData = self:getPlayerRogueData(player)
+    print("[getPlayerRogueDisplay] player:", player and player.Name or "nil", "rogueName:", rogueData.rogueName)
     return rogueData.rogueName or ""
 end
 
