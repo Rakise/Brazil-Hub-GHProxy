@@ -332,10 +332,25 @@ function BetterLeaderboard:createPlayerFrame(player)
         end
     end)
 
-    -- Armazenar conexões para limpeza
-    frame.Connections = {labelConnection, frameConnection}
-    frame.Player = player
-    frame.HasCharacter = hasCharacter
+    -- Armazenar conexões no sistema de gerenciamento
+    local frameKey = "frame_" .. player.UserId
+    if not self.connections[frameKey] then
+        self.connections[frameKey] = {}
+    end
+    self.connections[frameKey].labelClick = labelConnection
+    self.connections[frameKey].frameInput = frameConnection
+    
+    -- Usar ObjectValue para referenciar o player de forma segura
+    local playerValue = Instance.new("ObjectValue")
+    playerValue.Name = "PlayerReference"
+    playerValue.Value = player
+    playerValue.Parent = frame
+    
+    -- Usar BoolValue para hasCharacter
+    local hasCharacterValue = Instance.new("BoolValue")
+    hasCharacterValue.Name = "HasCharacter"
+    hasCharacterValue.Value = hasCharacter
+    hasCharacterValue.Parent = frame
     
     return frame
 end
@@ -355,13 +370,15 @@ function BetterLeaderboard:updatePlayerList()
     -- Limpar frames existentes com segurança
     for player, frame in pairs(self.playerFrames) do
         if frame then
-            -- Limpar conexões do frame
-            if frame.Connections then
-                for _, connection in pairs(frame.Connections) do
+            -- Limpar conexões do frame usando o sistema de gerenciamento
+            local frameKey = "frame_" .. player.UserId
+            if self.connections[frameKey] then
+                for _, connection in pairs(self.connections[frameKey]) do
                     if connection and connection.Connected then
                         connection:Disconnect()
                     end
                 end
+                self.connections[frameKey] = nil
             end
             
             if frame.Parent then
@@ -407,20 +424,29 @@ function BetterLeaderboard:updatePlayerColors()
     
     for player, frame in pairs(self.playerFrames) do
         if frame and frame.Parent and player and player:IsDescendantOf(Players) then
-            local hasCharacter = player.Character ~= nil
-            local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
+            -- Obter valores usando os ObjectValue/BoolValue
+            local playerRef = frame:FindFirstChild("PlayerReference")
+            local hasCharacterRef = frame:FindFirstChild("HasCharacter")
             
-            local playerLabel = frame:FindFirstChild("PlayerLabel")
-            if playerLabel then
-                playerLabel.TextColor3 = textColor
+            if playerRef and playerRef.Value == player then
+                local hasCharacter = player.Character ~= nil
+                local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
+                
+                local playerLabel = frame:FindFirstChild("PlayerLabel")
+                if playerLabel then
+                    playerLabel.TextColor3 = textColor
+                end
+                
+                local prestigeButton = frame:FindFirstChild("Prestige")
+                if prestigeButton then
+                    prestigeButton.TextColor3 = textColor
+                end
+                
+                -- Atualizar BoolValue
+                if hasCharacterRef then
+                    hasCharacterRef.Value = hasCharacter
+                end
             end
-            
-            local prestigeButton = frame:FindFirstChild("Prestige")
-            if prestigeButton then
-                prestigeButton.TextColor3 = textColor
-            end
-            
-            frame.HasCharacter = hasCharacter
         end
     end
 end
@@ -471,13 +497,18 @@ function BetterLeaderboard:connectPlayerEvents()
         -- Limpar frame do player
         if self.playerFrames[player] then
             local frame = self.playerFrames[player]
-            if frame and frame.Connections then
-                for _, connection in pairs(frame.Connections) do
+            
+            -- Limpar conexões do frame usando o sistema de gerenciamento
+            local frameKey = "frame_" .. player.UserId
+            if self.connections[frameKey] then
+                for _, connection in pairs(self.connections[frameKey]) do
                     if connection and connection.Connected then
                         connection:Disconnect()
                     end
                 end
+                self.connections[frameKey] = nil
             end
+            
             self.playerFrames[player] = nil
         end
         
@@ -588,13 +619,17 @@ function BetterLeaderboard:disable()
     -- Limpar frames de players
     for player, frame in pairs(self.playerFrames) do
         if frame then
-            if frame.Connections then
-                for _, connection in pairs(frame.Connections) do
+            -- Limpar conexões do frame usando o sistema de gerenciamento
+            local frameKey = "frame_" .. player.UserId
+            if self.connections[frameKey] then
+                for _, connection in pairs(self.connections[frameKey]) do
                     if connection and connection.Connected then
                         connection:Disconnect()
                     end
                 end
+                self.connections[frameKey] = nil
             end
+            
             if frame.Parent then
                 frame:Destroy()
             end
