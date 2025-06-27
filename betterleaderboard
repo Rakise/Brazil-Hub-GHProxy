@@ -306,11 +306,14 @@ function BetterLeaderboard:updatePlayerColors()
             local hasCharacter = player.Character ~= nil
             local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
             
-            if frame.PlayerLabel then
-                frame.PlayerLabel.TextColor3 = textColor
+            local playerLabel = frame:FindFirstChild("PlayerLabel")
+            if playerLabel then
+                playerLabel.TextColor3 = textColor
             end
-            if frame.Prestige then
-                frame.Prestige.TextColor3 = textColor
+            
+            local prestigeButton = frame:FindFirstChild("Prestige")
+            if prestigeButton then
+                prestigeButton.TextColor3 = textColor
             end
             
             frame.HasCharacter = hasCharacter
