@@ -200,11 +200,11 @@ function BetterLeaderboard:createCustomLeaderboard()
     -- Update canvas size when content changes
     local function updateCanvasSize()
         if scrollingFrame and scrollingFrame.Parent then
-            local contentSize = listLayout.AbsoluteContentSize
-            -- Garante que o CanvasSize seja pelo menos igual ao tamanho visível para o ScrollBar aparecer
-            local minHeight = scrollingFrame.AbsoluteWindowSize.Y
-            local canvasHeight = math.max(contentSize.Y + 10, minHeight + 1)
-            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, canvasHeight)
+            local n = #scrollingFrame:GetChildren() - 1 -- Remove o UIListLayout
+            local frameHeight = 25
+            local padding = 2
+            local totalHeight = n > 0 and (n * frameHeight + (n - 1) * padding) or 0
+            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
         end
     end
     local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
