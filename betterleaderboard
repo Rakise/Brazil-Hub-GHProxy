@@ -198,7 +198,6 @@ function BetterLeaderboard:createCustomLeaderboard()
     leaderboardButton.Parent = screenGui
     screenGui.Parent = playerGui
     
-    self.connections.canvasUpdate = canvasConnection
     self.scrollingFrame = scrollingFrame
     self.customLeaderboardGui = screenGui
     
