@@ -31,7 +31,8 @@ local COLORS = {
     WHITE = Color3.new(1, 1, 1),
     GRAY = Color3.new(0.592156, 0.560784, 0.560784),
     BLACK = Color3.new(0, 0, 0),
-    YELLOW = Color3.new(0.847058, 0.690196, 0.250980)
+    YELLOW = Color3.new(0.847058, 0.690196, 0.250980),
+    BLUE = Color3.fromRGB(80, 180, 255)
 }
 
 local BetterLeaderboard = {}
@@ -353,14 +354,19 @@ function BetterLeaderboard:updatePlayerColors()
     for player, frame in pairs(self.playerFrames) do
         if frame and frame.Parent and player and player.Parent then
             local hasCharacter = player.Character ~= nil
-            local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
-            
+            local isObserved = (self.currentCameraTarget == player)
             local playerLabel = frame:FindFirstChild("PlayerLabel")
+            local prestigeButton = frame:FindFirstChild("Prestige")
+
+            -- Cor: azul se observado, branco se tem personagem, cinza se não tem
+            local textColor = isObserved and COLORS.BLUE or (hasCharacter and COLORS.WHITE or COLORS.GRAY)
+
             if playerLabel then
                 playerLabel.TextColor3 = textColor
+                playerLabel.Active = hasCharacter -- Só clicável se tem personagem
+                playerLabel.AutoButtonColor = hasCharacter -- Efeito hover só se clicável
+                playerLabel.TextTransparency = hasCharacter and 0.2 or 0.5
             end
-            
-            local prestigeButton = frame:FindFirstChild("Prestige")
             if prestigeButton then
                 prestigeButton.TextColor3 = textColor
             end
