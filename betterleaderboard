@@ -197,7 +197,19 @@ function BetterLeaderboard:createCustomLeaderboard()
     scrollingFrame.Parent = leaderboardButton
     leaderboardButton.Parent = screenGui
     screenGui.Parent = playerGui
+
+    -- Update canvas size when content changes
+    local function updateCanvasSize()
+        if scrollingFrame and scrollingFrame.Parent then
+            local contentHeight = listLayout.AbsoluteContentSize.Y
+            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 4) -- 4px extra para garantir o scroll
+        end
+    end
+    local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
+    -- Chama uma vez ao criar
+    updateCanvasSize()
     
+    self.connections.canvasUpdate = canvasConnection
     self.scrollingFrame = scrollingFrame
     self.customLeaderboardGui = screenGui
     
