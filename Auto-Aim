@@ -112,10 +112,19 @@ function AutoAim:enable()
                 local npcHead = targetNPC:FindFirstChild("Head")
 
                 if npcHead then
-                    local velocity = npcHRP.Velocity
-                    local timeToHit = self.timeToHit or 0.15
-                    local predictedPos = npcHead.Position + velocity * timeToHit
-                    local hitPosition = predictedPos + Vector3.new(0, -2, 0)
+                    local hitPosition
+                    if equippedTool.Name == "Percutiens" then
+                        -- Mira 25 studs atrás do NPC em relação ao jogador
+                        local direction = (npcHRP.Position - character.HumanoidRootPart.Position).Unit
+                        local distanceBehind = 25 -- 20-30 studs atrás
+                        hitPosition = npcHead.Position + direction * distanceBehind
+                    else
+                        -- Mira normal (predição)
+                        local velocity = npcHRP.Velocity
+                        local timeToHit = self.timeToHit or 0.15
+                        local predictedPos = npcHead.Position + velocity * timeToHit
+                        hitPosition = predictedPos + Vector3.new(0, -2, 0)
+                    end
 
                     local marker = Instance.new("Part")
                     marker.Anchored = true
