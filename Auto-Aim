@@ -120,14 +120,6 @@ function AutoAim:enable()
     local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
     local Mouse = LocalPlayer:GetMouse()
     local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
-    
-    -- Buffer para predição de movimento
-    self.positionBuffer = self.positionBuffer or {}
-    self.bufferSize = 5
-    -- Configurações para predição
-    local delayTime = 3  -- Atraso de 3 segundos até o disparo
-    local projectileSpeed = 50  -- Velocidade do projétil em studs por segundo
-
     RemoteFunction.OnClientInvoke = function()
         local character = LocalPlayer.Character
         if not character then return end
@@ -149,35 +141,16 @@ function AutoAim:enable()
                 local npcHead = targetNPC:FindFirstChild("Head")
                 if npcHead then
                     local hitPosition
-                    local distance = (npcHead.Position - character.HumanoidRootPart.Position).Magnitude
-                    local flightTime = distance / projectileSpeed  -- Tempo de voo do projétil
-                    local timeToHit = delayTime + flightTime  -- Tempo total: atraso + voo
-
-                    -- Buffer de posições
-                    if not self.positionBuffer[targetNPC] then
-                        self.positionBuffer[targetNPC] = {}
-                    end
-                    local buffer = self.positionBuffer[targetNPC]
-                    table.insert(buffer, npcHead.Position)
-                    if #buffer > self.bufferSize then
-                        table.remove(buffer, 1)
-                    end
-
-                    -- Velocidade média
-                    local avgVelocity = Vector3.new(0, 0, 0)
-                    if #buffer > 1 then
-                        for i = 2, #buffer do
-                            avgVelocity = avgVelocity + (buffer[i] - buffer[i-1])
-                        end
-                        avgVelocity = avgVelocity / (#buffer - 1) * 60
-                    end
-
                     if equippedTool.Name == "Percutiens" then
+                        -- Mira atrás do NPC em relação ao jogador, usando range configurável
                         local direction = (npcHRP.Position - character.HumanoidRootPart.Position).Unit
                         local distanceBehind = math.random(self.studsBehindMin, self.studsBehindMax)
-                        hitPosition = npcHead.Position + avgVelocity * timeToHit + direction * distanceBehind
+                        hitPosition = npcHead.Position + direction * distanceBehind
                     else
-                        local predictedPos = npcHead.Position + avgVelocity * timeToHit
+                        -- Mira normal (predição)
+                        local velocity = npcHRP.Velocity
+                        local timeToHit = self.timeToHit or 0.15
+                        local predictedPos = npcHead.Position + velocity * timeToHit
                         hitPosition = predictedPos + Vector3.new(0, -2, 0)
                     end
 
