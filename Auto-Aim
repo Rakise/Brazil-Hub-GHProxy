@@ -62,13 +62,17 @@ function AutoAim:getBestNPC(localChar)
     if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
 
     local camera = Workspace.CurrentCamera
-    local viewport = camera.ViewportSize
-    local mousePos = Vector2.new(viewport.X/2, viewport.Y/2)
+    local mouse = Players.LocalPlayer:GetMouse()
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
     local fovMax = self.fovMax or 20
     local fieldOfView = camera.FieldOfView
-    local maxRadius = (fovMax / fieldOfView) * (viewport.X / 2)
+    local viewport = camera.ViewportSize
 
-    local closestNPC, minDist = nil, math.huge
+    -- Vetor da câmera para o mouse
+    local mouseRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
+    local mouseDir = mouseRay.Direction.Unit
+
+    local closestNPC, minAngle = nil, math.huge
 
     for _, model in ipairs(LIVE_FOLDER:GetChildren()) do
         local hrp = model:FindFirstChild("HumanoidRootPart")
@@ -77,16 +81,24 @@ function AutoAim:getBestNPC(localChar)
         local enoughhealth = model:FindFirstChild("Humanoid") and model.Humanoid.Health > 5
 
         if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughhealth then
-            local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+            local npcScreenPos, onScreen = camera:WorldToViewportPoint(head.Position)
             if onScreen then
-                local npc2D = Vector2.new(screenPos.X, screenPos.Y)
-                local dist = (npc2D - mousePos).Magnitude
-                if dist <= maxRadius and dist < minDist then
+                local npcDir = (head.Position - camera.CFrame.Position).Unit
+                local angle = math.deg(math.acos(mouseDir:Dot(npcDir)))
+                print(string.format("[AutoAim] NPC: %s | angle=%.2f", model.Name, angle))
+                if angle <= fovMax/2 and angle < minAngle then
+                    print("[AutoAim] -> Selecionado como melhor NPC!")
                     closestNPC = model
-                    minDist = dist
+                    minAngle = angle
                 end
             end
         end
+    end
+
+    if closestNPC then
+        print("[AutoAim] NPC escolhido:", closestNPC.Name)
+    else
+        print("[AutoAim] Nenhum NPC dentro do FOV!")
     end
 
     return closestNPC
