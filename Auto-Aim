@@ -61,8 +61,11 @@ end
 function AutoAim:getBestNPC(localChar)
     if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
 
-    local origin = localChar.HumanoidRootPart.Position
-    local closestNPC, shortestDistance = nil, math.huge
+    local camera = Workspace.CurrentCamera
+    local mouse = Players.LocalPlayer:GetMouse()
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local fovMax = self.fovMax or 20 -- graus
+    local closestNPC, minAngle = nil, math.huge
 
     for _, model in ipairs(LIVE_FOLDER:GetChildren()) do
         local hrp = model:FindFirstChild("HumanoidRootPart")
@@ -71,11 +74,13 @@ function AutoAim:getBestNPC(localChar)
         local enoughhealth = model:FindFirstChild("Humanoid") and model.Humanoid.Health > 5
 
         if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughhealth then
-            local distance = (origin - hrp.Position).Magnitude
-            if distance <= (self.maxRange or 200) then
-                if distance < shortestDistance then
+            local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+            if onScreen then
+                local npc2D = Vector2.new(screenPos.X, screenPos.Y)
+                local angle = math.deg((npc2D - mousePos).Magnitude / (camera.ViewportSize.X/2) * (camera.FieldOfView/2))
+                if angle <= fovMax and angle < minAngle then
                     closestNPC = model
-                    shortestDistance = distance
+                    minAngle = angle
                 end
             end
         end
@@ -110,7 +115,6 @@ function AutoAim:enable()
             if targetNPC and targetNPC:FindFirstChild("HumanoidRootPart") then
                 local npcHRP = targetNPC.HumanoidRootPart
                 local npcHead = targetNPC:FindFirstChild("Head")
-
                 if npcHead then
                     local hitPosition
                     if equippedTool.Name == "Percutiens" then
@@ -163,6 +167,11 @@ function AutoAim:disable()
     self.enabled = false
     local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
     RemoteFunction.OnClientInvoke = nil
+end
+
+-- Adicionar setter para FOV
+function AutoAim:setFOV(fov)
+    self.fovMax = fov
 end
 
 return AutoAim 
