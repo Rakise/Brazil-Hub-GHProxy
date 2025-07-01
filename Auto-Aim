@@ -62,11 +62,10 @@ function AutoAim:getBestNPC(localChar)
     if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
 
     local camera = Workspace.CurrentCamera
-    local mouse = Players.LocalPlayer:GetMouse()
-    local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local viewport = camera.ViewportSize
+    local mousePos = Vector2.new(viewport.X/2, viewport.Y/2)
     local fovMax = self.fovMax or 20
     local fieldOfView = camera.FieldOfView
-    local viewport = camera.ViewportSize
     local maxRadius = (fovMax / fieldOfView) * (viewport.X / 2)
 
     local closestNPC, minDist = nil, math.huge
