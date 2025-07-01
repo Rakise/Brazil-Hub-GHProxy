@@ -1,112 +1,35 @@
 -- PlayerESPHandler.lua
--- Enhanced Player ESP system for Roblox with improved structure and performance
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
--- Load Utils module
+-- Carrega o módulo Utils
 local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
 local utils = Utils.new()
 
--- Constants
-local CONSTANTS = {
-    ESP_NAME = "PlayerESP",
-    DEFAULT_TEXT_SIZE = 14,
-    DEFAULT_TEXT_COLOR = Color3.new(1, 1, 1),
-    BILLBOARD_SIZE = UDim2.new(0, 500, 0, 100),
-    LABEL_PADDING = UDim.new(0, 3),
-    TEXT_STROKE_TRANSPARENCY = 0.5
-}
-
--- Utility Functions
 local function getBestAdornee(character)
-    local candidates = {"Head", "UpperTorso", "Torso"}
-    
-    for _, partName in ipairs(candidates) do
-        local part = character:FindFirstChild(partName)
-        if part then
-            return part
-        end
-    end
-    
-    return character:FindFirstChildWhichIsA("BasePart")
+    return character:FindFirstChild("Head")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChildWhichIsA("BasePart")
 end
 
-local function createTextLabel(text, parent, autoSize)
-    local label = Instance.new("TextLabel")
-    label.FontSize = Enum.FontSize.Size14
-    label.TextColor3 = CONSTANTS.DEFAULT_TEXT_COLOR
-    label.BorderColor3 = Color3.new(0, 0, 0)
-    label.Text = text
-    label.TextStrokeTransparency = CONSTANTS.TEXT_STROKE_TRANSPARENCY
-    label.Font = Enum.Font.SourceSansSemibold
-    label.BackgroundTransparency = 1
-    label.TextSize = CONSTANTS.DEFAULT_TEXT_SIZE
-    label.BorderSizePixel = 0
-    label.BackgroundColor3 = Color3.new(1, 1, 1)
-    label.Parent = parent
-    
-    if autoSize then
-        label.AutomaticSize = Enum.AutomaticSize.X
-        label.Size = UDim2.new(0, 0, 0.1, 0)
-    else
-        label.Size = UDim2.new(1, 0, 0.1, 0)
-    end
-    
-    return label
-end
-
-local function createFrameWithLayout(parent, fillDirection)
-    local frame = Instance.new("Frame")
-    frame.BackgroundTransparency = 1
-    frame.BorderColor3 = Color3.new(0, 0, 0)
-    frame.Size = UDim2.new(1, 0, 0.1, 0)
-    frame.BorderSizePixel = 0
-    frame.BackgroundColor3 = Color3.new(1, 1, 1)
-    frame.Parent = parent
-    
-    local layout = Instance.new("UIListLayout")
-    layout.VerticalAlignment = Enum.VerticalAlignment.Center
-    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Padding = CONSTANTS.LABEL_PADDING
-    
-    if fillDirection then
-        layout.FillDirection = fillDirection
-    end
-    
-    layout.Parent = frame
-    
-    return frame
-end
-
--- PlayerESP Class
 local PlayerESP = {}
 PlayerESP.__index = PlayerESP
 
+PlayerESP.defaultTextSize = 14
+PlayerESP.defaultTextColor = Color3.new(1,1,1)
+
 function PlayerESP.new()
     local self = setmetatable({}, PlayerESP)
-    
-    -- State management
     self.enabled = false
     self.connections = {}
     self.espBillboards = {}
-    self.updateConnection = nil
-    
-    -- Configuration
-    self.defaultTextSize = CONSTANTS.DEFAULT_TEXT_SIZE
-    self.defaultTextColor = CONSTANTS.DEFAULT_TEXT_COLOR
-    
     return self
 end
 
--- Private Methods
-
---- Creates a billboard GUI for the specified player
---- @param player Player The player to create the billboard for
-function PlayerESP:_createBillboard(player)
+function PlayerESP:createBillboard(player)
     local character = player.Character
-    if not character or character:FindFirstChild(CONSTANTS.ESP_NAME) then
+    if not character or character:FindFirstChild("PlayerESP") then
         return
     end
 
@@ -115,246 +38,247 @@ function PlayerESP:_createBillboard(player)
         return
     end
 
-    -- Main Billboard GUI
-    local billboard = self:_createMainBillboard(adornee)
-    
-    -- Create UI elements
-    local nameLabel = createTextLabel("[" .. player.Name .. "]", billboard, false)
-    local infoFrame = self:_createInfoFrame(billboard)
-    local hpFrame = self:_createHealthFrame(billboard)
-
-    -- Store billboard data
-    self.espBillboards[player] = {
-        billboard = billboard,
-        nameLabel = nameLabel,
-        rogueLabel = infoFrame.rogueLabel,
-        edictLabel = infoFrame.edictLabel,
-        hpLabel = hpFrame.hpLabel,
-        hpPercLabel = hpFrame.hpPercLabel
-    }
-end
-
---- Creates the main billboard GUI structure
---- @param adornee BasePart The part to attach the billboard to
---- @return BillboardGui The created billboard
-function PlayerESP:_createMainBillboard(adornee)
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = CONSTANTS.ESP_NAME
+    billboard.Name = "PlayerESP"
     billboard.LightInfluence = 1
     billboard.Active = true
     billboard.Adornee = adornee
     billboard.ClipsDescendants = true
     billboard.AlwaysOnTop = true
-    billboard.Size = CONSTANTS.BILLBOARD_SIZE
+    billboard.Size = UDim2.new(0, 500, 0, 100)
     billboard.Parent = adornee
 
-    -- Main layout
     local layout = Instance.new("UIListLayout")
-    layout.Padding = CONSTANTS.LABEL_PADDING
+    layout.Padding = UDim.new(0, 3)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = billboard
 
-    return billboard
-end
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.FontSize = Enum.FontSize.Size14
+    nameLabel.TextColor3 = Color3.new(1,1,1)
+    nameLabel.BorderColor3 = Color3.new(0,0,0)
+    nameLabel.Text = "[" .. player.Name .. "]"
+    nameLabel.TextStrokeTransparency = 0.5
+    nameLabel.Font = Enum.Font.SourceSansSemibold
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextSize = 14
+    nameLabel.Size = UDim2.new(1,0,0.1,0)
+    nameLabel.BorderSizePixel = 0
+    nameLabel.BackgroundColor3 = Color3.new(1,1,1)
+    nameLabel.Parent = billboard
 
---- Creates the info frame containing rogue and edict labels
---- @param parent Instance The parent to attach the frame to
---- @return table Table containing the frame and its labels
-function PlayerESP:_createInfoFrame(parent)
-    local infoFrame = createFrameWithLayout(parent, Enum.FillDirection.Horizontal)
-    
-    local rogueLabel = createTextLabel("[Lord Abadon Terrified]", infoFrame, true)
-    local edictLabel = createTextLabel("[Healer]", infoFrame, true)
-    
-    return {
-        frame = infoFrame,
+    local infoFrame = Instance.new("Frame")
+    infoFrame.BackgroundTransparency = 1
+    infoFrame.BorderColor3 = Color3.new(0,0,0)
+    infoFrame.Size = UDim2.new(1,0,0.1,0)
+    infoFrame.BorderSizePixel = 0
+    infoFrame.BackgroundColor3 = Color3.new(1,1,1)
+    infoFrame.Parent = billboard
+
+    local infoLayout = Instance.new("UIListLayout")
+    infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    infoLayout.FillDirection = Enum.FillDirection.Horizontal
+    infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    infoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    infoLayout.Parent = infoFrame
+
+    local rogueLabel = Instance.new("TextLabel")
+    rogueLabel.FontSize = Enum.FontSize.Size14
+    rogueLabel.TextColor3 = Color3.new(1,1,1)
+    rogueLabel.BorderColor3 = Color3.new(0,0,0)
+    rogueLabel.Text = "[Lord Abadon Terrified]"
+    rogueLabel.TextStrokeTransparency = 0.5
+    rogueLabel.AutomaticSize = Enum.AutomaticSize.X
+    rogueLabel.Font = Enum.Font.SourceSansSemibold
+    rogueLabel.BackgroundTransparency = 1
+    rogueLabel.TextSize = 14
+    rogueLabel.Size = UDim2.new(0,0,0.1,0)
+    rogueLabel.BorderSizePixel = 0
+    rogueLabel.BackgroundColor3 = Color3.new(1,1,1)
+    rogueLabel.Parent = infoFrame
+
+    local edictLabel = Instance.new("TextLabel")
+    edictLabel.FontSize = Enum.FontSize.Size14
+    edictLabel.TextColor3 = Color3.new(1,1,1)
+    edictLabel.BorderColor3 = Color3.new(0,0,0)
+    edictLabel.Text = "[Healer]"
+    edictLabel.TextStrokeTransparency = 0.5
+    edictLabel.Font = Enum.Font.SourceSansSemibold
+    edictLabel.BackgroundTransparency = 1
+    edictLabel.AutomaticSize = Enum.AutomaticSize.X
+    edictLabel.TextSize = 14
+    edictLabel.Size = UDim2.new(0,0,0.1,0)
+    edictLabel.BorderSizePixel = 0
+    edictLabel.BackgroundColor3 = Color3.new(1,1,1)
+    edictLabel.Parent = infoFrame
+
+    local hpFrame = Instance.new("Frame")
+    hpFrame.BackgroundTransparency = 1
+    hpFrame.BorderColor3 = Color3.new(0,0,0)
+    hpFrame.Size = UDim2.new(1,0,0.1,0)
+    hpFrame.BorderSizePixel = 0
+    hpFrame.BackgroundColor3 = Color3.new(1,1,1)
+    hpFrame.Parent = billboard
+
+    local hpLayout = Instance.new("UIListLayout")
+    hpLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    hpLayout.FillDirection = Enum.FillDirection.Horizontal
+    hpLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    hpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    hpLayout.Parent = hpFrame
+
+    local hpLabel = Instance.new("TextLabel")
+    hpLabel.FontSize = Enum.FontSize.Size14
+    hpLabel.TextColor3 = Color3.new(1,1,1)
+    hpLabel.BorderColor3 = Color3.new(0,0,0)
+    hpLabel.Text = "[100/100]"
+    hpLabel.TextStrokeTransparency = 0.5
+    hpLabel.Font = Enum.Font.SourceSansSemibold
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.AutomaticSize = Enum.AutomaticSize.X
+    hpLabel.TextSize = 14
+    hpLabel.Size = UDim2.new(0,0,0.1,0)
+    hpLabel.BorderSizePixel = 0
+    hpLabel.BackgroundColor3 = Color3.new(1,1,1)
+    hpLabel.Parent = hpFrame
+
+    local hpPercLabel = Instance.new("TextLabel")
+    hpPercLabel.FontSize = Enum.FontSize.Size14
+    hpPercLabel.TextColor3 = Color3.new(1,1,1)
+    hpPercLabel.BorderColor3 = Color3.new(0,0,0)
+    hpPercLabel.Text = "[100%]"
+    hpPercLabel.TextStrokeTransparency = 0.5
+    hpPercLabel.Font = Enum.Font.SourceSansSemibold
+    hpPercLabel.BackgroundTransparency = 1
+    hpPercLabel.AutomaticSize = Enum.AutomaticSize.X
+    hpPercLabel.TextSize = 14
+    hpPercLabel.Size = UDim2.new(0,0,0.1,0)
+    hpPercLabel.BorderSizePixel = 0
+    hpPercLabel.BackgroundColor3 = Color3.new(1,1,1)
+    hpPercLabel.Parent = hpFrame
+
+    self.espBillboards[player] = {
+        billboard = billboard,
+        nameLabel = nameLabel,
         rogueLabel = rogueLabel,
-        edictLabel = edictLabel
-    }
-end
-
---- Creates the health frame containing health labels
---- @param parent Instance The parent to attach the frame to
---- @return table Table containing the frame and its labels
-function PlayerESP:_createHealthFrame(parent)
-    local hpFrame = createFrameWithLayout(parent, Enum.FillDirection.Horizontal)
-    
-    local hpLabel = createTextLabel("[100/100]", hpFrame, true)
-    local hpPercLabel = createTextLabel("[100%]", hpFrame, true)
-    
-    return {
-        frame = hpFrame,
+        edictLabel = edictLabel,
         hpLabel = hpLabel,
         hpPercLabel = hpPercLabel
     }
 end
 
---- Removes billboard for the specified player
---- @param player Player The player to remove the billboard for
-function PlayerESP:_removeBillboard(player)
+function PlayerESP:removeBillboard(player)
     local data = self.espBillboards[player]
     if data and data.billboard then
         data.billboard:Destroy()
+        self.espBillboards[player] = nil
     end
-    self.espBillboards[player] = nil
 end
 
---- Updates all active billboards with current player data
-function PlayerESP:_updateBillboards()
+function PlayerESP:updateBillboards()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Players.LocalPlayer and player.Character then
             local data = self.espBillboards[player]
-            
-            -- Create billboard if it doesn't exist
             if not data then
-                self:_createBillboard(player)
+                self:createBillboard(player)
                 data = self.espBillboards[player]
             end
-            
-            -- Update billboard data
             if data then
-                self:_updateBillboardData(player, data)
+                local currentName = data.nameLabel.Text
+                local currentRogue = data.rogueLabel.Text
+                local currentEdict = data.edictLabel.Text
+                local currentHP = data.hpLabel.Text
+                local currentHPPerc = data.hpPercLabel.Text
+
+                local newName = "[" .. player.Name .. "]"
+                local newRogue = "[" .. utils:getPlayerRogueDisplay(player) .. "]"
+                local newEdict = "[" .. utils:getPlayerEdictDisplay(player) .. "]"
+                local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
+                local newHP = "[" .. healthDisplay .. "]"
+                local newHPPerc = "[" .. healthPercentDisplay .. "]"
+
+                if currentName ~= newName then
+                    data.nameLabel.Text = newName
+                end
+                if currentRogue ~= newRogue then
+                    data.rogueLabel.Text = newRogue
+                end
+                if currentEdict ~= newEdict then
+                    data.edictLabel.Text = newEdict
+                end
+                if currentHP ~= newHP then
+                    data.hpLabel.Text = newHP
+                end
+                if currentHPPerc ~= newHPPerc then
+                    data.hpPercLabel.Text = newHPPerc
+                end
             end
         end
     end
 end
 
---- Updates billboard data for a specific player
---- @param player Player The player to update
---- @param data table The billboard data to update
-function PlayerESP:_updateBillboardData(player, data)
-    data.nameLabel.Text = "[" .. player.Name .. "]"
-    data.rogueLabel.Text = "[" .. utils:getPlayerRogueDisplay(player) .. "]"
-    data.edictLabel.Text = "[" .. utils:getPlayerEdictDisplay(player) .. "]"
-    
-    local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-    data.hpLabel.Text = "[" .. healthDisplay .. "]"
-    data.hpPercLabel.Text = "[" .. healthPercentDisplay .. "]"
-end
-
---- Sets up event connections for player management
-function PlayerESP:_setupConnections()
-    -- Handle new players joining
+function PlayerESP:enable()
+    self.enabled = true
+    self:cleanup()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            self:createBillboard(player)
+        else
+        end
+    end
     table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
         if player ~= Players.LocalPlayer then
-            self:_createBillboard(player)
+            self:createBillboard(player)
+        else
         end
     end))
-    
-    -- Handle players leaving
     table.insert(self.connections, Players.PlayerRemoving:Connect(function(player)
-        self:_removeBillboard(player)
+        self:removeBillboard(player)
     end))
-    
-    -- Setup update loop
     self.updateConnection = RunService.RenderStepped:Connect(function()
-        self:_updateBillboards()
+        self:updateBillboards()
     end)
 end
 
---- Applies text size to all billboard labels
---- @param size number The text size to apply
-function PlayerESP:_applyTextSizeToAll(size)
-    for _, data in pairs(self.espBillboards) do
-        local labels = {data.nameLabel, data.rogueLabel, data.edictLabel, data.hpLabel, data.hpPercLabel}
-        for _, label in ipairs(labels) do
-            if label then
-                label.TextSize = size
-            end
-        end
-    end
-end
-
---- Applies text color to all billboard labels
---- @param color Color3 The color to apply
-function PlayerESP:_applyTextColorToAll(color)
-    for _, data in pairs(self.espBillboards) do
-        local labels = {data.nameLabel, data.rogueLabel, data.edictLabel, data.hpLabel, data.hpPercLabel}
-        for _, label in ipairs(labels) do
-            if label then
-                label.TextColor3 = color
-            end
-        end
-    end
-end
-
--- Public Methods
-
---- Enables the ESP system
-function PlayerESP:enable()
-    if self.enabled then
-        return -- Already enabled
-    end
-    
-    self.enabled = true
-    self:cleanup()
-    
-    -- Create billboards for existing players
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= Players.LocalPlayer then
-            self:_createBillboard(player)
-        end
-    end
-    
-    self:_setupConnections()
-end
-
---- Disables the ESP system
 function PlayerESP:disable()
     self.enabled = false
     self:cleanup()
 end
 
---- Cleans up all connections and billboards
 function PlayerESP:cleanup()
-    -- Disconnect all connections
     for _, conn in ipairs(self.connections) do
-        if conn and conn.Disconnect then 
-            conn:Disconnect() 
-        end
+        if conn and conn.Disconnect then conn:Disconnect() end
     end
     self.connections = {}
-    
-    -- Disconnect update connection
     if self.updateConnection and self.updateConnection.Disconnect then
         self.updateConnection:Disconnect()
     end
     self.updateConnection = nil
-    
-    -- Remove all billboards
     for player, _ in pairs(self.espBillboards) do
-        self:_removeBillboard(player)
+        self:removeBillboard(player)
     end
 end
 
---- Sets the text size for all ESP labels
---- @param size number The new text size
 function PlayerESP:setTextSize(size)
     self.defaultTextSize = size
-    self:_applyTextSizeToAll(size)
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.TextSize = size end
+        if data.rogueLabel then data.rogueLabel.TextSize = size end
+        if data.edictLabel then data.edictLabel.TextSize = size end
+        if data.hpLabel then data.hpLabel.TextSize = size end
+        if data.hpPercLabel then data.hpPercLabel.TextSize = size end
+    end
 end
 
---- Sets the text color for all ESP labels
---- @param color Color3 The new text color
 function PlayerESP:setTextColor(color)
     self.defaultTextColor = color
-    self:_applyTextColorToAll(color)
-end
-
---- Checks if ESP is currently enabled
---- @return boolean True if enabled, false otherwise
-function PlayerESP:isEnabled()
-    return self.enabled
-end
-
---- Gets the current configuration
---- @return table Configuration table with text size and color
-function PlayerESP:getConfig()
-    return {
-        textSize = self.defaultTextSize,
-        textColor = self.defaultTextColor,
-        enabled = self.enabled
-    }
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.TextColor3 = color end
+        if data.rogueLabel then data.rogueLabel.TextColor3 = color end
+        if data.edictLabel then data.edictLabel.TextColor3 = color end
+        if data.hpLabel then data.hpLabel.TextColor3 = color end
+        if data.hpPercLabel then data.hpPercLabel.TextColor3 = color end
+    end
 end
 
 return PlayerESP
