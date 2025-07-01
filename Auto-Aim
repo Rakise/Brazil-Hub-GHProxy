@@ -59,44 +59,51 @@ function AutoAim:setTools(toolTable)
     self.toolNames = hash
 end
 
---- Busca o NPC mais próximo e visível
 function AutoAim:getBestNPC(localChar)
+    -- Verifica se o personagem local é válido
     if not localChar or not localChar:FindFirstChild("HumanoidRootPart") then return end
 
+    -- Obtém a câmera e a posição do mouse
     local camera = Workspace.CurrentCamera
     local mouse = Players.LocalPlayer:GetMouse()
     local mousePos = Vector2.new(mouse.X, mouse.Y)
     local fovMax = self.fovMax or 20
-    local fieldOfView = camera.FieldOfView
-    local viewport = camera.ViewportSize
 
-    -- Vetor da câmera para o mouse
+    -- Precomputa o cosseno do ângulo máximo do FOV
+    local cosFov = math.cos(math.rad(fovMax / 2))
+
+    -- Calcula a direção do mouse
     local mouseRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
     local mouseDir = mouseRay.Direction.Unit
 
-    local closestNPC, minAngle = nil, math.huge
+    -- Inicializa variáveis para rastrear o melhor NPC
+    local closestNPC, maxDot = nil, -1
 
+    -- Itera sobre os modelos em LIVE_FOLDER
     for _, model in ipairs(LIVE_FOLDER:GetChildren()) do
         local hrp = model:FindFirstChild("HumanoidRootPart")
         local head = model:FindFirstChild("Head")
         local knocked = model:FindFirstChild("Knocked")
-        local enoughhealth = model:FindFirstChild("Humanoid") and model.Humanoid.Health > 5
+        local enoughHealth = model:FindFirstChild("Humanoid") and model.Humanoid.Health > 5
 
-        if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughhealth then
+        -- Aplica filtros para NPCs válidos
+        if model:IsA("Model") and model ~= localChar and hrp and head and not knocked and enoughHealth then
             local npcScreenPos, onScreen = camera:WorldToViewportPoint(head.Position)
             if onScreen then
+                -- Calcula a direção do NPC e o produto escalar
                 local npcDir = (head.Position - camera.CFrame.Position).Unit
-                local angle = math.deg(math.acos(mouseDir:Dot(npcDir)))
-                print(string.format("[AutoAim] NPC: %s | angle=%.2f", model.Name, angle))
-                if angle <= fovMax/2 and angle < minAngle then
-                    print("[AutoAim] -> Selecionado como melhor NPC!")
+                local dot = mouseDir:Dot(npcDir)
+
+                -- Verifica se está dentro do FOV e é o melhor candidato
+                if dot >= cosFov and dot > maxDot then
+                    maxDot = dot
                     closestNPC = model
-                    minAngle = angle
                 end
             end
         end
     end
 
+    -- Exibe o resultado
     if closestNPC then
         print("[AutoAim] NPC escolhido:", closestNPC.Name)
     else
