@@ -20,6 +20,8 @@ function AutoAim.new()
     self.maxRange = 200
     self.timeToHit = 0.15
     self.toolNames = { ["Fimbulvetr"] = false, ["Perflora"] = false, ["Armis"] = false, ["Grapple"] = false, ['Percutiens'] = false }
+    self.studsBehindMin = 20
+    self.studsBehindMax = 30
     return self
 end
 
@@ -133,9 +135,9 @@ function AutoAim:enable()
                 if npcHead then
                     local hitPosition
                     if equippedTool.Name == "Percutiens" then
-                        -- Mira 25 studs atrás do NPC em relação ao jogador
+                        -- Mira atrás do NPC em relação ao jogador, usando range configurável
                         local direction = (npcHRP.Position - character.HumanoidRootPart.Position).Unit
-                        local distanceBehind = 25 -- 20-30 studs atrás
+                        local distanceBehind = math.random(self.studsBehindMin, self.studsBehindMax)
                         hitPosition = npcHead.Position + direction * distanceBehind
                     else
                         -- Mira normal (predição)
@@ -187,6 +189,11 @@ end
 -- Adicionar setter para FOV
 function AutoAim:setFOV(fov)
     self.fovMax = fov
+end
+
+function AutoAim:setStudsBehindRange(min, max)
+    self.studsBehindMin = min
+    self.studsBehindMax = max
 end
 
 return AutoAim 
