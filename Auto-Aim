@@ -64,8 +64,12 @@ function AutoAim:getBestNPC(localChar)
     local camera = Workspace.CurrentCamera
     local mouse = Players.LocalPlayer:GetMouse()
     local mousePos = Vector2.new(mouse.X, mouse.Y)
-    local fovMax = self.fovMax or 20 -- graus
-    local closestNPC, minAngle = nil, math.huge
+    local fovMax = self.fovMax or 20
+    local fieldOfView = camera.FieldOfView
+    local viewport = camera.ViewportSize
+    local maxRadius = (fovMax / fieldOfView) * (viewport.X / 2)
+
+    local closestNPC, minDist = nil, math.huge
 
     for _, model in ipairs(LIVE_FOLDER:GetChildren()) do
         local hrp = model:FindFirstChild("HumanoidRootPart")
@@ -77,10 +81,10 @@ function AutoAim:getBestNPC(localChar)
             local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
             if onScreen then
                 local npc2D = Vector2.new(screenPos.X, screenPos.Y)
-                local angle = math.deg((npc2D - mousePos).Magnitude / (camera.ViewportSize.X/2) * (camera.FieldOfView/2))
-                if angle <= fovMax and angle < minAngle then
+                local dist = (npc2D - mousePos).Magnitude
+                if dist <= maxRadius and dist < minDist then
                     closestNPC = model
-                    minAngle = angle
+                    minDist = dist
                 end
             end
         end
