@@ -1,4 +1,4 @@
--- PlayerESPHandler.lua
+-- PlayerESPHandler.lua - OTIMIZADO
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -33,6 +33,8 @@ function PlayerESP.new()
     self.enabled = false
     self.connections = {}
     self.espBillboards = {}
+    self.playerConnections = {} -- NOVO: Rastrear conexões por player
+    self.dataCache = {} -- NOVO: Cache de dados para evitar recálculos
     return self
 end
 
@@ -176,8 +178,21 @@ function PlayerESP:createBillboard(player)
         infoFrame = infoFrame,
         hpFrame = hpFrame
     }
+    
+    -- OTIMIZAÇÃO: Inicializar cache de dados para o player
+    self.dataCache[player] = {
+        lastUpdate = 0,
+        rogueName = "",
+        edict = "",
+        healthDisplay = "",
+        healthPercentDisplay = ""
+    }
+    
     -- Apply display config to this billboard
     self:setDisplayConfig(self.displayConfig)
+    
+    -- OTIMIZAÇÃO: Atualizar dados iniciais imediatamente
+    self:updatePlayerData(player)
 end
 
 function PlayerESP:removeBillboard(player)
@@ -186,62 +201,122 @@ function PlayerESP:removeBillboard(player)
         data.billboard:Destroy()
         self.espBillboards[player] = nil
     end
-end
-
-function PlayerESP:updateBillboards()
-    -- Otimização: throttling para atualizar no máximo a cada 0.1s
-    self._lastUpdate = self._lastUpdate or 0
-    if tick() - self._lastUpdate < 0.1 then return end
-    self._lastUpdate = tick()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= Players.LocalPlayer and player.Character then
-            local data = self.espBillboards[player]
-            if not data then
-                self:createBillboard(player)
-                data = self.espBillboards[player]
-            end
-            if data then
-                -- Checa se houve mudança relevante antes de atualizar
-                local rogueName = utils:getPlayerRogueDisplay(player)
-                local edict = utils:getPlayerEdictDisplay(player)
-                local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-                if data._last == nil or data._last.rogueName ~= rogueName or data._last.edict ~= edict or data._last.healthDisplay ~= healthDisplay or data._last.healthPercentDisplay ~= healthPercentDisplay then
-                    data.nameLabel.Text = "[" .. player.Name .. "]"
-                    data.rogueLabel.Text = "[" .. rogueName .. "]"
-                    data.edictLabel.Text = "[" .. edict .. "]"
-                    data.hpLabel.Text = "[" .. healthDisplay .. "]"
-                    data.hpPercLabel.Text = "[" .. healthPercentDisplay .. "]"
-                    data._last = {
-                        rogueName = rogueName,
-                        edict = edict,
-                        healthDisplay = healthDisplay,
-                        healthPercentDisplay = healthPercentDisplay
-                    }
-                end
+    
+    -- CORREÇÃO CRÍTICA: Limpar cache de dados
+    if self.dataCache[player] then
+        self.dataCache[player] = nil
+    end
+    
+    -- CORREÇÃO CRÍTICA: Desconectar conexões específicas do player
+    if self.playerConnections[player] then
+        for _, conn in pairs(self.playerConnections[player]) do
+            if conn and conn.Disconnect then
+                conn:Disconnect()
             end
         end
+        self.playerConnections[player] = nil
+    end
+end
+
+-- OTIMIZAÇÃO CRÍTICA: Função para atualizar dados de um player específico
+function PlayerESP:updatePlayerData(player)
+    if not player or not player.Parent then return end
+    
+    local cache = self.dataCache[player]
+    if not cache then return end
+    
+    local currentTime = tick()
+    
+    -- OTIMIZAÇÃO: Cache com timeout de 1 segundo (ao invés de calcular a cada frame)
+    if currentTime - cache.lastUpdate < 1 then
+        return -- Usar dados em cache
+    end
+    
+    -- Atualizar cache
+    cache.rogueName = utils:getPlayerRogueDisplay(player)
+    cache.edict = utils:getPlayerEdictDisplay(player)
+    cache.healthDisplay, cache.healthPercentDisplay = utils:getPlayerHealthDisplay(player)
+    cache.lastUpdate = currentTime
+    
+    -- Atualizar UI apenas se os dados mudaram
+    local data = self.espBillboards[player]
+    if data then
+        data.nameLabel.Text = "[" .. player.Name .. "]"
+        data.rogueLabel.Text = "[" .. cache.rogueName .. "]"
+        data.edictLabel.Text = "[" .. cache.edict .. "]"
+        data.hpLabel.Text = "[" .. cache.healthDisplay .. "]"
+        data.hpPercLabel.Text = "[" .. cache.healthPercentDisplay .. "]"
+    end
+end
+
+-- OTIMIZAÇÃO CRÍTICA: Refatoração completa da função de atualização
+function PlayerESP:updateBillboards()
+    -- OTIMIZAÇÃO: Throttling mais agressivo - atualizar apenas a cada 0.5s (2 FPS)
+    self._lastUpdate = self._lastUpdate or 0
+    if tick() - self._lastUpdate < 0.5 then return end
+    self._lastUpdate = tick()
+    
+    -- OTIMIZAÇÃO: Iterar apenas sobre players que já têm billboards
+    for player, data in pairs(self.espBillboards) do
+        if player and player.Parent and player.Character then
+            self:updatePlayerData(player)
+        else
+            -- CORREÇÃO: Remover billboard se player não é mais válido
+            self:removeBillboard(player)
+        end
+    end
+end
+
+-- CORREÇÃO CRÍTICA: Função de conexão de player com limpeza adequada
+function PlayerESP:connectPlayer(player)
+    if player == Players.LocalPlayer then return end
+    
+    -- Inicializar array de conexões para este player
+    self.playerConnections[player] = {}
+    
+    -- Conectar eventos específicos do player
+    local charAddedConn = player.CharacterAdded:Connect(function(character)
+        if self.enabled then
+            -- Pequeno delay para garantir que o character está totalmente carregado
+            task.wait(0.1)
+            self:createBillboard(player)
+        end
+    end)
+    
+    local charRemovingConn = player.CharacterRemoving:Connect(function(character)
+        self:removeBillboard(player)
+    end)
+    
+    -- Armazenar conexões para limpeza posterior
+    table.insert(self.playerConnections[player], charAddedConn)
+    table.insert(self.playerConnections[player], charRemovingConn)
+    
+    -- Se já tem character, criar billboard
+    if player.Character then
+        self:createBillboard(player)
     end
 end
 
 function PlayerESP:enable()
     self.enabled = true
     self:cleanup()
+    
+    -- OTIMIZAÇÃO: Conectar players existentes
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= Players.LocalPlayer then
-            self:createBillboard(player)
-        else
-        end
+        self:connectPlayer(player)
     end
+    
+    -- CORREÇÃO CRÍTICA: Conexões globais com limpeza adequada
     table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
-        if player ~= Players.LocalPlayer then
-            self:createBillboard(player)
-        else
-        end
+        self:connectPlayer(player)
     end))
+    
     table.insert(self.connections, Players.PlayerRemoving:Connect(function(player)
         self:removeBillboard(player)
     end))
-    self.updateConnection = RunService.RenderStepped:Connect(function()
+    
+    -- OTIMIZAÇÃO CRÍTICA: Mudar de RenderStepped para Heartbeat (menos frequente)
+    self.updateConnection = RunService.Heartbeat:Connect(function()
         self:updateBillboards()
     end)
 end
@@ -251,18 +326,27 @@ function PlayerESP:disable()
     self:cleanup()
 end
 
+-- CORREÇÃO CRÍTICA: Limpeza completa melhorada
 function PlayerESP:cleanup()
+    -- Desconectar conexões globais
     for _, conn in ipairs(self.connections) do
         if conn and conn.Disconnect then conn:Disconnect() end
     end
     self.connections = {}
+    
+    -- Desconectar conexão de atualização
     if self.updateConnection and self.updateConnection.Disconnect then
         self.updateConnection:Disconnect()
     end
     self.updateConnection = nil
+    
+    -- CORREÇÃO CRÍTICA: Limpar todos os billboards e conexões de players
     for player, _ in pairs(self.espBillboards) do
         self:removeBillboard(player)
     end
+    
+    -- Limpar cache de dados
+    self.dataCache = {}
 end
 
 function PlayerESP:setTextSize(size)
