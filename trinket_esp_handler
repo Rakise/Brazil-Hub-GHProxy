@@ -9,6 +9,43 @@ TrinketESP.defaultTextSize = 14
 TrinketESP.defaultTextColor = Color3.fromRGB(255, 255, 0)
 TrinketESP.enabled = false
 
+-- Tabela de MeshIds conhecidos para identificação de trinkets
+local MESH_ID_MAP = {
+    ["rbxassetid://5196551436"] = "Amulet",
+    ["rbxassetid://5196577540"] = "Old Amulet",
+    ["rbxassetid://5204003946"] = "Goblet",
+    ["rbxassetid://5204453430"] = "Scroll",
+    ["rbxassetid://2877143560"] = "Ruby",
+    ["rbxassetid://2877143592"] = "Sapphire",
+    ["rbxassetid://2877143624"] = "Emerald",
+    -- Adicione outros MeshIds conforme necessário
+}
+
+local function getTrinketNameByMeshId(part)
+    -- 1. Tenta SpecialMesh (Ruby, Sapphire, Emerald)
+    local specialMesh = part:FindFirstChildWhichIsA("SpecialMesh")
+    if specialMesh and specialMesh.MeshId then
+        local meshId = tostring(specialMesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
+        if MESH_ID_MAP[meshId] then
+            return MESH_ID_MAP[meshId]
+        end
+    end
+    -- 2. Tenta Mesh (Amulet, Old Amulet, Goblet, Scroll)
+    local mesh = part:FindFirstChildWhichIsA("Mesh")
+    if mesh and mesh.MeshId then
+        local meshId = tostring(mesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
+        if MESH_ID_MAP[meshId] then
+            return MESH_ID_MAP[meshId]
+        end
+    end
+    -- 3. Fallback: nome da part se for um dos conhecidos
+    local fallbackName = MESH_ID_MAP[part.Name]
+    if fallbackName then
+        return fallbackName
+    end
+    return nil
+end
+
 function TrinketESP.new()
     local self = setmetatable({}, TrinketESP)
     self.espBillboards = {}
@@ -50,7 +87,8 @@ function TrinketESP:createBillboard(trinket)
     label.FontSize = Enum.FontSize.Size14
     label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
     label.BorderColor3 = Color3.new(0, 0, 0)
-    label.Text = trinket.Name
+    local meshName = getTrinketNameByMeshId(trinket)
+    label.Text = meshName or trinket.Name
     label.TextStrokeTransparency = 0.5
     label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.Font = Enum.Font.SourceSans
