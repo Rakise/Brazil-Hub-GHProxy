@@ -312,25 +312,26 @@ function PlayerESP:setDisplayConfig(config)
         if data.nameLabel and data.nameLabel.Parent then
             data.nameLabel.Parent = nil
         end
-        -- Add back in the correct order if enabled
+        -- Add back in the correct visual order:
+        -- 1. Player Name
         if data.nameLabel and self.displayConfig.showPlayerName ~= false then
             data.nameLabel.Parent = data.billboard
         end
-        if data.infoFrame then
-            if data.rogueLabel and self.displayConfig.showRogueName ~= false then
-                data.rogueLabel.Parent = data.infoFrame
-            end
-            if data.edictLabel and self.displayConfig.showEdict ~= false then
-                data.edictLabel.Parent = data.infoFrame
-            end
+        -- 2. Rogue Name (infoFrame)
+        if data.infoFrame and data.rogueLabel and self.displayConfig.showRogueName ~= false then
+            data.rogueLabel.Parent = data.infoFrame
         end
-        if data.hpFrame then
-            if data.hpLabel and self.displayConfig.showHealth ~= false then
-                data.hpLabel.Parent = data.hpFrame
-            end
-            if data.hpPercLabel and self.displayConfig.showHealthPercent ~= false then
-                data.hpPercLabel.Parent = data.hpFrame
-            end
+        -- 3. Edict (infoFrame)
+        if data.infoFrame and data.edictLabel and self.displayConfig.showEdict ~= false then
+            data.edictLabel.Parent = data.infoFrame
+        end
+        -- 4. Health (hpFrame)
+        if data.hpFrame and data.hpLabel and self.displayConfig.showHealth ~= false then
+            data.hpLabel.Parent = data.hpFrame
+        end
+        -- 5. Health % (hpFrame)
+        if data.hpFrame and data.hpPercLabel and self.displayConfig.showHealthPercent ~= false then
+            data.hpPercLabel.Parent = data.hpFrame
         end
     end
 end
