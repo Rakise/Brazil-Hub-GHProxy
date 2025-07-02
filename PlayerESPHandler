@@ -172,7 +172,9 @@ function PlayerESP:createBillboard(player)
         rogueLabel = rogueLabel,
         edictLabel = edictLabel,
         hpLabel = hpLabel,
-        hpPercLabel = hpPercLabel
+        hpPercLabel = hpPercLabel,
+        infoFrame = infoFrame,
+        hpFrame = hpFrame
     }
     -- Apply display config to this billboard
     self:setDisplayConfig(self.displayConfig)
@@ -290,13 +292,28 @@ end
 -- Method to update display config from outside
 function PlayerESP:setDisplayConfig(config)
     self.displayConfig = config or self.displayConfig
-    -- Update all billboards to reflect new config
+    -- For each billboard, add/remove elements from layout by setting Parent
     for _, data in pairs(self.espBillboards) do
-        if data.nameLabel then data.nameLabel.Visible = self.displayConfig.showPlayerName ~= false end
-        if data.rogueLabel then data.rogueLabel.Visible = self.displayConfig.showRogueName ~= false end
-        if data.edictLabel then data.edictLabel.Visible = self.displayConfig.showEdict ~= false end
-        if data.hpLabel then data.hpLabel.Visible = self.displayConfig.showHealth ~= false end
-        if data.hpPercLabel then data.hpPercLabel.Visible = self.displayConfig.showHealthPercent ~= false end
+        -- Player Name
+        if data.nameLabel then
+            data.nameLabel.Parent = (self.displayConfig.showPlayerName ~= false) and data.billboard or nil
+        end
+        -- Rogue Name
+        if data.rogueLabel and data.infoFrame then
+            data.rogueLabel.Parent = (self.displayConfig.showRogueName ~= false) and data.infoFrame or nil
+        end
+        -- Edict
+        if data.edictLabel and data.infoFrame then
+            data.edictLabel.Parent = (self.displayConfig.showEdict ~= false) and data.infoFrame or nil
+        end
+        -- Health
+        if data.hpLabel and data.hpFrame then
+            data.hpLabel.Parent = (self.displayConfig.showHealth ~= false) and data.hpFrame or nil
+        end
+        -- Health Percent
+        if data.hpPercLabel and data.hpFrame then
+            data.hpPercLabel.Parent = (self.displayConfig.showHealthPercent ~= false) and data.hpFrame or nil
+        end
     end
 end
 
