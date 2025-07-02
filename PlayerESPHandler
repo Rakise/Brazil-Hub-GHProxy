@@ -308,12 +308,15 @@ function PlayerESP:setDisplayConfig(config)
                 end
             end
         end
-        -- Remove nameLabel from billboard (if present)
-        if data.nameLabel and data.nameLabel.Parent then
-            data.nameLabel.Parent = nil
+        -- Remove all children from billboard except UIListLayout
+        if data.billboard then
+            for _, child in ipairs(data.billboard:GetChildren()) do
+                if not child:IsA("UIListLayout") then
+                    child.Parent = nil
+                end
+            end
         end
-        -- Add back in the correct visual order:
-        -- 1. Player Name
+        -- Set LayoutOrder explicitly
         if data.nameLabel then
             data.nameLabel.LayoutOrder = 1
         end
@@ -323,8 +326,15 @@ function PlayerESP:setDisplayConfig(config)
         if data.hpFrame then
             data.hpFrame.LayoutOrder = 3
         end
+        -- Add back in the correct visual order:
         if data.nameLabel and self.displayConfig.showPlayerName ~= false then
             data.nameLabel.Parent = data.billboard
+        end
+        if data.infoFrame then
+            data.infoFrame.Parent = data.billboard
+        end
+        if data.hpFrame then
+            data.hpFrame.Parent = data.billboard
         end
         -- 2. Rogue Name (infoFrame)
         if data.infoFrame and data.rogueLabel and self.displayConfig.showRogueName ~= false then
