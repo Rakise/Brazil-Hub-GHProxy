@@ -9,7 +9,7 @@ local Mouse = LocalPlayer:GetMouse()
 local RemoteFunction
 if game.PlaceId == 14341521240 then
     for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
-        if obj:IsA("RemoteFunction") and obj.Name == "\0" then
+        if obj:IsA("RemoteFunction") and obj.Name == "" then
             RemoteFunction = obj
             break
         end
