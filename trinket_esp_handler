@@ -1,7 +1,15 @@
 -- trinket_esp_handler.lua
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
--- Table of known MeshIds for trinket identification
+local TrinketESP = {}
+TrinketESP.__index = TrinketESP
+
+TrinketESP.defaultTextSize = 14
+TrinketESP.defaultTextColor = Color3.fromRGB(255, 255, 0)
+TrinketESP.enabled = false
+
+-- Tabela de MeshIds conhecidos para identificação de trinkets
 local MESH_ID_MAP = {
     ["rbxassetid://5196551436"] = "Amulet",
     ["rbxassetid://5196577540"] = "Old Amulet",
@@ -12,127 +20,142 @@ local MESH_ID_MAP = {
     ["rbxassetid://2877143560"] = "Ruby",
     ["rbxassetid://2877143592"] = "Sapphire",
     ["rbxassetid://2877143624"] = "Emerald",
-    ["rbxassetid://2520762076"] = "Howler Friend"
-    -- Add other MeshIds as needed
+    ["rbxassetid://2520762076"] = "Howler"
+    -- Adicione outros MeshIds conforme necessário
 }
 
--- Retrieves the mesh ID from a part, checking MeshPart, SpecialMesh, or Mesh
-local function getMeshId(part)
-    if part:IsA("MeshPart") then
-        return part.MeshId
-    end
-    local specialMesh = part:FindFirstChildWhichIsA("SpecialMesh")
-    if specialMesh then
-        return specialMesh.MeshId
-    end
-    local mesh = part:FindFirstChildWhichIsA("Mesh")
-    if mesh then
-        return mesh.MeshId
-    end
-    return nil
-end
-
--- Determines the display name of a trinket based on its mesh ID or part name
 local function getTrinketNameByMeshId(part)
-    local meshId = getMeshId(part)
-    if meshId then
-        return MESH_ID_MAP[meshId] or meshId
+    -- 1. MeshPart direto
+    if part:IsA("MeshPart") and part.MeshId then
+        local meshId = tostring(part.MeshId):gsub("%%20", ""):gsub("%s+", "")
+        if MESH_ID_MAP[meshId] then
+            return MESH_ID_MAP[meshId]
+        else
+            return meshId
+        end
+    end
+    -- 2. SpecialMesh (Ruby, Sapphire, Emerald)
+    local specialMesh = part:FindFirstChildWhichIsA("SpecialMesh")
+    if specialMesh and specialMesh.MeshId then
+        local meshId = tostring(specialMesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
+        if MESH_ID_MAP[meshId] then
+            return MESH_ID_MAP[meshId]
+        else
+            return meshId
+        end
+    end
+    -- 3. Mesh (Amulet, Old Amulet, Goblet, Scroll)
+    local mesh = part:FindFirstChildWhichIsA("Mesh")
+    if mesh and mesh.MeshId then
+        local meshId = tostring(mesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
+        if MESH_ID_MAP[meshId] then
+            return MESH_ID_MAP[meshId]
+        else
+            return meshId
+        end
+    end
+    -- 4. Fallback: nome da part se for um dos conhecidos
+    local fallbackName = MESH_ID_MAP[part.Name]
+    if fallbackName then
+        return fallbackName
     end
     return part.Name
 end
 
--- Creates a BillboardGui with standard properties for ESP
-local function createBillboardGui(adornee)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "TrinketESP"
-    billboard.Adornee = adornee
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 100, 0, 100)
-    return billboard
-end
-
--- Creates a TextLabel with standard properties for the billboard
-local function createTextLabel(parent, text)
-    local label = Instance.new("TextLabel")
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(157, 157, 157)
-    label.TextSize = 14
-    label.Font = Enum.Font.SourceSans
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.Position = UDim2.new(0.5, 0, 0.5, 0)
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.TextStrokeTransparency = 0.5
-    return label
-end
-
--- TrinketESP class for managing trinket visual indicators
-local TrinketESP = {}
-TrinketESP.__index = TrinketESP
-
--- Initializes a new TrinketESP instance
 function TrinketESP.new()
     local self = setmetatable({}, TrinketESP)
-    self.espBillboards = {}           -- Stores billboard instances for each trinket
-    self.connections = {}             -- Stores event connections
-    self.enabled = false              -- Tracks if ESP is active
+    self.espBillboards = {}
+    self.connections = {}
     return self
 end
 
--- Checks if an object is a valid trinket (BasePart with an "ID" StringValue)
-local function isValidTrinket(obj)
-    return obj:IsA("BasePart") and obj:FindFirstChild("ID") and obj:FindFirstChild("ID"):IsA("StringValue")
+function TrinketESP:findTrinkets()
+    local trinketFolder = Workspace
+    if not trinketFolder then return {} end
+    local trinkets = {}
+    for _, obj in ipairs(trinketFolder:GetChildren()) do
+        if obj:IsA("BasePart") then
+            local idValue = obj:FindFirstChild("ID")
+            if idValue and idValue:IsA("StringValue") then
+                table.insert(trinkets, obj)
+            end
+        end
+    end
+    return trinkets
 end
 
--- Creates a billboard for a trinket if it doesn't already exist
 function TrinketESP:createBillboard(trinket)
     if self.espBillboards[trinket] then return end
-    local billboard = createBillboardGui(trinket)
-    local meshName = getTrinketNameByMeshId(trinket)
-    local label = createTextLabel(billboard, meshName)
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "TrinketESP"
+    billboard.Adornee = trinket
+    billboard.LightInfluence = 1
+    billboard.Active = true
+    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    billboard.ClipsDescendants = true
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 100, 0, 100)
     billboard.Parent = trinket
+
+    local label = Instance.new("TextLabel")
+    label.FontSize = Enum.FontSize.Size14
+    label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
+    label.BorderColor3 = Color3.new(0, 0, 0)
+    local meshName = getTrinketNameByMeshId(trinket)
+    label.Text = meshName or trinket.Name
+    label.TextStrokeTransparency = 0.5
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Font = Enum.Font.SourceSans
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.TextSize = 14
+    label.BorderSizePixel = 0
+    label.BackgroundColor3 = Color3.new(1, 1, 1)
+    label.Parent = billboard
+
+    local scale = Instance.new("UIScale")
+    scale.Parent = billboard
+
     self.espBillboards[trinket] = billboard
 end
 
--- Removes the billboard associated with a trinket
 function TrinketESP:removeBillboard(trinket)
-    local billboard = self.espBillboards[trinket]
-    if billboard then
-        billboard:Destroy()
+    if self.espBillboards[trinket] then
+        self.espBillboards[trinket]:Destroy()
         self.espBillboards[trinket] = nil
     end
 end
 
--- Initializes billboards for all existing trinkets in Workspace
-function TrinketESP:initializeTrinkets()
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if isValidTrinket(obj) then
-            self:createBillboard(obj)
+function TrinketESP:updateESP()
+    local trinkets = self:findTrinkets()
+    local trinketSet = {}
+    for _, trinket in ipairs(trinkets) do
+        trinketSet[trinket] = true
+        self:createBillboard(trinket)
+    end
+    -- Remove billboards de trinkets que sumiram
+    for trinket in pairs(self.espBillboards) do
+        if not trinketSet[trinket] then
+            self:removeBillboard(trinket)
         end
     end
 end
 
--- Enables the ESP, setting up event listeners and initial trinkets
 function TrinketESP:enable()
     if self.enabled then return end
     self.enabled = true
-    self:initializeTrinkets()
-    self.connections.childAdded = Workspace.ChildAdded:Connect(function(child)
-        if isValidTrinket(child) then
-            self:createBillboard(child)
-        end
-    end)
-    self.connections.childRemoved = Workspace.ChildRemoved:Connect(function(child)
-        self:removeBillboard(child)
-    end)
+    self:updateESP()
+    table.insert(self.connections, RunService.Heartbeat:Connect(function()
+        self:updateESP()
+    end))
 end
 
--- Disables the ESP, disconnecting events and removing billboards
 function TrinketESP:disable()
-    if not self.enabled then return end
     self.enabled = false
-    for _, connection in pairs(self.connections) do
-        connection:Disconnect()
+    for _, conn in ipairs(self.connections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
     end
     self.connections = {}
     for trinket in pairs(self.espBillboards) do
@@ -140,4 +163,4 @@ function TrinketESP:disable()
     end
 end
 
-return TrinketESP
+return TrinketESP 
