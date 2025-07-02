@@ -314,6 +314,15 @@ function PlayerESP:setDisplayConfig(config)
         end
         -- Add back in the correct visual order:
         -- 1. Player Name
+        if data.nameLabel then
+            data.nameLabel.LayoutOrder = 1
+        end
+        if data.infoFrame then
+            data.infoFrame.LayoutOrder = 2
+        end
+        if data.hpFrame then
+            data.hpFrame.LayoutOrder = 3
+        end
         if data.nameLabel and self.displayConfig.showPlayerName ~= false then
             data.nameLabel.Parent = data.billboard
         end
