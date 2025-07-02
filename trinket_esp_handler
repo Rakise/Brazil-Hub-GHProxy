@@ -1,0 +1,113 @@
+-- trinket_esp_handler.lua
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local TrinketESP = {}
+TrinketESP.__index = TrinketESP
+
+TrinketESP.defaultTextSize = 14
+TrinketESP.defaultTextColor = Color3.fromRGB(255, 255, 0)
+TrinketESP.enabled = false
+
+function TrinketESP.new()
+    local self = setmetatable({}, TrinketESP)
+    self.espBillboards = {}
+    self.connections = {}
+    return self
+end
+
+function TrinketESP:findTrinkets()
+    -- Ajuste o caminho conforme o jogo
+    local trinketFolder = Workspace
+    if not trinketFolder then return {} end
+    local trinkets = {}
+    for _, obj in ipairs(trinketFolder:GetChildren()) do
+        if obj:IsA("BasePart") then
+            local idValue = obj:FindFirstChild("ID")
+            if idValue and idValue:IsA("StringValue") then
+                table.insert(trinkets, obj)
+            end
+        end
+    end
+    return trinkets
+end
+
+function TrinketESP:createBillboard(trinket)
+    if self.espBillboards[trinket] then return end
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "TrinketESP"
+    billboard.Adornee = trinket
+    billboard.LightInfluence = 1
+    billboard.Active = true
+    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    billboard.ClipsDescendants = true
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 100, 0, 100)
+    billboard.Parent = trinket
+
+    local label = Instance.new("TextLabel")
+    label.FontSize = Enum.FontSize.Size14
+    label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
+    label.BorderColor3 = Color3.new(0, 0, 0)
+    label.Text = trinket.Name
+    label.TextStrokeTransparency = 0.5
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Font = Enum.Font.SourceSans
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.TextSize = 14
+    label.BorderSizePixel = 0
+    label.BackgroundColor3 = Color3.new(1, 1, 1)
+    label.Parent = billboard
+
+    local scale = Instance.new("UIScale")
+    scale.Parent = billboard
+
+    self.espBillboards[trinket] = billboard
+end
+
+function TrinketESP:removeBillboard(trinket)
+    if self.espBillboards[trinket] then
+        self.espBillboards[trinket]:Destroy()
+        self.espBillboards[trinket] = nil
+    end
+end
+
+function TrinketESP:updateESP()
+    local trinkets = self:findTrinkets()
+    local trinketSet = {}
+    for _, trinket in ipairs(trinkets) do
+        trinketSet[trinket] = true
+        self:createBillboard(trinket)
+    end
+    -- Remove billboards de trinkets que sumiram
+    for trinket in pairs(self.espBillboards) do
+        if not trinketSet[trinket] then
+            self:removeBillboard(trinket)
+        end
+    end
+end
+
+function TrinketESP:enable()
+    if self.enabled then return end
+    self.enabled = true
+    self:updateESP()
+    table.insert(self.connections, RunService.Heartbeat:Connect(function()
+        self:updateESP()
+    end))
+end
+
+function TrinketESP:disable()
+    self.enabled = false
+    for _, conn in ipairs(self.connections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
+    end
+    self.connections = {}
+    for trinket in pairs(self.espBillboards) do
+        self:removeBillboard(trinket)
+    end
+end
+
+return TrinketESP 
