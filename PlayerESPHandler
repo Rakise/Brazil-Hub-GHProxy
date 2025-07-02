@@ -218,8 +218,6 @@ function PlayerESP:updateBillboards()
                         healthPercentDisplay = healthPercentDisplay
                     }
                 end
-                -- Apply display config to this billboard (in case toggles changed)
-                self:setDisplayConfig(self.displayConfig)
             end
         end
     end
