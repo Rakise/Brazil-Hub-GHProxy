@@ -27,6 +27,8 @@ local function getTrinketNameByMeshId(part)
         local meshId = tostring(part.MeshId):gsub("%%20", ""):gsub("%s+", "")
         if MESH_ID_MAP[meshId] then
             return MESH_ID_MAP[meshId]
+        else
+            return meshId
         end
     end
     -- 2. SpecialMesh (Ruby, Sapphire, Emerald)
@@ -35,6 +37,8 @@ local function getTrinketNameByMeshId(part)
         local meshId = tostring(specialMesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
         if MESH_ID_MAP[meshId] then
             return MESH_ID_MAP[meshId]
+        else
+            return meshId
         end
     end
     -- 3. Mesh (Amulet, Old Amulet, Goblet, Scroll)
@@ -43,6 +47,8 @@ local function getTrinketNameByMeshId(part)
         local meshId = tostring(mesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
         if MESH_ID_MAP[meshId] then
             return MESH_ID_MAP[meshId]
+        else
+            return meshId
         end
     end
     -- 4. Fallback: nome da part se for um dos conhecidos
@@ -50,7 +56,7 @@ local function getTrinketNameByMeshId(part)
     if fallbackName then
         return fallbackName
     end
-    return nil
+    return part.Name
 end
 
 function TrinketESP.new()
@@ -61,16 +67,11 @@ function TrinketESP.new()
 end
 
 function TrinketESP:findTrinkets()
-    -- Ajuste o caminho conforme o jogo
     local trinketFolder = Workspace
     if not trinketFolder then return {} end
     local trinkets = {}
     for _, obj in ipairs(trinketFolder:GetChildren()) do
-        -- MeshPart com MeshId conhecido
-        if obj:IsA("MeshPart") and obj.MeshId and MESH_ID_MAP[tostring(obj.MeshId):gsub("%%20", ""):gsub("%s+", "")] then
-            table.insert(trinkets, obj)
-        -- BasePart com StringValue 'ID'
-        elseif obj:IsA("BasePart") then
+        if obj:IsA("BasePart") then
             local idValue = obj:FindFirstChild("ID")
             if idValue and idValue:IsA("StringValue") then
                 table.insert(trinkets, obj)
