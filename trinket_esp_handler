@@ -20,11 +20,99 @@ local MESH_ID_MAP = {
     ["rbxassetid://2877143560"] = "Ruby",
     ["rbxassetid://2877143592"] = "Sapphire",
     ["rbxassetid://2877143624"] = "Emerald",
-    ["rbxassetid://2520762076"] = "Howler"
+    ["rbxassetid://2520762076"] = "Howler Friend"
     -- Adicione outros MeshIds conforme necessário
 }
 
+-- Lista de matchers para trinkets especiais identificados por propriedades
+local SPECIAL_TRINKET_MATCHERS = {
+    function(part)
+        -- Idol of the Forgotten
+        if not part:IsA("UnionOperation") then return nil end
+        if tostring(part.Color) ~= tostring(Color3.new(37/85,113/255,25/51)) then return nil end
+        if part.Material ~= Enum.Material.Slate then return nil end
+        local size = part.Size
+        if math.abs(size.X - 0.7009) > 0.01 or math.abs(size.Y - 0.6554) > 0.01 or math.abs(size.Z - 0.6830) > 0.01 then
+            return nil
+        end
+        local clickPart = part:FindFirstChild("ClickPart")
+        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        for _, child in ipairs(part:GetChildren()) do
+            if child:IsA("ParticleEmitter") then
+                return "Idol of the Forgotten"
+            end
+        end
+        return nil
+    end,
+    function(part)
+        -- Amulet of the White King
+        if not part:IsA("UnionOperation") then return nil end
+        if tostring(part.Color) ~= tostring(Color3.new(248/255, 248/255, 248/255)) then return nil end
+        if part.Material ~= Enum.Material.Neon then return nil end
+        local size = part.Size
+        if math.abs(size.X - 0.195) > 0.01 or math.abs(size.Y - 1.811) > 0.01 or math.abs(size.Z - 1.04) > 0.01 then
+            return nil
+        end
+        local clickPart = part:FindFirstChild("ClickPart")
+        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        for _, child in ipairs(part:GetChildren()) do
+            if child:IsA("PointLight") then
+                return "Amulet of the White King"
+            end
+        end
+        return nil
+    end,
+    function(part)
+        -- Nightstone
+        if not part:IsA("UnionOperation") then return nil end
+        if tostring(part.Color) ~= tostring(Color3.new(29/255,46/255,58/255)) then return nil end
+        if part.Material ~= Enum.Material.Neon then return nil end
+        local size = part.Size
+        if math.abs(size.X - 0.4437) > 0.01 or math.abs(size.Y - 0.4436) > 0.01 or math.abs(size.Z - 0.4333) > 0.01 then
+            return nil
+        end
+        local clickPart = part:FindFirstChild("ClickPart")
+        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        -- Nightstone não tem filhos especiais como PointLight ou ParticleEmitter
+        return "Nightstone"
+    end,
+    function(part)
+        -- ??? (orb roxo)
+        if not part:IsA("Part") then return nil end
+        if tostring(part.Color) ~= tostring(Color3.new(89/255,2/15,89/255)) then return nil end
+        if part.Transparency ~= 1 then return nil end
+        local size = part.Size
+        if math.abs(size.X - 0.17486) > 0.01 or math.abs(size.Y - 0.17486) > 0.01 or math.abs(size.Z - 0.17486) > 0.01 then
+            return nil
+        end
+        local clickPart = part:FindFirstChild("ClickPart")
+        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        local hasOrbParticle = false
+        local hasPointLight = false
+        local hasSphereMesh = false
+        for _, child in ipairs(part:GetChildren()) do
+            if child:IsA("ParticleEmitter") and child.Name == "OrbParticle" then
+                hasOrbParticle = true
+            elseif child:IsA("PointLight") then
+                hasPointLight = true
+            elseif child:IsA("SpecialMesh") and child.MeshType == Enum.MeshType.Sphere then
+                hasSphereMesh = true
+            end
+        end
+        if hasOrbParticle and hasPointLight and hasSphereMesh then
+            return "???"
+        end
+        return nil
+    end,
+    -- Adicione mais matchers conforme necessário
+}
+
 local function getTrinketNameByMeshId(part)
+    -- 0. Matchers para trinkets especiais
+    for _, matcher in ipairs(SPECIAL_TRINKET_MATCHERS) do
+        local name = matcher(part)
+        if name then return name end
+    end
     -- 1. MeshPart direto
     if part:IsA("MeshPart") and part.MeshId then
         local meshId = tostring(part.MeshId):gsub("%%20", ""):gsub("%s+", "")
@@ -34,7 +122,7 @@ local function getTrinketNameByMeshId(part)
             return meshId
         end
     end
-    -- 2. SpecialMesh (Ruby, Sapphire, Emerald)
+    -- 2. SpecialMesh
     local specialMesh = part:FindFirstChildWhichIsA("SpecialMesh")
     if specialMesh and specialMesh.MeshId then
         local meshId = tostring(specialMesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
@@ -44,7 +132,7 @@ local function getTrinketNameByMeshId(part)
             return meshId
         end
     end
-    -- 3. Mesh (Amulet, Old Amulet, Goblet, Scroll)
+    -- 3. Mesh
     local mesh = part:FindFirstChildWhichIsA("Mesh")
     if mesh and mesh.MeshId then
         local meshId = tostring(mesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
@@ -54,11 +142,7 @@ local function getTrinketNameByMeshId(part)
             return meshId
         end
     end
-    -- 4. Fallback: nome da part se for um dos conhecidos
-    local fallbackName = MESH_ID_MAP[part.Name]
-    if fallbackName then
-        return fallbackName
-    end
+    -- 4. Fallback: nome do objeto
     return part.Name
 end
 
