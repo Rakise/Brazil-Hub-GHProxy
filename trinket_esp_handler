@@ -104,6 +104,33 @@ local SPECIAL_TRINKET_MATCHERS = {
         end
         return nil
     end,
+    function(part)
+        -- Phoenix Down
+        if not part:IsA("Part") then return nil end
+        if tostring(part.Color) ~= tostring(Color3.new(1,4/5,0)) then return nil end
+        if part.Transparency ~= 1 then return nil end
+        local size = part.Size
+        if math.abs(size.X - 0.444) > 0.01 or math.abs(size.Y - 0.444) > 0.01 or math.abs(size.Z - 0.433) > 0.01 then
+            return nil
+        end
+        local clickPart = part:FindFirstChild("ClickPart")
+        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        -- Checa se tem Attachment com ParticleEmitter de textura específica
+        local hasPhoenixParticle = false
+        for _, child in ipairs(part:GetChildren()) do
+            if child:IsA("Attachment") then
+                for _, sub in ipairs(child:GetChildren()) do
+                    if sub:IsA("ParticleEmitter") and tostring(sub.Texture) == "rbxassetid://1536547385" then
+                        hasPhoenixParticle = true
+                    end
+                end
+            end
+        end
+        if hasPhoenixParticle then
+            return "Phoenix Down"
+        end
+        return nil
+    end,
     -- Adicione mais matchers conforme necessário
 }
 
