@@ -22,7 +22,14 @@ local MESH_ID_MAP = {
 }
 
 local function getTrinketNameByMeshId(part)
-    -- 1. Tenta SpecialMesh (Ruby, Sapphire, Emerald)
+    -- 1. MeshPart direto
+    if part:IsA("MeshPart") and part.MeshId then
+        local meshId = tostring(part.MeshId):gsub("%%20", ""):gsub("%s+", "")
+        if MESH_ID_MAP[meshId] then
+            return MESH_ID_MAP[meshId]
+        end
+    end
+    -- 2. SpecialMesh (Ruby, Sapphire, Emerald)
     local specialMesh = part:FindFirstChildWhichIsA("SpecialMesh")
     if specialMesh and specialMesh.MeshId then
         local meshId = tostring(specialMesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
@@ -30,7 +37,7 @@ local function getTrinketNameByMeshId(part)
             return MESH_ID_MAP[meshId]
         end
     end
-    -- 2. Tenta Mesh (Amulet, Old Amulet, Goblet, Scroll)
+    -- 3. Mesh (Amulet, Old Amulet, Goblet, Scroll)
     local mesh = part:FindFirstChildWhichIsA("Mesh")
     if mesh and mesh.MeshId then
         local meshId = tostring(mesh.MeshId):gsub("%%20", ""):gsub("%s+", "")
@@ -38,7 +45,7 @@ local function getTrinketNameByMeshId(part)
             return MESH_ID_MAP[meshId]
         end
     end
-    -- 3. Fallback: nome da part se for um dos conhecidos
+    -- 4. Fallback: nome da part se for um dos conhecidos
     local fallbackName = MESH_ID_MAP[part.Name]
     if fallbackName then
         return fallbackName
