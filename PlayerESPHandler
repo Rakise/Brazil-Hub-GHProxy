@@ -292,27 +292,45 @@ end
 -- Method to update display config from outside
 function PlayerESP:setDisplayConfig(config)
     self.displayConfig = config or self.displayConfig
-    -- For each billboard, add/remove elements from layout by setting Parent
     for _, data in pairs(self.espBillboards) do
-        -- Player Name
-        if data.nameLabel then
-            data.nameLabel.Parent = (self.displayConfig.showPlayerName ~= false) and data.billboard or nil
+        -- Remove all children from infoFrame and hpFrame except the layout
+        if data.infoFrame then
+            for _, child in ipairs(data.infoFrame:GetChildren()) do
+                if not child:IsA("UIListLayout") then
+                    child.Parent = nil
+                end
+            end
         end
-        -- Rogue Name
-        if data.rogueLabel and data.infoFrame then
-            data.rogueLabel.Parent = (self.displayConfig.showRogueName ~= false) and data.infoFrame or nil
+        if data.hpFrame then
+            for _, child in ipairs(data.hpFrame:GetChildren()) do
+                if not child:IsA("UIListLayout") then
+                    child.Parent = nil
+                end
+            end
         end
-        -- Edict
-        if data.edictLabel and data.infoFrame then
-            data.edictLabel.Parent = (self.displayConfig.showEdict ~= false) and data.infoFrame or nil
+        -- Remove nameLabel from billboard (if present)
+        if data.nameLabel and data.nameLabel.Parent then
+            data.nameLabel.Parent = nil
         end
-        -- Health
-        if data.hpLabel and data.hpFrame then
-            data.hpLabel.Parent = (self.displayConfig.showHealth ~= false) and data.hpFrame or nil
+        -- Add back in the correct order if enabled
+        if data.nameLabel and self.displayConfig.showPlayerName ~= false then
+            data.nameLabel.Parent = data.billboard
         end
-        -- Health Percent
-        if data.hpPercLabel and data.hpFrame then
-            data.hpPercLabel.Parent = (self.displayConfig.showHealthPercent ~= false) and data.hpFrame or nil
+        if data.infoFrame then
+            if data.rogueLabel and self.displayConfig.showRogueName ~= false then
+                data.rogueLabel.Parent = data.infoFrame
+            end
+            if data.edictLabel and self.displayConfig.showEdict ~= false then
+                data.edictLabel.Parent = data.infoFrame
+            end
+        end
+        if data.hpFrame then
+            if data.hpLabel and self.displayConfig.showHealth ~= false then
+                data.hpLabel.Parent = data.hpFrame
+            end
+            if data.hpPercLabel and self.displayConfig.showHealthPercent ~= false then
+                data.hpPercLabel.Parent = data.hpFrame
+            end
         end
     end
 end
