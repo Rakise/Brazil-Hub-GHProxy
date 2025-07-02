@@ -109,6 +109,7 @@ function AutoAim:enable()
 
         if equippedTool and self.toolNames[equippedTool.Name] then
             local targetNPC = self:getBestNPC(character)
+            print(targetNPC)
             if targetNPC then
                 local npcHRP = targetNPC:FindFirstChild("HumanoidRootPart")
                 local npcHead = targetNPC:FindFirstChild("Head")
