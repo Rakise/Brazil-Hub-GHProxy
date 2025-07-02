@@ -19,6 +19,15 @@ PlayerESP.__index = PlayerESP
 PlayerESP.defaultTextSize = 14
 PlayerESP.defaultTextColor = Color3.new(1,1,1)
 
+-- Store display config (default: all true)
+PlayerESP.displayConfig = {
+    showPlayerName = true,
+    showRogueName = true,
+    showEdict = true,
+    showHealth = true,
+    showHealthPercent = true
+}
+
 function PlayerESP.new()
     local self = setmetatable({}, PlayerESP)
     self.enabled = false
@@ -165,6 +174,8 @@ function PlayerESP:createBillboard(player)
         hpLabel = hpLabel,
         hpPercLabel = hpPercLabel
     }
+    -- Apply display config to this billboard
+    self:setDisplayConfig(self.displayConfig)
 end
 
 function PlayerESP:removeBillboard(player)
@@ -176,6 +187,10 @@ function PlayerESP:removeBillboard(player)
 end
 
 function PlayerESP:updateBillboards()
+    -- Otimização: throttling para atualizar no máximo a cada 0.1s
+    self._lastUpdate = self._lastUpdate or 0
+    if tick() - self._lastUpdate < 0.1 then return end
+    self._lastUpdate = tick()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Players.LocalPlayer and player.Character then
             local data = self.espBillboards[player]
@@ -184,34 +199,25 @@ function PlayerESP:updateBillboards()
                 data = self.espBillboards[player]
             end
             if data then
-                local currentName = data.nameLabel.Text
-                local currentRogue = data.rogueLabel.Text
-                local currentEdict = data.edictLabel.Text
-                local currentHP = data.hpLabel.Text
-                local currentHPPerc = data.hpPercLabel.Text
-
-                local newName = "[" .. player.Name .. "]"
-                local newRogue = "[" .. utils:getPlayerRogueDisplay(player) .. "]"
-                local newEdict = "[" .. utils:getPlayerEdictDisplay(player) .. "]"
+                -- Checa se houve mudança relevante antes de atualizar
+                local rogueName = utils:getPlayerRogueDisplay(player)
+                local edict = utils:getPlayerEdictDisplay(player)
                 local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-                local newHP = "[" .. healthDisplay .. "]"
-                local newHPPerc = "[" .. healthPercentDisplay .. "]"
-
-                if currentName ~= newName then
-                    data.nameLabel.Text = newName
+                if data._last == nil or data._last.rogueName ~= rogueName or data._last.edict ~= edict or data._last.healthDisplay ~= healthDisplay or data._last.healthPercentDisplay ~= healthPercentDisplay then
+                    data.nameLabel.Text = "[" .. player.Name .. "]"
+                    data.rogueLabel.Text = "[" .. rogueName .. "]"
+                    data.edictLabel.Text = "[" .. edict .. "]"
+                    data.hpLabel.Text = "[" .. healthDisplay .. "]"
+                    data.hpPercLabel.Text = "[" .. healthPercentDisplay .. "]"
+                    data._last = {
+                        rogueName = rogueName,
+                        edict = edict,
+                        healthDisplay = healthDisplay,
+                        healthPercentDisplay = healthPercentDisplay
+                    }
                 end
-                if currentRogue ~= newRogue then
-                    data.rogueLabel.Text = newRogue
-                end
-                if currentEdict ~= newEdict then
-                    data.edictLabel.Text = newEdict
-                end
-                if currentHP ~= newHP then
-                    data.hpLabel.Text = newHP
-                end
-                if currentHPPerc ~= newHPPerc then
-                    data.hpPercLabel.Text = newHPPerc
-                end
+                -- Apply display config to this billboard (in case toggles changed)
+                self:setDisplayConfig(self.displayConfig)
             end
         end
     end
@@ -278,6 +284,19 @@ function PlayerESP:setTextColor(color)
         if data.edictLabel then data.edictLabel.TextColor3 = color end
         if data.hpLabel then data.hpLabel.TextColor3 = color end
         if data.hpPercLabel then data.hpPercLabel.TextColor3 = color end
+    end
+end
+
+-- Method to update display config from outside
+function PlayerESP:setDisplayConfig(config)
+    self.displayConfig = config or self.displayConfig
+    -- Update all billboards to reflect new config
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.Visible = self.displayConfig.showPlayerName ~= false end
+        if data.rogueLabel then data.rogueLabel.Visible = self.displayConfig.showRogueName ~= false end
+        if data.edictLabel then data.edictLabel.Visible = self.displayConfig.showEdict ~= false end
+        if data.hpLabel then data.hpLabel.Visible = self.displayConfig.showHealth ~= false end
+        if data.hpPercLabel then data.hpPercLabel.Visible = self.displayConfig.showHealthPercent ~= false end
     end
 end
 
