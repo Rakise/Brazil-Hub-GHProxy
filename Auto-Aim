@@ -6,7 +6,17 @@ local Debris = game:GetService("Debris")
 local LIVE_FOLDER = Workspace:WaitForChild("Live")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
-local RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
+local RemoteFunction
+if game.PlaceId == 9866748353 then
+    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+        if obj:IsA("RemoteFunction") and obj.Name == "" then
+            RemoteFunction = obj
+            break
+        end
+    end
+else
+    RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
+end
 
 local AutoAim = {}
 AutoAim.__index = AutoAim
