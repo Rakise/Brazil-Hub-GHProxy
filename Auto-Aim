@@ -7,7 +7,7 @@ local LIVE_FOLDER = Workspace:WaitForChild("Live")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 local RemoteFunction
-if game.PlaceId == 9866748353 then
+if game.PlaceId == 14341521240 then
     for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
         if obj:IsA("RemoteFunction") and obj.Name == "\0" then
             RemoteFunction = obj
