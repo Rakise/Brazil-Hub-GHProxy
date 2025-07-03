@@ -1,211 +1,118 @@
--- Enhanced Leaderboard Script
--- Integra o sistema original com as melhorias do BetterLeaderboard
+-- betterleaderboard.lua
+-- Handler OOP para criar um leaderboard customizado
+-- Uso: local BetterLeaderboard = require(path); local leaderboard = BetterLeaderboard.new(); leaderboard:enable()/leaderboard:disable()
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
 
--- Variáveis do sistema original
-local l__MainFrame__1 = script.Parent:WaitForChild("MainFrame")
-local u1 = false
-local u2 = {}
-local l__ScrollingFrame__3 = l__MainFrame__1:WaitForChild("ScrollingFrame")
-local l__PlayerLabel__4 = script:WaitForChild("PlayerLabel")
-local l__LocalPlayer__5 = Players.LocalPlayer
+-- Carrega o módulo Utils com tratamento de erro
+local Utils, utils
+local success, err = pcall(function()
+    Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
+    utils = Utils.new()
+end)
 
--- Variáveis do BetterLeaderboard
-local BetterLeaderboard = {}
-BetterLeaderboard.__index = BetterLeaderboard
+if not success then
+    warn("Falha ao carregar Utils: " .. tostring(err))
+    -- Criar um utils mock para evitar erros
+    utils = {
+        getPlayerPrestigeData = function(self, player)
+            return {level = 0}
+        end,
+        getPlayerRogueDisplay = function(self, player)
+            return player.Name
+        end
+    }
+end
 
 -- Cache de cores para evitar criar novos objetos
 local COLORS = {
     WHITE = Color3.new(1, 1, 1),
     GRAY = Color3.new(0.592156, 0.560784, 0.560784),
     BLACK = Color3.new(0, 0, 0),
-    YELLOW = Color3.fromRGB(255, 214, 81),
-    BLUE = Color3.fromRGB(80, 180, 255),
-    RED = Color3.new(1, 0, 0),
-    GREEN = Color3.new(49/51, 197/255, 26/51)
+    YELLOW = Color3.new(0.847058, 0.690196, 0.250980),
+    BLUE = Color3.fromRGB(80, 180, 255)
 }
 
--- Função original para formatar nomes
-local function u6(p1, p2, p3, p4, p5, p6)
-    if not workspace:FindFirstChild("priv") then
-        local v2 = ""
-        if p4 == "Owner" then
-            local v3
-            if p5 == "Female" then
-                v3 = "Lady"
-            else
-                v3 = "Lord"
-            end
-            v2 = v3
-            if p1 == "Ratriel" then
-                v2 = "Pontiff"
-            end
-        end
-        local v4 = {}
-        if v2 ~= "" then
-            table.insert(v4, v2)
-        end
-        if p1 ~= "" and p1 ~= " " then
-            table.insert(v4, p1)
-        end
-        if p3 ~= "" then
-            table.insert(v4, p3)
-        end
-        local v5 = table.concat(v4, " ")
-        local v6 = 0
-        if p6 > 0 then
-            v6 = 3 + string.len(tostring(p6)) * 3
-        end
-        local v7 = v6 > 0 and string.rep(" ", v6) .. v5 or v5
-        if p2 ~= "" then
-            v7 = v7 .. ", " .. p2
-        end
-        return v7
-    else
-        local v4 = {}
-        if p1 ~= "" and p1 ~= " " then
-            return " "..p1
-        end
-    end
+local BetterLeaderboard = {}
+BetterLeaderboard.__index = BetterLeaderboard
+
+function BetterLeaderboard.new()
+    local self = setmetatable({}, BetterLeaderboard)
+    self.enabled = false
+    self.connections = {}
+    self.frameConnections = {} -- Conexões específicas dos frames
+    self.originalLeaderboardGui = nil
+    self.customLeaderboardGui = nil
+    self.updateScheduled = false
+    self.currentCameraTarget = nil
+    self.originalCameraSubject = nil
+    self.playerFrames = {}
+    self.lastColorUpdate = 0
+    self.colorUpdateInterval = 1
+    self.scrollingFrame = nil
+    return self
 end
 
--- Função para obter dados do jogador
-local function getPlayerData(player)
-    if not player or not player.Parent then
-        return nil
+function BetterLeaderboard:getPlayerGui()
+    local player = Players.LocalPlayer
+    if not player then 
+        return nil 
     end
     
-    local leaderstats = player:FindFirstChild("leaderstats")
-    if not leaderstats then
-        return nil
+    local playerGui = player:FindFirstChildOfClass("PlayerGui")
+    if not playerGui then
+        local success, result = pcall(function()
+            return player:WaitForChild("PlayerGui", 5)
+        end)
+        if success then
+            playerGui = result
+        end
     end
     
-    local data = {
-        firstName = leaderstats:FindFirstChild("FirstName") and leaderstats.FirstName.Value or "",
-        lastName = leaderstats:FindFirstChild("LastName") and leaderstats.LastName.Value or "",
-        uberTitle = leaderstats:FindFirstChild("UberTitle") and leaderstats.UberTitle.Value or "",
-        houseRank = leaderstats:FindFirstChild("HouseRank") and leaderstats.HouseRank.Value or "",
-        gender = leaderstats:FindFirstChild("Gender") and leaderstats.Gender.Value or "",
-        prestige = leaderstats:FindFirstChild("Rank") and leaderstats.Rank.Value or 0,
-        maxEdict = leaderstats:FindFirstChild("MaxEdict") and leaderstats.MaxEdict.Value or false,
-        hidden = leaderstats:FindFirstChild("Hidden") and leaderstats.Hidden.Value or false,
-        leaderstats = leaderstats
-    }
-    
-    return data
+    return playerGui
 end
 
--- Função melhorada para atualizar a lista de jogadores
-local function u7()
-    if u1 then
-        return
-    end
-    u1 = true
+function BetterLeaderboard:findOriginalLeaderboardGui()
+    local playerGui = self:getPlayerGui()
+    if not playerGui then return nil end
     
-    local v8 = {}
-    local v10 = Players:GetPlayers()
-    
-    for i, v in pairs(v10) do
-        local playerData = getPlayerData(v)
-        if playerData and u2[v] and not playerData.hidden and playerData.firstName ~= "" then
-            table.insert(v8, v)
-        elseif u2[v] then
-            u2[v].frame.Visible = false
+    return playerGui:FindFirstChild("LeaderboardGui")
+end
+
+function BetterLeaderboard:isCustomLeaderboardValid()
+    return self.customLeaderboardGui and 
+           self.customLeaderboardGui.Parent and 
+           self.customLeaderboardGui:FindFirstChild("Leaderboard") and 
+           self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame")
+end
+
+function BetterLeaderboard:scheduleUpdate()
+    if self.updateScheduled then return end
+    self.updateScheduled = true
+    task.spawn(function()
+        task.wait(0.1)
+        if self.enabled then
+            self:updatePlayerList()
         end
-    end
-    
-    -- Sorting melhorado
-    table.sort(v8, function(A, B)
-        if not A then return true end
-        if not B then return false end
-        
-        local dataA = getPlayerData(A)
-        local dataB = getPlayerData(B)
-        
-        if not dataA or not dataB then return false end
-        
-        -- Primeiro por sobrenome
-        if dataA.lastName ~= "" and dataB.lastName == "" then
-            return true
-        end
-        if dataA.lastName == "" and dataB.lastName ~= "" then
-            return false
-        end
-        if dataA.lastName < dataB.lastName then
-            return true
-        end
-        if dataB.lastName < dataA.lastName then
-            return false
-        end
-        
-        -- Depois por rank da casa
-        if dataB.houseRank < dataA.houseRank then
-            return true
-        end
-        if dataA.houseRank < dataB.houseRank then
-            return false
-        end
-        
-        -- Por último por nome
-        if dataA.firstName < dataB.firstName then
-            return true
-        end
-        if dataB.firstName < dataA.firstName then
-            return false
-        end
-        
-        return A.Name < B.Name
+        self.updateScheduled = false
     end)
-    
-    -- Posicionar frames
-    for v24, v25 in pairs(v8) do
-        local frameData = u2[v25]
-        if frameData and frameData.frame then
-            frameData.frame.Position = UDim2.new(0, 0, 0, (v24 - 1) * 20)
-            frameData.frame.Visible = true
-        end
-    end
-    
-    -- Ajustar tamanho do frame
-    local v29 = #v8 * 20
-    l__MainFrame__1.Size = UDim2.new(0.05, 200, 0, math.min(v29 + 20, 340))
-    l__ScrollingFrame__3.CanvasSize = UDim2.new(0, 0, 0, v29)
-    
-    u1 = false
 end
 
--- Função para trocar câmera (do BetterLeaderboard)
-local currentCameraTarget = nil
-local originalCameraSubject = nil
-
-local function switchCameraToPlayer(player)
+function BetterLeaderboard:switchCameraToPlayer(player)
     local camera = workspace.CurrentCamera
     if not camera or not player or not player.Parent then 
         return 
     end
     
-    if currentCameraTarget == player then
-        -- Reset camera
-        if originalCameraSubject and originalCameraSubject.Parent then
-            camera.CameraSubject = originalCameraSubject
-        else
-            local localPlayer = Players.LocalPlayer
-            if localPlayer and localPlayer.Character then
-                local humanoid = localPlayer.Character:FindFirstChild("Humanoid")
-                if humanoid then
-                    camera.CameraSubject = humanoid
-                end
-            end
-        end
-        currentCameraTarget = nil
+    if self.currentCameraTarget == player then
+        self:resetCameraToLocalPlayer()
         return
     end
     
-    if not originalCameraSubject then
-        originalCameraSubject = camera.CameraSubject
+    if not self.originalCameraSubject then
+        self.originalCameraSubject = camera.CameraSubject
     end
     
     if not player.Character then 
@@ -217,282 +124,409 @@ local function switchCameraToPlayer(player)
         return 
     end
     
-    currentCameraTarget = player
+    self.currentCameraTarget = player
     camera.CameraSubject = humanoid
 end
 
--- Função melhorada para criar player label
-local function u8(p9)
-    if u2[p9] then
-        return
-    end
+function BetterLeaderboard:resetCameraToLocalPlayer()
+    local camera = workspace.CurrentCamera
+    if not camera then return end
     
-    local playerData = getPlayerData(p9)
-    if not playerData then
-        return
-    end
-    
-    -- Criar frame principal
-    local v30 = l__PlayerLabel__4:Clone()
-    local l__Prestige__31 = v30:WaitForChild("Prestige")
-    
-    -- Armazenar dados do frame
-    u2[p9] = {
-        frame = v30,
-        prestige = l__Prestige__31,
-        connections = {},
-        lastDisplayText = "",
-        playerData = playerData
-    }
-    
-    local frameData = u2[p9]
-    
-    -- Configurar visibilidade inicial
-    if playerData.hidden and p9 ~= l__LocalPlayer__5 and p9.UserId ~= 1721299790 then
-        v30.Visible = false
-    end
-    
-    -- Função para atualizar display
-    local function updateDisplay()
-        local currentData = getPlayerData(p9)
-        if not currentData then return end
-        
-        local displayText = u6(
-            currentData.firstName,
-            currentData.uberTitle,
-            currentData.lastName,
-            currentData.houseRank,
-            currentData.gender,
-            currentData.prestige
-        )
-        
-        v30.Text = displayText
-        frameData.lastDisplayText = displayText
-        
-        -- Atualizar prestige
-        if currentData.prestige > 0 then
-            l__Prestige__31.Text = "#" .. currentData.prestige
-            l__Prestige__31.Visible = true
-        else
-            l__Prestige__31.Visible = false
-        end
-        
-        -- Atualizar cores
-        local hasCharacter = p9.Character ~= nil
-        local isObserved = (currentCameraTarget == p9)
-        
-        if currentData.uberTitle == "Destroyer Of Heaven" then
-            v30.TextColor3 = COLORS.RED
-        elseif currentData.maxEdict then
-            v30.TextColor3 = COLORS.YELLOW
-        elseif isObserved then
-            v30.TextColor3 = COLORS.BLUE
-        elseif hasCharacter then
-            v30.TextColor3 = COLORS.WHITE
-        else
-            v30.TextColor3 = COLORS.GRAY
-        end
-        
-        -- Atualizar prestige color
-        l__Prestige__31.TextColor3 = v30.TextColor3
-    end
-    
-    -- Função para mostrar username no hover
-    local function showUsername()
-        local v42 = 0
-        if playerData.prestige > 0 then
-            v42 = 3 + string.len(tostring(playerData.prestige)) * 3
-        end
-        local u10 = p9.Name:sub(1, 2) .. "\226\128\142" .. p9.Name:sub(3)
-        v30.Text = v42 > 0 and string.rep(" ", v42) .. u10 or u10
-        v30.TextTransparency = 0.3
-    end
-    
-    local function hideUsername()
-        v30.Text = frameData.lastDisplayText
-        v30.TextTransparency = 0
-    end
-    
-    -- Conectar eventos
-    frameData.connections.mouseEnter = v30.MouseEnter:Connect(showUsername)
-    frameData.connections.mouseLeave = v30.MouseLeave:Connect(hideUsername)
-    
-    -- Adicionar funcionalidade de câmera (click para observar)
-    frameData.connections.mouseClick = v30.MouseButton1Click:Connect(function()
-        if p9.Character then
-            switchCameraToPlayer(p9)
-        end
-    end)
-    
-    -- Conectar mudanças nos leaderstats
-    local function connectLeaderstatChange(statName)
-        local stat = playerData.leaderstats:FindFirstChild(statName)
-        if stat then
-            frameData.connections[statName] = stat.Changed:Connect(function()
-                updateDisplay()
-                u7()
-            end)
+    if self.originalCameraSubject and self.originalCameraSubject.Parent then
+        camera.CameraSubject = self.originalCameraSubject
+    else
+        local localPlayer = Players.LocalPlayer
+        if localPlayer and localPlayer.Character then
+            local humanoid = localPlayer.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                camera.CameraSubject = humanoid
+            end
         end
     end
     
-    connectLeaderstatChange("FirstName")
-    connectLeaderstatChange("LastName")
-    connectLeaderstatChange("UberTitle")
-    connectLeaderstatChange("HouseRank")
-    connectLeaderstatChange("Gender")
-    connectLeaderstatChange("Rank")
-    connectLeaderstatChange("MaxEdict")
-    connectLeaderstatChange("Hidden")
-    
-    -- Conectar mudanças de personagem
-    frameData.connections.characterAdded = p9.CharacterAdded:Connect(function()
-        task.wait(0.1)
-        updateDisplay()
-        u7()
-    end)
-    
-    frameData.connections.characterRemoving = p9.CharacterRemoving:Connect(function()
-        if currentCameraTarget == p9 then
-            switchCameraToPlayer(p9) -- Vai resetar a câmera
-        end
-        updateDisplay()
-        u7()
-    end)
-    
-    -- Invocar MaxEdict request
-    pcall(function()
-        local Requests = ReplicatedStorage:FindFirstChild("Requests")
-        if Requests and Requests:FindFirstChild("ShowMaxEdict") then
-            Requests.ShowMaxEdict:InvokeServer()
-        end
-    end)
-    
-    -- Update inicial
-    updateDisplay()
-    
-    -- Adicionar ao ScrollingFrame
-    pcall(function()
-        v30.Parent = l__ScrollingFrame__3
-    end)
-    
-    u7()
-    return v30
+    self.currentCameraTarget = nil
 end
 
--- Função para remover player
-local function u11(p11)
-    if not u2[p11] then
-        return
+function BetterLeaderboard:createCustomLeaderboard()
+    local playerGui = self:getPlayerGui()
+    if not playerGui then
+        return nil, nil
     end
     
-    local frameData = u2[p11]
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "BetterLeaderboardGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+    local leaderboardButton = Instance.new("ImageButton")
+    leaderboardButton.Name = "Leaderboard"
+    leaderboardButton.ScaleType = Enum.ScaleType.Slice
+    leaderboardButton.ImageTransparency = 0.8
+    leaderboardButton.Size = UDim2.new(0.05, 150, 0, 240)
+    leaderboardButton.AnchorPoint = Vector2.new(1, 0)
+    leaderboardButton.Image = "rbxassetid://1327087642"
+    leaderboardButton.BackgroundTransparency = 1
+    leaderboardButton.Position = UDim2.new(1, 0, 0, 0)
+    leaderboardButton.BackgroundColor3 = COLORS.WHITE
+    leaderboardButton.BorderSizePixel = 0
+    leaderboardButton.SliceCenter = Rect.new(Vector2.new(20, 20), Vector2.new(190, 190))
+
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.ScrollBarImageColor3 = COLORS.GREEN
+    scrollingFrame.MidImage = "rbxassetid://3515608813"
+    scrollingFrame.Active = true
+    scrollingFrame.ScrollBarThickness = 10
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.BackgroundColor3 = COLORS.WHITE
+    scrollingFrame.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+    scrollingFrame.Position = UDim2.new(-0.07, 0, 0.04, 0)
+    scrollingFrame.TopImage = "rbxassetid://3515609176"
+    scrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+    scrollingFrame.Size = UDim2.new(1.05, -10, 1, -20)
+    scrollingFrame.BottomImage = "rbxassetid://3515608177"
+    scrollingFrame.BorderSizePixel = 0
+    scrollingFrame.CanvasSize = UDim2.new(0, 0,0, 330)
+    scrollingFrame.Name = "ScrollingFrame"
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 2)
     
-    -- Disconnect all connections
-    for _, connection in pairs(frameData.connections) do
+    -- Parent elements in correct order
+    listLayout.Parent = scrollingFrame
+    scrollingFrame.Parent = leaderboardButton
+    leaderboardButton.Parent = screenGui
+    screenGui.Parent = playerGui
+
+    -- Update canvas size when content changes
+    local function updateCanvasSize()
+        if scrollingFrame and scrollingFrame.Parent then
+            local contentHeight = listLayout.AbsoluteContentSize.Y
+            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 4) -- 4px extra para garantir o scroll
+        end
+    end
+    local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
+    -- Chama uma vez ao criar
+    updateCanvasSize()
+    
+    self.connections.canvasUpdate = canvasConnection
+    self.scrollingFrame = scrollingFrame
+    self.customLeaderboardGui = screenGui
+    
+    return screenGui, scrollingFrame
+end
+
+function BetterLeaderboard:createPlayerFrame(player)
+    if not player or not player.Parent then 
+        return nil
+    end
+    
+    local frame = Instance.new("Frame")
+    frame.BackgroundTransparency = 1
+    frame.BorderColor3 = COLORS.BLACK
+    frame.SizeConstraint = Enum.SizeConstraint.RelativeXX
+    frame.Size = UDim2.new(1, 0, 0, 25)
+    frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = COLORS.WHITE
+
+    local hasCharacter = player.Character ~= nil
+    local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
+
+    local prestigeData = utils:getPlayerPrestigeData(player)
+    local prestigeLevel = prestigeData.level or 0
+
+    local prestigeButton = Instance.new("TextButton")
+    prestigeButton.Font = Enum.Font.SourceSansSemibold
+    prestigeButton.TextColor3 = textColor
+    prestigeButton.TextTransparency = 0.2
+    prestigeButton.Text = "#" .. prestigeLevel
+    prestigeButton.TextStrokeTransparency = 0.5
+    prestigeButton.Size = UDim2.new(0, 35, 1, 0)
+    prestigeButton.BackgroundTransparency = 1
+    prestigeButton.TextXAlignment = Enum.TextXAlignment.Left
+    prestigeButton.Name = "Prestige"
+    prestigeButton.TextSize = 16
+    prestigeButton.BorderSizePixel = 0
+    prestigeButton.Visible = prestigeLevel > 0
+
+    local playerLabel = Instance.new("TextButton")
+    playerLabel.Font = Enum.Font.SourceSansSemibold
+    playerLabel.TextColor3 = textColor
+    playerLabel.BorderColor3 = COLORS.BLACK
+    playerLabel.Text = utils:getPlayerRogueDisplay(player) or player.Name
+    playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playerLabel.TextStrokeTransparency = 0.5
+    playerLabel.Size = UDim2.new(1, -35, 1, 0)
+    playerLabel.BackgroundTransparency = 1
+    playerLabel.Position = UDim2.new(0, 35, 0, 0)
+    playerLabel.TextSize = 18
+    playerLabel.Name = "PlayerLabel"
+    playerLabel.BorderSizePixel = 0
+    playerLabel.TextTruncate = Enum.TextTruncate.AtEnd
+
+    -- Parent elements
+    prestigeButton.Parent = frame
+    playerLabel.Parent = frame
+
+    -- Connect click events - store connections simply
+    local connectionKey = "player_" .. player.UserId
+    self.frameConnections[connectionKey] = {}
+    
+    self.frameConnections[connectionKey][1] = playerLabel.MouseButton1Click:Connect(function()
+        if self.enabled and hasCharacter and player.Parent then
+            self:switchCameraToPlayer(player)
+        end
+    end)
+    
+    return frame
+end
+
+function BetterLeaderboard:cleanupFrameConnections()
+    for key, connections in pairs(self.frameConnections) do
+        if connections then
+            for _, connection in pairs(connections) do
+                if connection and connection.Connected then
+                    connection:Disconnect()
+                end
+            end
+        end
+    end
+    self.frameConnections = {}
+end
+
+function BetterLeaderboard:updatePlayerList()
+    if not self:isCustomLeaderboardValid() then 
+        return 
+    end
+    
+    local scrollingFrame = self.scrollingFrame
+    if not scrollingFrame or not scrollingFrame.Parent then 
+        return 
+    end
+    
+    -- Clean up existing frames and connections
+    self:cleanupFrameConnections()
+    
+    for player, frame in pairs(self.playerFrames) do
+        if frame and frame.Parent then
+            frame:Destroy()
+        end
+    end
+    self.playerFrames = {}
+    
+    -- Create frames for all players
+    local playerList = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player and player.Parent then
+            table.insert(playerList, player)
+        end
+    end
+    
+    -- Sort players by prestige level (highest first)
+    table.sort(playerList, function(a, b)
+        local prestigeA = utils:getPlayerPrestigeData(a).level or 0
+        local prestigeB = utils:getPlayerPrestigeData(b).level or 0
+        if prestigeA == prestigeB then
+            return a.Name < b.Name
+        end
+        return prestigeA > prestigeB
+    end)
+    
+    -- Create frames in order
+    for i, player in ipairs(playerList) do
+        local frame = self:createPlayerFrame(player)
+        if frame then
+            frame.LayoutOrder = i
+            frame.Parent = scrollingFrame
+            self.playerFrames[player] = frame
+        end
+    end
+end
+
+function BetterLeaderboard:updatePlayerColors()
+    local currentTime = tick()
+    if currentTime - self.lastColorUpdate < self.colorUpdateInterval then return end
+    self.lastColorUpdate = currentTime
+    
+    for player, frame in pairs(self.playerFrames) do
+        if frame and frame.Parent and player and player.Parent then
+            local hasCharacter = player.Character ~= nil
+            local isObserved = (self.currentCameraTarget == player)
+            local playerLabel = frame:FindFirstChild("PlayerLabel")
+            local prestigeButton = frame:FindFirstChild("Prestige")
+
+            -- Cor: azul se observado, branco se tem personagem, cinza se não tem
+            local textColor = isObserved and COLORS.BLUE or (hasCharacter and COLORS.WHITE or COLORS.GRAY)
+
+            if playerLabel then
+                playerLabel.TextColor3 = textColor
+                playerLabel.Active = hasCharacter -- Só clicável se tem personagem
+                playerLabel.AutoButtonColor = hasCharacter -- Efeito hover só se clicável
+                playerLabel.TextTransparency = hasCharacter and 0.2 or 0.5
+            end
+            if prestigeButton then
+                prestigeButton.TextColor3 = textColor
+            end
+        end
+    end
+end
+
+function BetterLeaderboard:connectPlayerEvents()
+    -- Disconnect existing connections
+    for key, connection in pairs(self.connections) do
         if connection and connection.Connected then
             connection:Disconnect()
         end
     end
+    self.connections = {}
     
-    -- Reset camera if this player was being observed
-    if currentCameraTarget == p11 then
-        switchCameraToPlayer(p11) -- Vai resetar a câmera
-    end
-    
-    -- Destroy frame
-    if frameData.frame then
-        frameData.frame:Destroy()
-    end
-    
-    u2[p11] = nil
-    u7()
-end
-
--- Toggleable Enhanced Leaderboard
-BetterLeaderboard._enabled = false
-BetterLeaderboard._connections = {}
-
-function BetterLeaderboard:enable()
-    if self._enabled then return end
-    self._enabled = true
-    -- Cria a UI se não existir
-    if not script.Parent or not script.Parent:IsA("ScreenGui") then
-        warn("BetterLeaderboard: script.Parent não é ScreenGui!")
-        return
-    end
-    script.Parent.Enabled = true
-    -- Conectar eventos principais
-    table.insert(self._connections, Players.PlayerAdded:Connect(function(player)
+    -- Simple player events
+    self.connections.playerAdded = Players.PlayerAdded:Connect(function(player)
         task.wait(0.1)
-        u8(player)
-    end))
-    table.insert(self._connections, Players.PlayerRemoving:Connect(function(player)
-        u11(player)
-    end))
-    table.insert(self._connections, l__LocalPlayer__5.ChildRemoved:Connect(function(ch)
-        if ch.Name == "Ingame" then
-            script.Parent.Enabled = false
+        self:scheduleUpdate()
+    end)
+    
+    self.connections.playerRemoving = Players.PlayerRemoving:Connect(function(player)
+        if self.currentCameraTarget == player then
+            self:resetCameraToLocalPlayer()
         end
-    end))
-    table.insert(self._connections, l__LocalPlayer__5.ChildAdded:Connect(function(ch)
-        if ch.Name == "Ingame" then
-            script.Parent.Enabled = true
-        end
-    end))
-    table.insert(self._connections, RunService.Heartbeat:Connect(function()
-        for player, frameData in pairs(u2) do
-            if frameData and frameData.frame and frameData.frame.Parent and player and player.Parent then
-                local hasCharacter = player.Character ~= nil
-                local isObserved = (currentCameraTarget == player)
-                local currentData = getPlayerData(player)
-                if currentData then
-                    local textColor
-                    if currentData.uberTitle == "Destroyer Of Heaven" then
-                        textColor = COLORS.RED
-                    elseif currentData.maxEdict then
-                        textColor = COLORS.YELLOW
-                    elseif isObserved then
-                        textColor = COLORS.BLUE
-                    elseif hasCharacter then
-                        textColor = COLORS.WHITE
-                    else
-                        textColor = COLORS.GRAY
-                    end
-                    frameData.frame.TextColor3 = textColor
-                    frameData.prestige.TextColor3 = textColor
-                    frameData.frame.TextTransparency = hasCharacter and 0 or 0.3
+        
+        -- Clean up frame connections for this player
+        local connectionKey = "player_" .. player.UserId
+        if self.frameConnections[connectionKey] then
+            for _, connection in pairs(self.frameConnections[connectionKey]) do
+                if connection and connection.Connected then
+                    connection:Disconnect()
                 end
             end
+            self.frameConnections[connectionKey] = nil
         end
-    end))
-    -- Inicializar para jogadores existentes
+        
+        if self.playerFrames[player] then
+            self.playerFrames[player] = nil
+        end
+        
+        self:scheduleUpdate()
+    end)
+    
+    -- Character events for existing players
     for _, player in pairs(Players:GetPlayers()) do
-        task.spawn(function()
-            u8(player)
-        end)
+        if player and player.Parent then
+            local characterAddedKey = "charAdded_" .. player.UserId
+            local characterRemovingKey = "charRemoving_" .. player.UserId
+            
+            self.connections[characterAddedKey] = player.CharacterAdded:Connect(function()
+                task.wait(0.1)
+                self:scheduleUpdate()
+            end)
+            
+            self.connections[characterRemovingKey] = player.CharacterRemoving:Connect(function()
+                if self.currentCameraTarget == player then
+                    self:resetCameraToLocalPlayer()
+                end
+                self:scheduleUpdate()
+            end)
+        end
     end
+    
+    -- Update colors periodically
+    self.connections.colorUpdate = RunService.Heartbeat:Connect(function()
+        if self.enabled then
+            self:updatePlayerColors()
+        end
+    end)
+end
+
+function BetterLeaderboard:hideOriginalLeaderboard()
+    self.originalLeaderboardGui = self:findOriginalLeaderboardGui()
+    if self.originalLeaderboardGui then
+        self.originalLeaderboardGui.Enabled = false
+    end
+end
+
+function BetterLeaderboard:showOriginalLeaderboard()
+    if self.originalLeaderboardGui and self.originalLeaderboardGui.Parent then
+        self.originalLeaderboardGui.Enabled = true
+    end
+end
+
+function BetterLeaderboard:enable()
+    if self.enabled then return end
+    
+    self.enabled = true
+    
+    -- Hide original leaderboard
+    self:hideOriginalLeaderboard()
+    
+    -- Create custom leaderboard
+    local success, err = pcall(function()
+        self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
+    end)
+    
+    if not success or not self.customLeaderboardGui then
+        self.enabled = false
+        return
+    end
+    
+    -- Connect events
+    self:connectPlayerEvents()
+    
+    -- Initial update
+    self:scheduleUpdate()
+    
+    print("BetterLeaderboard enabled")
 end
 
 function BetterLeaderboard:disable()
-    if not self._enabled then return end
-    self._enabled = false
-    -- Desconectar eventos
-    for _, conn in ipairs(self._connections) do
-        if conn and conn.Disconnect then conn:Disconnect() end
-    end
-    self._connections = {}
-    -- Remover todos os frames de jogadores
-    for player, frameData in pairs(u2) do
-        if frameData and frameData.frame then
-            frameData.frame:Destroy()
+    if not self.enabled then return end
+    
+    self.enabled = false
+    
+    -- Disconnect all connections
+    for key, connection in pairs(self.connections) do
+        if connection and connection.Connected then
+            connection:Disconnect()
         end
     end
-    u2 = {}
-    -- Esconder a UI
-    if script.Parent and script.Parent:IsA("ScreenGui") then
-        script.Parent.Enabled = false
+    self.connections = {}
+    
+    -- Clean up frame connections
+    self:cleanupFrameConnections()
+    
+    -- Reset camera
+    self:resetCameraToLocalPlayer()
+    
+    -- Clean up frames
+    for player, frame in pairs(self.playerFrames) do
+        if frame and frame.Parent then
+            frame:Destroy()
+        end
+    end
+    self.playerFrames = {}
+    
+    -- Clean up GUI
+    if self.customLeaderboardGui and self.customLeaderboardGui.Parent then
+        self.customLeaderboardGui:Destroy()
+    end
+    self.customLeaderboardGui = nil
+    self.scrollingFrame = nil
+    
+    -- Show original leaderboard
+    self:showOriginalLeaderboard()
+    
+    print("BetterLeaderboard disabled")
+end
+
+function BetterLeaderboard:toggle()
+    if self.enabled then
+        self:disable()
+    else
+        self:enable()
     end
 end
 
-print("Enhanced Leaderboard carregado com sucesso!")
+function BetterLeaderboard:destroy()
+    self:disable()
+end
+
 return BetterLeaderboard
