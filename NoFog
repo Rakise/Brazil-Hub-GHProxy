@@ -34,40 +34,6 @@ function NoFog:apply()
     Lighting.FogEnd = 1e10
     Lighting.FogStart = 1e10 - 1
     Lighting.FogColor = Color3.new(1, 1, 1)
-    
-    -- Remove efeitos visuais
-    for _, v in ipairs(Lighting:GetChildren()) do
-        if isTargetEffect(v) then
-            v:Destroy()
-        end
-    end
-end
-
-function NoFog:saveOriginal()
-    local Lighting = game:GetService("Lighting")
-    
-    -- Limpa efeitos anteriores se existirem
-    if self._original and self._original.Effects then
-        for _, effect in ipairs(self._original.Effects) do
-            if effect and effect.Destroy then
-                effect:Destroy()
-            end
-        end
-    end
-    
-    self._original = {
-        FogStart = Lighting.FogStart,
-        FogEnd = Lighting.FogEnd,
-        FogColor = Lighting.FogColor,
-        Effects = {}
-    }
-    
-    -- Salva cópias dos efeitos atuais
-    for _, v in ipairs(Lighting:GetChildren()) do
-        if isTargetEffect(v) then
-            table.insert(self._original.Effects, v:Clone())
-        end
-    end
 end
 
 function NoFog:restoreOriginal()
@@ -78,21 +44,6 @@ function NoFog:restoreOriginal()
     Lighting.FogStart = self._original.FogStart
     Lighting.FogEnd = self._original.FogEnd
     Lighting.FogColor = self._original.FogColor
-    
-    -- Remove efeitos atuais
-    for _, v in ipairs(Lighting:GetChildren()) do
-        if isTargetEffect(v) then
-            v:Destroy()
-        end
-    end
-    
-    -- Restaura efeitos originais
-    for _, effect in ipairs(self._original.Effects) do
-        if effect and effect.Parent == nil then -- Verifica se ainda é válido
-            local restored = effect:Clone()
-            restored.Parent = Lighting
-        end
-    end
 end
 
 function NoFog:enable()
@@ -121,16 +72,6 @@ end
 
 function NoFog:cleanup()
     self:disable()
-    
-    -- Limpa efeitos salvos da memória
-    if self._original and self._original.Effects then
-        for _, effect in ipairs(self._original.Effects) do
-            if effect and effect.Destroy then
-                effect:Destroy()
-            end
-        end
-    end
-    self._original = nil
 end
 
 -- Método para verificar se está habilitado
