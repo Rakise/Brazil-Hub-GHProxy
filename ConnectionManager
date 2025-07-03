@@ -4,48 +4,62 @@
 local ConnectionManager = {}
 ConnectionManager.__index = ConnectionManager
 
+-- Cria uma nova instância do ConnectionManager
 function ConnectionManager.new()
     return setmetatable({ _conns = {} }, ConnectionManager)
 end
 
--- Adiciona uma conexão e retorna a conexão
+-- Conecta um sinal a uma função e adiciona a conexão ao manager
+-- @param signal O sinal (evento) a ser conectado
+-- @param callback A função a ser chamada quando o evento for disparado
+-- @return A conexão criada
 function ConnectionManager:connect(signal, callback)
     local conn = signal:Connect(callback)
-    table.insert(self._conns, conn)
+    self:add(conn)
     return conn
 end
 
--- Adiciona uma conexão já existente (útil para conexões criadas fora do manager)
+-- Adiciona uma conexão existente ao manager
+-- @param conn A conexão a ser adicionada (deve ser uma RBXScriptConnection)
 function ConnectionManager:add(conn)
-    if conn and conn.Disconnect then
-        table.insert(self._conns, conn)
+    if typeof(conn) ~= "RBXScriptConnection" then
+        warn("Tentativa de adicionar um objeto que não é uma RBXScriptConnection")
+        return
+    end
+    if not self._conns[conn] then
+        self._conns[conn] = true
     end
 end
 
 -- Remove e desconecta uma conexão específica
+-- @param conn A conexão a ser removida
 function ConnectionManager:remove(conn)
-    for i, c in ipairs(self._conns) do
-        if c == conn then
-            if c.Disconnect then c:Disconnect() end
-            table.remove(self._conns, i)
-            break
+    if self._conns[conn] then
+        if conn.Connected then
+            conn:Disconnect()
         end
+        self._conns[conn] = nil
     end
 end
 
--- Desconecta todas as conexões
+-- Desconecta todas as conexões e limpa a lista
 function ConnectionManager:disconnectAll()
-    for _, conn in ipairs(self._conns) do
-        if conn and conn.Disconnect then
+    for conn, _ in pairs(self._conns) do
+        if conn.Connected then
             conn:Disconnect()
         end
     end
     self._conns = {}
 end
 
--- Conta conexões ativas
+-- Conta o número de conexões gerenciadas
+-- @return O número de conexões ativas
 function ConnectionManager:count()
-    return #self._conns
+    local count = 0
+    for _ in pairs(self._conns) do
+        count = count + 1
+    end
+    return count
 end
 
-return ConnectionManager 
+return ConnectionManager
