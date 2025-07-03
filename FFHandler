@@ -28,12 +28,14 @@ FFDetector.__index = FFDetector
 function FFDetector.new()
     local self = setmetatable({}, FFDetector)
     self.enabled = false
-    self._connMgr = ConnectionManager.new() -- global
-    self._charConnMgrs = {} -- [character] = ConnectionManager
+    self._connMgr = ConnectionManager.new() -- Connections globais
+    self._playerConnMgrs = {} -- [player] = ConnectionManager para connections específicas do player
+    self._charConnMgrs = {} -- [character] = ConnectionManager para connections específicas do character
     self.billboards = {} -- [character] = {billboard, label, lastTimeLeft}
     self.ffData = {} -- [character] = {ff, startTime}
     self.billboardMaxDistance = 125
     self.billboardTextSize = 18
+    self._lastUpdate = 0
     return self
 end
 
@@ -62,6 +64,8 @@ function FFDetector:createBillboard(character, ff, startTime)
     if character:FindFirstChild('FFBillboard') then return end
     
     local player = Players:GetPlayerFromCharacter(character)
+    if not player then return end
+    
     local timeLeft = utils:getForceFieldTimeLeft(player)
     
     local billboard = Instance.new('BillboardGui')
@@ -72,6 +76,7 @@ function FFDetector:createBillboard(character, ff, startTime)
     billboard.MaxDistance = self.billboardMaxDistance
     billboard.Adornee = getBestAdornee(character)
     billboard.Parent = character
+    
     local label = Instance.new('TextLabel')
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
@@ -82,6 +87,7 @@ function FFDetector:createBillboard(character, ff, startTime)
     label.Font = Enum.Font.SourceSansBold
     label.Text = string.format('%.1f s until FF is out', timeLeft)
     label.Parent = billboard
+    
     self.billboards[character] = {
         billboard = billboard,
         label = label,
@@ -95,35 +101,72 @@ function FFDetector:removeBillboard(character)
         data.billboard:Destroy()
     end
     self.billboards[character] = nil
+end
+
+function FFDetector:clearCharacterData(character)
+    -- Remove billboard primeiro
+    self:removeBillboard(character)
+    
+    -- Remove dados do FF
+    self.ffData[character] = nil
+    
+    -- Desconecta e remove connection manager específico do character
     if self._charConnMgrs[character] then
         self._charConnMgrs[character]:disconnectAll()
         self._charConnMgrs[character] = nil
     end
 end
 
-function FFDetector:clearCharacterData(character)
-    self:removeBillboard(character)
-    self.ffData[character] = nil
+function FFDetector:clearPlayerData(player)
+    -- Limpa dados do character atual
+    if player.Character then
+        self:clearCharacterData(player.Character)
+    end
+    
+    -- Desconecta e remove connection manager específico do player
+    if self._playerConnMgrs[player] then
+        self._playerConnMgrs[player]:disconnectAll()
+        self._playerConnMgrs[player] = nil
+    end
 end
 
 function FFDetector:cleanup()
+    -- Desconecta todas as connections globais
     self._connMgr:disconnectAll()
-    for _, mgr in pairs(self._charConnMgrs) do
+    
+    -- Desconecta todas as connections específicas de players
+    for player, mgr in pairs(self._playerConnMgrs) do
+        mgr:disconnectAll()
+    end
+    self._playerConnMgrs = {}
+    
+    -- Desconecta todas as connections específicas de characters
+    for character, mgr in pairs(self._charConnMgrs) do
         mgr:disconnectAll()
     end
     self._charConnMgrs = {}
+    
+    -- Remove todos os billboards
     for character, _ in pairs(self.billboards) do
         self:removeBillboard(character)
     end
+    
+    -- Limpa dados dos FFs
+    self.ffData = {}
 end
 
 function FFDetector:onForceFieldAdded(character, ff)
     if not ff:GetAttribute("StartTime") then
         ff:SetAttribute("StartTime", tick())
     end
+    
+    -- Evita duplicatas
     if self.ffData[character] and self.ffData[character].ff == ff then return end
+    
     self.ffData[character] = {ff = ff, startTime = getTime()}
     self:createBillboard(character, ff, self.ffData[character].startTime)
+    
+    -- Adiciona connection para detectar quando FF é removido
     if self._charConnMgrs[character] then
         self._charConnMgrs[character]:add(ff.AncestryChanged:Connect(function(_, parent)
             if not parent then
@@ -134,11 +177,16 @@ function FFDetector:onForceFieldAdded(character, ff)
 end
 
 function FFDetector:registerCharacterFF(character)
+    -- Limpa connections anteriores do character
     if self._charConnMgrs[character] then
         self._charConnMgrs[character]:disconnectAll()
     end
+    
+    -- Cria novo connection manager para o character
     self._charConnMgrs[character] = ConnectionManager.new()
     local mgr = self._charConnMgrs[character]
+    
+    -- Registra FFs existentes
     for _, ff in ipairs(character:GetChildren()) do
         if ff:IsA('ForceField') then
             if not ff:GetAttribute("StartTime") then
@@ -150,11 +198,15 @@ function FFDetector:registerCharacterFF(character)
             self:createBillboard(character, ff, self.ffData[character].startTime)
         end
     end
+    
+    -- Monitora novos FFs adicionados
     mgr:add(character.ChildAdded:Connect(function(child)
         if child:IsA('ForceField') then
             self:onForceFieldAdded(character, child)
         end
     end))
+    
+    -- Monitora quando character é removido
     mgr:add(character.AncestryChanged:Connect(function(_, parent)
         if not parent then
             self:clearCharacterData(character)
@@ -163,28 +215,38 @@ function FFDetector:registerCharacterFF(character)
 end
 
 function FFDetector:registerPlayer(player)
+    -- Limpa connections anteriores do player
+    if self._playerConnMgrs[player] then
+        self._playerConnMgrs[player]:disconnectAll()
+    end
+    
+    -- Cria novo connection manager para o player
+    self._playerConnMgrs[player] = ConnectionManager.new()
+    local mgr = self._playerConnMgrs[player]
+    
+    -- Registra character atual se existir
     if player.Character then
         self:registerCharacterFF(player.Character)
     end
-    self._connMgr:add(player.CharacterAdded:Connect(function(character)
+    
+    -- Monitora novos characters
+    mgr:add(player.CharacterAdded:Connect(function(character)
         if self.enabled then
             self:registerCharacterFF(character)
         end
     end))
-    self._connMgr:add(player.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            if player.Character then
-                self:clearCharacterData(player.Character)
-            end
-        end
+    
+    -- Monitora quando character é removido (CharacterRemoving)
+    mgr:add(player.CharacterRemoving:Connect(function(character)
+        self:clearCharacterData(character)
     end))
 end
 
 function FFDetector:updateBillboards()
     -- Otimização: throttling para atualizar no máximo a cada 0.15s
-    self._lastUpdate = self._lastUpdate or 0
     if tick() - self._lastUpdate < 0.15 then return end
     self._lastUpdate = tick()
+    
     for _, player in ipairs(Players:GetPlayers()) do
         local character = player.Character
         if character then
@@ -192,18 +254,24 @@ function FFDetector:updateBillboards()
             if data and data.ff and data.ff.Parent == character then
                 local timeLeft = utils:getForceFieldTimeLeft(player)
                 local bdata = self.billboards[character]
+                
                 if not bdata then
                     self:createBillboard(character, data.ff, data.startTime)
                 else
                     -- Só atualiza se o tempo mudou significativamente
-                    if bdata._lastTimeLeft == nil or math.abs(bdata._lastTimeLeft - timeLeft) > 0.19 then
-                        bdata.label.Text = string.format('%.1f s until FF is out', timeLeft)
-                        bdata.label.TextColor3 = self:getFFColor(timeLeft)
-                        bdata.billboard.MaxDistance = self.billboardMaxDistance
-                        bdata._lastTimeLeft = timeLeft
+                    if bdata.lastTimeLeft == nil or math.abs(bdata.lastTimeLeft - timeLeft) > 0.19 then
+                        if bdata.label then
+                            bdata.label.Text = string.format('%.1f s until FF is out', timeLeft)
+                            bdata.label.TextColor3 = self:getFFColor(timeLeft)
+                        end
+                        if bdata.billboard then
+                            bdata.billboard.MaxDistance = self.billboardMaxDistance
+                        end
+                        bdata.lastTimeLeft = timeLeft
                     end
                 end
             else
+                -- Remove billboard se FF não existe mais
                 if self.billboards[character] then
                     self:clearCharacterData(character)
                 end
@@ -213,20 +281,39 @@ function FFDetector:updateBillboards()
 end
 
 function FFDetector:enable()
+    if self.enabled then return end
+    
     self.enabled = true
-    self:cleanup()
+    self:cleanup() -- Limpa estado anterior
+    
+    -- Registra players existentes
     for _, player in ipairs(Players:GetPlayers()) do
         self:registerPlayer(player)
     end
+    
+    -- Monitora novos players
     self._connMgr:add(Players.PlayerAdded:Connect(function(player)
-        self:registerPlayer(player)
+        if self.enabled then
+            self:registerPlayer(player)
+        end
     end))
+    
+    -- Monitora players que saem
+    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
+        self:clearPlayerData(player)
+    end))
+    
+    -- Atualiza billboards
     self._connMgr:add(RunService.RenderStepped:Connect(function()
-        self:updateBillboards()
+        if self.enabled then
+            self:updateBillboards()
+        end
     end))
 end
 
 function FFDetector:disable()
+    if not self.enabled then return end
+    
     self.enabled = false
     self:cleanup()
 end
@@ -241,4 +328,4 @@ function FFDetector:setBillboardTextSize(value)
     self:updateBillboardTextSize()
 end
 
-return FFDetector 
+return FFDetector
