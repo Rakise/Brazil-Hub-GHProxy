@@ -203,12 +203,13 @@ function PlayerESP:removeBillboard(player)
         data.billboard:Destroy()
         self.espBillboards[player] = nil
     end
-    -- CORREÇÃO CRÍTICA: Limpar cache de dados
     if self.dataCache[player] then
         self.dataCache[player] = nil
     end
-    -- NÃO limpe as conexões aqui!
-    -- self.playerConnections[player] = nil
+    if self._playerConnMgrs[player] then
+        self._playerConnMgrs[player]:disconnectAll()
+        self._playerConnMgrs[player] = nil
+    end
 end
 
 -- OTIMIZAÇÃO CRÍTICA: Função para atualizar dados de um player específico
