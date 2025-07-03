@@ -28,13 +28,15 @@ PlayerESP.displayConfig = {
     showHealthPercent = true
 }
 
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
 function PlayerESP.new()
     local self = setmetatable({}, PlayerESP)
     self.enabled = false
-    self.connections = {}
+    self._connMgr = ConnectionManager.new()
+    self._playerConnMgrs = {} -- [player] = ConnectionManager
     self.espBillboards = {}
-    self.playerConnections = {} -- NOVO: Rastrear conexões por player
-    self.dataCache = {} -- NOVO: Cache de dados para evitar recálculos
+    self.dataCache = {}
     return self
 end
 
@@ -261,32 +263,20 @@ end
 -- CORREÇÃO CRÍTICA: Função de conexão de player com limpeza adequada
 function PlayerESP:connectPlayer(player)
     if player == Players.LocalPlayer then return end
-
-    -- Desconectar conexões antigas deste player, se existirem
-    if self.playerConnections[player] then
-        for _, conn in pairs(self.playerConnections[player]) do
-            if conn and conn.Disconnect then conn:Disconnect() end
-        end
+    if self._playerConnMgrs[player] then
+        self._playerConnMgrs[player]:disconnectAll()
     end
-    self.playerConnections[player] = {}
-
-    -- Conectar eventos específicos do player
-    local charAddedConn = player.CharacterAdded:Connect(function(character)
+    self._playerConnMgrs[player] = ConnectionManager.new()
+    local mgr = self._playerConnMgrs[player]
+    mgr:add(player.CharacterAdded:Connect(function(character)
         if self.enabled then
-            -- Pequeno delay para garantir que o character está totalmente carregado
             task.wait(0.1)
             self:createBillboard(player)
         end
-    end)
-
-    local charRemovingConn = player.CharacterRemoving:Connect(function(character)
+    end))
+    mgr:add(player.CharacterRemoving:Connect(function(character)
         self:removeBillboard(player)
-    end)
-
-    table.insert(self.playerConnections[player], charAddedConn)
-    table.insert(self.playerConnections[player], charRemovingConn)
-
-    -- Se já tem character, criar billboard
+    end))
     if player.Character then
         self:createBillboard(player)
     end
@@ -295,25 +285,22 @@ end
 function PlayerESP:enable()
     self.enabled = true
     self:cleanup()
-    
-    -- OTIMIZAÇÃO: Conectar players existentes
     for _, player in ipairs(Players:GetPlayers()) do
         self:connectPlayer(player)
     end
-    
-    -- CORREÇÃO CRÍTICA: Conexões globais com limpeza adequada
-    table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
+    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
         self:connectPlayer(player)
     end))
-    
-    table.insert(self.connections, Players.PlayerRemoving:Connect(function(player)
+    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
         self:removeBillboard(player)
+        if self._playerConnMgrs[player] then
+            self._playerConnMgrs[player]:disconnectAll()
+            self._playerConnMgrs[player] = nil
+        end
     end))
-    
-    -- OTIMIZAÇÃO CRÍTICA: Mudar de RenderStepped para Heartbeat (menos frequente)
-    self.updateConnection = RunService.Heartbeat:Connect(function()
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
         self:updateBillboards()
-    end)
+    end))
 end
 
 function PlayerESP:disable()
@@ -323,24 +310,14 @@ end
 
 -- CORREÇÃO CRÍTICA: Limpeza completa melhorada
 function PlayerESP:cleanup()
-    -- Desconectar conexões globais
-    for _, conn in ipairs(self.connections) do
-        if conn and conn.Disconnect then conn:Disconnect() end
+    self._connMgr:disconnectAll()
+    for _, mgr in pairs(self._playerConnMgrs) do
+        mgr:disconnectAll()
     end
-    self.connections = {}
-    
-    -- Desconectar conexão de atualização
-    if self.updateConnection and self.updateConnection.Disconnect then
-        self.updateConnection:Disconnect()
-    end
-    self.updateConnection = nil
-    
-    -- CORREÇÃO CRÍTICA: Limpar todos os billboards e conexões de players
+    self._playerConnMgrs = {}
     for player, _ in pairs(self.espBillboards) do
         self:removeBillboard(player)
     end
-    
-    -- Limpar cache de dados
     self.dataCache = {}
 end
 
