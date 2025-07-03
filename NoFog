@@ -6,13 +6,35 @@ NoFog.enabled = false
 NoFog._connections = {}
 NoFog._original = nil
 
+-- Lista de efeitos suportados
+local EFFECT_TYPES = {
+    "Atmosphere",
+    "BloomEffect", 
+    "ColorCorrectionEffect",
+    "DepthOfFieldEffect",
+    "SunRaysEffect"
+}
+
+local function isTargetEffect(obj)
+    for _, effectType in ipairs(EFFECT_TYPES) do
+        if obj:IsA(effectType) then
+            return true
+        end
+    end
+    return false
+end
+
 function NoFog:apply()
     local Lighting = game:GetService("Lighting")
+    
+    -- Remove fog
     Lighting.FogEnd = 1e10
     Lighting.FogStart = 1e10 - 1
-    Lighting.FogColor = Color3.new(1,1,1)
+    Lighting.FogColor = Color3.new(1, 1, 1)
+    
+    -- Remove efeitos visuais
     for _, v in ipairs(Lighting:GetChildren()) do
-        if v:IsA("Atmosphere") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+        if isTargetEffect(v) then
             v:Destroy()
         end
     end
@@ -20,14 +42,26 @@ end
 
 function NoFog:saveOriginal()
     local Lighting = game:GetService("Lighting")
+    
+    -- Limpa efeitos anteriores se existirem
+    if self._original and self._original.Effects then
+        for _, effect in ipairs(self._original.Effects) do
+            if effect and effect.Destroy then
+                effect:Destroy()
+            end
+        end
+    end
+    
     self._original = {
         FogStart = Lighting.FogStart,
         FogEnd = Lighting.FogEnd,
         FogColor = Lighting.FogColor,
         Effects = {}
     }
+    
+    -- Salva cópias dos efeitos atuais
     for _, v in ipairs(Lighting:GetChildren()) do
-        if v:IsA("Atmosphere") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+        if isTargetEffect(v) then
             table.insert(self._original.Effects, v:Clone())
         end
     end
@@ -36,39 +70,77 @@ end
 function NoFog:restoreOriginal()
     local Lighting = game:GetService("Lighting")
     if not self._original then return end
+    
+    -- Restaura propriedades do fog
     Lighting.FogStart = self._original.FogStart
     Lighting.FogEnd = self._original.FogEnd
     Lighting.FogColor = self._original.FogColor
+    
+    -- Remove efeitos atuais
     for _, v in ipairs(Lighting:GetChildren()) do
-        if v:IsA("Atmosphere") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+        if isTargetEffect(v) then
             v:Destroy()
         end
     end
+    
+    -- Restaura efeitos originais
     for _, effect in ipairs(self._original.Effects) do
-        effect:Clone().Parent = Lighting
+        if effect and effect.Parent == nil then -- Verifica se ainda é válido
+            local restored = effect:Clone()
+            restored.Parent = Lighting
+        end
     end
 end
 
 function NoFog:enable()
     if self.enabled then return end
+    
     self.enabled = true
     self:saveOriginal()
     self:apply()
-    table.insert(self._connections, game:GetService("Lighting").ChildAdded:Connect(function()
-        if self.enabled then self:apply() end
-    end))
-    table.insert(self._connections, game:GetService("Lighting").ChildRemoved:Connect(function()
-        if self.enabled then self:apply() end
+    
+    -- Conecta eventos para re-aplicar quando novos efeitos forem adicionados
+    table.insert(self._connections, game:GetService("Lighting").ChildAdded:Connect(function(child)
+        if self.enabled and isTargetEffect(child) then
+            child:Destroy()
+        end
     end))
 end
 
 function NoFog:disable()
+    if not self.enabled then return end
+    
     self.enabled = false
+    
+    -- Desconecta todos os eventos
     for _, conn in ipairs(self._connections) do
-        if conn and conn.Disconnect then conn:Disconnect() end
+        if conn and conn.Disconnect then 
+            conn:Disconnect() 
+        end
     end
     self._connections = {}
+    
+    -- Restaura configurações originais
     self:restoreOriginal()
 end
 
-return NoFog 
+function NoFog:cleanup()
+    self:disable()
+    
+    -- Limpa efeitos salvos da memória
+    if self._original and self._original.Effects then
+        for _, effect in ipairs(self._original.Effects) do
+            if effect and effect.Destroy then
+                effect:Destroy()
+            end
+        end
+    end
+    self._original = nil
+end
+
+-- Método para verificar se está habilitado
+function NoFog:isEnabled()
+    return self.enabled
+end
+
+return NoFog
