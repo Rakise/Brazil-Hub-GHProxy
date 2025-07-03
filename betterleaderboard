@@ -287,6 +287,7 @@ function BetterLeaderboard:cleanupFrameConnections()
     for key, mgr in pairs(self._frameConnMgrs) do
         if mgr then
             mgr:disconnectAll()
+            self._frameConnMgrs[key] = nil
         end
     end
     self._frameConnMgrs = {}
