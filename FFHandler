@@ -156,11 +156,12 @@ function FFDetector:cleanup()
 end
 
 function FFDetector:onForceFieldAdded(character, ff)
+    -- Sempre setar StartTime ao adicionar novo FF
     if not ff:GetAttribute("StartTime") then
         ff:SetAttribute("StartTime", tick())
     end
     if self.ffData[character] and self.ffData[character].ff == ff then return end
-    self.ffData[character] = {ff = ff, startTime = getTime()}
+    self.ffData[character] = {ff = ff, startTime = ff:GetAttribute("StartTime") or getTime()}
     self:createBillboard(character, ff, self.ffData[character].startTime)
     if self._charConnMgrs[character] then
         local conn = ff.AncestryChanged:Connect(function(_, parent)
@@ -182,11 +183,12 @@ function FFDetector:registerCharacterFF(character)
     local mgr = self._charConnMgrs[character]
     for _, ff in ipairs(character:GetChildren()) do
         if ff:IsA('ForceField') then
+            -- Sempre setar StartTime se não existir
             if not ff:GetAttribute("StartTime") then
                 ff:SetAttribute("StartTime", tick())
             end
             if not self.ffData[character] then
-                self.ffData[character] = {ff = ff, startTime = getTime()}
+                self.ffData[character] = {ff = ff, startTime = ff:GetAttribute("StartTime") or getTime()}
             end
             self:createBillboard(character, ff, self.ffData[character].startTime)
             local conn = ff.AncestryChanged:Connect(function(_, parent)
@@ -200,6 +202,10 @@ function FFDetector:registerCharacterFF(character)
     end
     mgr:add(character.ChildAdded:Connect(function(child)
         if child:IsA('ForceField') then
+            -- Sempre setar StartTime ao adicionar novo FF
+            if not child:GetAttribute("StartTime") then
+                child:SetAttribute("StartTime", tick())
+            end
             self:onForceFieldAdded(character, child)
         end
     end))
