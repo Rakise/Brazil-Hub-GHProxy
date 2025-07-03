@@ -37,12 +37,8 @@ local SPECIAL_TRINKET_MATCHERS = {
         if part.Material ~= Enum.Material.Slate then return nil end
         local clickPart = part:FindFirstChildOfClass("Part")
         if not (clickPart and clickPart.Transparency == 1) then return nil end
-        for _, child in ipairs(part:GetChildren()) do
-            if child:IsA("ParticleEmitter") then
-                return "Idol of the Forgotten"
-            end
-        end
-        return nil
+        if not part:FindFirstChildOfClass("ParticleEmitter") then return nil end
+        return "Idol of the Forgotten"
     end,
     function(part)
         -- Amulet of the White King
