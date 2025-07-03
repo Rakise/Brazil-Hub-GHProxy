@@ -204,41 +204,60 @@ function FFDetector:registerCharacterFF(character)
 end
 
 function FFDetector:registerPlayer(player)
-    if self.enabled and player.Character then
+    if player.Character then
         self:registerCharacterFF(player.Character)
     end
     self._connMgr:add(player.CharacterAdded:Connect(function(character)
-        if self.enabled then
-            self:registerCharacterFF(character)
-        end
+        self:registerCharacterFF(character)
     end))
-    self._connMgr:add(player.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            if player.Character then
-                self:clearCharacterData(player.Character)
-            end
-        end
+    self._connMgr:add(player.CharacterRemoving:Connect(function(character)
+        self:clearCharacterData(character)
     end))
 end
 
 function FFDetector:updateBillboards()
     if tick() - (self._lastUpdate or 0) < 0.15 then return end
     self._lastUpdate = tick()
-    for character, data in pairs(self.ffData) do
-        if data.ff and data.ff.Parent == character then
-            local player = Players:GetPlayerFromCharacter(character)
-            local timeLeft = utils:getForceFieldTimeLeft(player)
-            local bdata = self.billboards[character]
-            if not bdata then
-                self:createBillboard(character, data.ff, data.startTime)
-            elseif math.abs(bdata.lastTimeLeft - timeLeft) > 0.19 then
-                bdata.label.Text = string.format('%.1f s until FF is out', timeLeft)
-                bdata.label.TextColor3 = self:getFFColor(timeLeft)
-                bdata.billboard.MaxDistance = self.billboardMaxDistance
-                bdata.lastTimeLeft = timeLeft
+    for _, player in ipairs(Players:GetPlayers()) do
+        local character = player.Character
+        if character then
+            local data = self.ffData[character]
+            local ff = nil
+            -- Sempre procure ForceField atual
+            for _, child in ipairs(character:GetChildren()) do
+                if child:IsA('ForceField') then
+                    ff = child
+                    break
+                end
             end
-        else
-            self:removeForceFieldData(character, data.ff)
+            if ff then
+                if not data or data.ff ~= ff then
+                    -- Novo FF detectado, registrar e criar billboard
+                    self.ffData[character] = {ff = ff, startTime = ff:GetAttribute("StartTime") or getTime()}
+                    self:createBillboard(character, ff, self.ffData[character].startTime)
+                    local conn = ff.AncestryChanged:Connect(function(_, parent)
+                        if not parent then
+                            self:removeForceFieldData(character, ff)
+                        end
+                    end)
+                    if self._charConnMgrs[character] then
+                        self._charConnMgrs[character]:add(conn)
+                    end
+                    self._ffConnections[ff] = conn
+                end
+                local timeLeft = utils:getForceFieldTimeLeft(player)
+                local bdata = self.billboards[character]
+                if bdata and math.abs(bdata.lastTimeLeft - timeLeft) > 0.19 then
+                    bdata.label.Text = string.format('%.1f s until FF is out', timeLeft)
+                    bdata.label.TextColor3 = self:getFFColor(timeLeft)
+                    bdata.billboard.MaxDistance = self.billboardMaxDistance
+                    bdata.lastTimeLeft = timeLeft
+                end
+            else
+                if data then
+                    self:removeForceFieldData(character, data.ff)
+                end
+            end
         end
     end
 end
@@ -247,10 +266,17 @@ function FFDetector:enable()
     self.enabled = true
     self:cleanup()
     for _, player in ipairs(Players:GetPlayers()) do
-        self:registerPlayer(player)
+        if player.Character then
+            self:registerCharacterFF(player.Character)
+        end
     end
     self._connMgr:add(Players.PlayerAdded:Connect(function(player)
         self:registerPlayer(player)
+    end))
+    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
+        if player.Character then
+            self:clearCharacterData(player.Character)
+        end
     end))
     self._connMgr:add(RunService.RenderStepped:Connect(function()
         self:updateBillboards()
