@@ -29,7 +29,7 @@ function AutoAim.new()
         enabled = false,
         maxRange = 200,
         timeToHit = 0.15,
-        toolNames = {Fimbulvetr=true, Perflora=true, Armis=true, Grapple=true, Percutiens=true},
+        toolNames = {Fimbulvetr=true, Perflora=true, Armis=true, Grapple=true, Percutiens=true, Inferi=true},
         studsBehindMin = 20,
         studsBehindMax = 30,
         fovMax = 20
