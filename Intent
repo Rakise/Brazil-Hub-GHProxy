@@ -1,135 +1,278 @@
-local Intent = {}
-Intent.enabled = false
-local Players = game:GetService("Players")
-local intentBillboards = {}
-local intentConnections = {}
+--[[
+    Intent System - Displays equipped tool names above players' heads
+    
+    This module creates billboard GUIs that show what tool each player has equipped.
+    It automatically updates when players equip/unequip tools and manages cleanup.
+]]
 
+local Intent = {}
+
+-- Module state
+Intent.enabled = false
+
+-- Services
+local Players = game:GetService("Players")
+
+-- Configuration constants
+local CONFIG = {
+    BILLBOARD_SIZE = UDim2.new(5, 0, 1, 0),
+    BILLBOARD_OFFSET = Vector2.new(0, 3),
+    MAX_DISTANCE = 60,
+    LABEL_TEXT_SIZE = 14,
+    LABEL_COLOR = Color3.new(1, 1, 1),
+    STROKE_THICKNESS = 2,
+    STROKE_TRANSPARENCY = 0.1,
+    DEFAULT_TOOL_TEXT = "None"
+}
+
+-- Internal state
+local billboardRegistry = {}
+local connectionRegistry = {}
+
+--[[
+    Retrieves the name of the currently equipped tool for a player
+    @param player: Player - The player to check
+    @return string - The name of the equipped tool or "None" if no tool is equipped
+]]
 local function getEquippedToolName(player)
     local character = player.Character
-    if not character then return "None" end
-    local tool = character:FindFirstChildOfClass("Tool")
-    return tool and tool.Name or "None"
+    if not character then 
+        return CONFIG.DEFAULT_TOOL_TEXT 
+    end
+    
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    return equippedTool and equippedTool.Name or CONFIG.DEFAULT_TOOL_TEXT
 end
 
-local function updateIntentLabel(player)
-    local bb = intentBillboards[player]
-    if not bb then return end
-    local label = bb:FindFirstChild("IntentLabel")
+--[[
+    Updates the text label of a player's intent billboard
+    @param player: Player - The player whose billboard should be updated
+]]
+local function updateBillboardLabel(player)
+    local billboard = billboardRegistry[player]
+    if not billboard then return end
+    
+    local label = billboard:FindFirstChild("IntentLabel")
     if not label then return end
+    
     label.Text = getEquippedToolName(player)
 end
 
-local function createIntentBillboard(player)
-    if not player or player == Players.LocalPlayer or intentBillboards[player] then return end
-    local character = player.Character
-    if not character then return end
-    local head = character:FindFirstChild("Head")
-    if not head then return end
-    -- BillboardGui
-    local bb = Instance.new("BillboardGui")
-    bb.Name = "IntentBillboard"
-    bb.LightInfluence = 1
-    bb.SizeOffset = Vector2.new(0,3)
-    bb.Active = true
-    bb.MaxDistance = 60
-    bb.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    bb.ClipsDescendants = true
-    bb.Size = UDim2.new(5,0,1,0)
-    bb.Adornee = head
-    bb.Parent = head
-    -- TextLabel
+--[[
+    Creates the billboard GUI structure for displaying tool names
+    @param parentObject: Instance - The object to parent the billboard to
+    @return BillboardGui - The created billboard GUI
+]]
+local function createBillboardStructure(parentObject)
+    -- Create main billboard GUI
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "IntentBillboard"
+    billboard.LightInfluence = 1
+    billboard.SizeOffset = CONFIG.BILLBOARD_OFFSET
+    billboard.Active = true
+    billboard.MaxDistance = CONFIG.MAX_DISTANCE
+    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    billboard.ClipsDescendants = true
+    billboard.Size = CONFIG.BILLBOARD_SIZE
+    billboard.Adornee = parentObject
+    billboard.Parent = parentObject
+    
+    -- Create text label
     local label = Instance.new("TextLabel")
     label.Name = "IntentLabel"
-    label.TextSize = 14
+    label.TextSize = CONFIG.LABEL_TEXT_SIZE
     label.FontSize = Enum.FontSize.Size14
-    label.Size = UDim2.new(1,0,1,0)
-    label.TextColor3 = Color3.new(1,1,1)
-    label.BorderColor3 = Color3.new(0,0,0)
-    label.Text = getEquippedToolName(player)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.TextColor3 = CONFIG.LABEL_COLOR
+    label.BorderColor3 = Color3.new(0, 0, 0)
     label.TextWrapped = true
-    label.TextStrokeTransparency = 0.1
-    label.AnchorPoint = Vector2.new(0.5,0.5)
+    label.TextStrokeTransparency = CONFIG.STROKE_TRANSPARENCY
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.Font = Enum.Font.SourceSans
     label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0.5,0,0.5,0)
-    label.BackgroundColor3 = Color3.new(1,1,1)
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.BackgroundColor3 = Color3.new(1, 1, 1)
     label.TextScaled = true
     label.BorderSizePixel = 0
     label.TextWrap = true
-    label.Parent = bb
-    intentBillboards[player] = bb
-    -- Atualização dinâmica do nome do tool
-    local function toolUpdate()
-        updateIntentLabel(player)
+    label.Parent = billboard
+    
+    -- Add text stroke for better visibility
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = CONFIG.STROKE_THICKNESS
+    stroke.Parent = label
+    
+    return billboard
+end
+
+--[[
+    Sets up event connections to monitor tool changes for a player
+    @param player: Player - The player to monitor
+]]
+local function setupToolChangeMonitoring(player)
+    local character = player.Character
+    if not character then return end
+    
+    local function onToolChange(child)
+        if child:IsA("Tool") then
+            updateBillboardLabel(player)
+        end
     end
-    -- Conectar eventos para atualizar o label
-    local char = player.Character
-    if char then
-        table.insert(intentConnections, char.ChildAdded:Connect(function(child)
-            if child:IsA("Tool") then toolUpdate() end
-        end))
-        table.insert(intentConnections, char.ChildRemoved:Connect(function(child)
-            if child:IsA("Tool") then toolUpdate() end
-        end))
+    
+    -- Connect to tool add/remove events
+    local addConnection = character.ChildAdded:Connect(onToolChange)
+    local removeConnection = character.ChildRemoved:Connect(onToolChange)
+    
+    -- Store connections for cleanup
+    table.insert(connectionRegistry, addConnection)
+    table.insert(connectionRegistry, removeConnection)
+end
+
+--[[
+    Creates an intent billboard for a specific player
+    @param player: Player - The player to create a billboard for
+]]
+local function createPlayerBillboard(player)
+    -- Skip if player is local player or billboard already exists
+    if not player or player == Players.LocalPlayer or billboardRegistry[player] then 
+        return 
+    end
+    
+    local character = player.Character
+    if not character then return end
+    
+    local head = character:FindFirstChild("Head")
+    if not head then return end
+    
+    -- Create billboard structure
+    local billboard = createBillboardStructure(head)
+    
+    -- Initialize label text
+    local label = billboard:FindFirstChild("IntentLabel")
+    if label then
+        label.Text = getEquippedToolName(player)
+    end
+    
+    -- Register billboard
+    billboardRegistry[player] = billboard
+    
+    -- Set up tool change monitoring
+    setupToolChangeMonitoring(player)
+end
+
+--[[
+    Removes the intent billboard for a specific player
+    @param player: Player - The player whose billboard should be removed
+]]
+local function removePlayerBillboard(player)
+    local billboard = billboardRegistry[player]
+    if billboard then
+        billboard:Destroy()
+        billboardRegistry[player] = nil
     end
 end
 
-local function removeIntentBillboard(player)
-    if intentBillboards[player] then
-        intentBillboards[player]:Destroy()
-        intentBillboards[player] = nil
-    end
-end
-
-local function updateAllIntentBillboards()
+--[[
+    Creates billboards for all eligible players currently in the game
+]]
+local function createAllBillboards()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Players.LocalPlayer then
-            createIntentBillboard(player)
+            createPlayerBillboard(player)
         end
     end
 end
 
-local function removeAllIntentBillboards()
-    for player, bb in pairs(intentBillboards) do
-        if bb then bb:Destroy() end
+--[[
+    Removes all intent billboards and clears the registry
+]]
+local function removeAllBillboards()
+    for player, billboard in pairs(billboardRegistry) do
+        if billboard then
+            billboard:Destroy()
+        end
     end
-    intentBillboards = {}
+    billboardRegistry = {}
 end
 
-local function connectIntentEvents()
-    table.insert(intentConnections, Players.PlayerAdded:Connect(function(player)
-        table.insert(intentConnections, player.CharacterAdded:Connect(function()
-            createIntentBillboard(player)
-        end))
-    end))
+--[[
+    Sets up event connections for player join/character spawn events
+]]
+local function setupPlayerEventConnections()
+    -- Handle new players joining
+    local playerAddedConnection = Players.PlayerAdded:Connect(function(player)
+        -- Set up billboard creation when player spawns
+        local characterAddedConnection = player.CharacterAdded:Connect(function()
+            createPlayerBillboard(player)
+        end)
+        table.insert(connectionRegistry, characterAddedConnection)
+    end)
+    table.insert(connectionRegistry, playerAddedConnection)
+    
+    -- Handle existing players respawning
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Players.LocalPlayer then
-            table.insert(intentConnections, player.CharacterAdded:Connect(function()
-                createIntentBillboard(player)
-            end))
+            local characterAddedConnection = player.CharacterAdded:Connect(function()
+                createPlayerBillboard(player)
+            end)
+            table.insert(connectionRegistry, characterAddedConnection)
         end
     end
 end
 
-local function disconnectIntentEvents()
-    for _, conn in ipairs(intentConnections) do
-        if conn and conn.Disconnect then conn:Disconnect() end
+--[[
+    Disconnects all event connections and clears the registry
+]]
+local function disconnectAllConnections()
+    for _, connection in ipairs(connectionRegistry) do
+        if connection and connection.Disconnect then
+            connection:Disconnect()
+        end
     end
-    intentConnections = {}
+    connectionRegistry = {}
 end
 
+--[[
+    Enables the intent system
+    Creates billboards for all players and sets up event monitoring
+]]
 function Intent.enable()
     if Intent.enabled then return end
+    
     Intent.enabled = true
-    updateAllIntentBillboards()
-    connectIntentEvents()
+    createAllBillboards()
+    setupPlayerEventConnections()
 end
 
+--[[
+    Disables the intent system
+    Removes all billboards and disconnects all event connections
+]]
 function Intent.disable()
     if not Intent.enabled then return end
+    
     Intent.enabled = false
-    removeAllIntentBillboards()
-    disconnectIntentEvents()
+    removeAllBillboards()
+    disconnectAllConnections()
+end
+
+--[[
+    Checks if the intent system is currently enabled
+    @return boolean - True if enabled, false otherwise
+]]
+function Intent.isEnabled()
+    return Intent.enabled
+end
+
+--[[
+    Manually updates all billboards (useful for debugging or forced refresh)
+]]
+function Intent.refreshAll()
+    if not Intent.enabled then return end
+    
+    for player, _ in pairs(billboardRegistry) do
+        updateBillboardLabel(player)
+    end
 end
 
 return Intent
