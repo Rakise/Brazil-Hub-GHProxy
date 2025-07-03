@@ -39,8 +39,8 @@ local SPECIAL_TRINKET_MATCHERS = {
         if math.abs(size.X - 0.7009) > 0.01 or math.abs(size.Y - 0.6554) > 0.01 or math.abs(size.Z - 0.6830) > 0.01 then
             return nil
         end
-        local clickPart = part:FindFirstChild("ClickPart")
-        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        local clickPart = part:FindFirstChildOfClass("Part")
+        if not (clickPart and clickPart.Transparency == 1) then return nil end
         for _, child in ipairs(part:GetChildren()) do
             if child:IsA("ParticleEmitter") then
                 return "Idol of the Forgotten"
@@ -57,8 +57,8 @@ local SPECIAL_TRINKET_MATCHERS = {
         if math.abs(size.X - 0.195) > 0.01 or math.abs(size.Y - 1.811) > 0.01 or math.abs(size.Z - 1.04) > 0.01 then
             return nil
         end
-        local clickPart = part:FindFirstChild("ClickPart")
-        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        local clickPart = part:FindFirstChildOfClass("Part")
+        if not (clickPart and clickPart.Transparency == 1) then return nil end
         for _, child in ipairs(part:GetChildren()) do
             if child:IsA("PointLight") then
                 return "Amulet of the White King"
@@ -75,8 +75,8 @@ local SPECIAL_TRINKET_MATCHERS = {
         if math.abs(size.X - 0.4437) > 0.01 or math.abs(size.Y - 0.4436) > 0.01 or math.abs(size.Z - 0.4333) > 0.01 then
             return nil
         end
-        local clickPart = part:FindFirstChild("ClickPart")
-        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        local clickPart = part:FindFirstChildOfClass("Part")
+        if not (clickPart and clickPart.Transparency == 1) then return nil end
         -- Nightstone não tem filhos especiais como PointLight ou ParticleEmitter
         return "Nightstone"
     end,
@@ -89,8 +89,8 @@ local SPECIAL_TRINKET_MATCHERS = {
         if math.abs(size.X - 0.17486) > 0.01 or math.abs(size.Y - 0.17486) > 0.01 or math.abs(size.Z - 0.17486) > 0.01 then
             return nil
         end
-        local clickPart = part:FindFirstChild("ClickPart")
-        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        local clickPart = part:FindFirstChildOfClass("Part")
+        if not (clickPart and clickPart.Transparency == 1) then return nil end
         local hasOrbParticle = false
         local hasPointLight = false
         local hasSphereMesh = false
@@ -117,8 +117,8 @@ local SPECIAL_TRINKET_MATCHERS = {
         if math.abs(size.X - 0.444) > 0.01 or math.abs(size.Y - 0.444) > 0.01 or math.abs(size.Z - 0.433) > 0.01 then
             return nil
         end
-        local clickPart = part:FindFirstChild("ClickPart")
-        if not (clickPart and clickPart:IsA("Part") and clickPart.Transparency == 1) then return nil end
+        local clickPart = part:FindFirstChildOfClass("Part")
+        if not (clickPart and clickPart.Transparency == 1) then return nil end
         -- Checa se tem Attachment com ParticleEmitter de textura específica
         local hasPhoenixParticle = false
         for _, child in ipairs(part:GetChildren()) do
