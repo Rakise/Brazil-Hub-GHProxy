@@ -32,8 +32,7 @@ local MESH_ID_MAP = {
 local SPECIAL_TRINKET_MATCHERS = {
     function(part)
         -- Idol of the Forgotten
-        if not part:IsA("Part") then return nil end
-        if tostring(part.Color) ~= tostring(Color3.new(111,113,125)) then return nil end
+        if not part:IsA("BasePart") then return nil end
         if part.Material ~= Enum.Material.Slate then return nil end
         local clickPart = part:FindFirstChildOfClass("Part")
         if not (clickPart and clickPart.Transparency == 1) then return nil end
