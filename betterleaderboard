@@ -35,14 +35,16 @@ local COLORS = {
     BLUE = Color3.fromRGB(80, 180, 255)
 }
 
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
 function BetterLeaderboard.new()
     local self = setmetatable({}, BetterLeaderboard)
     self.enabled = false
-    self.connections = {}
-    self.frameConnections = {} -- Conexões específicas dos frames
+    self._connMgr = ConnectionManager.new()
+    self._frameConnMgrs = {} -- [key] = ConnectionManager para cada frame
     self.originalLeaderboardGui = nil
     self.customLeaderboardGui = nil
     self.updateScheduled = false
@@ -206,10 +208,10 @@ function BetterLeaderboard:createCustomLeaderboard()
         end
     end
     local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
+    self._connMgr:add(canvasConnection)
     -- Chama uma vez ao criar
     updateCanvasSize()
     
-    self.connections.canvasUpdate = canvasConnection
     self.scrollingFrame = scrollingFrame
     self.customLeaderboardGui = screenGui
     
@@ -270,28 +272,24 @@ function BetterLeaderboard:createPlayerFrame(player)
 
     -- Connect click events - store connections simply
     local connectionKey = "player_" .. player.UserId
-    self.frameConnections[connectionKey] = {}
+    self._frameConnMgrs[connectionKey] = ConnectionManager.new()
     
-    self.frameConnections[connectionKey][1] = playerLabel.MouseButton1Click:Connect(function()
+    self._frameConnMgrs[connectionKey]:add(playerLabel.MouseButton1Click:Connect(function()
         if self.enabled and hasCharacter and player.Parent then
             self:switchCameraToPlayer(player)
         end
-    end)
+    end))
     
     return frame
 end
 
 function BetterLeaderboard:cleanupFrameConnections()
-    for key, connections in pairs(self.frameConnections) do
-        if connections then
-            for _, connection in pairs(connections) do
-                if connection and connection.Connected then
-                    connection:Disconnect()
-                end
-            end
+    for key, mgr in pairs(self._frameConnMgrs) do
+        if mgr then
+            mgr:disconnectAll()
         end
     end
-    self.frameConnections = {}
+    self._frameConnMgrs = {}
 end
 
 function BetterLeaderboard:updatePlayerList()
@@ -372,69 +370,50 @@ function BetterLeaderboard:updatePlayerColors()
 end
 
 function BetterLeaderboard:connectPlayerEvents()
-    -- Disconnect existing connections
-    for key, connection in pairs(self.connections) do
-        if connection and connection.Connected then
-            connection:Disconnect()
-        end
-    end
-    self.connections = {}
+    self._connMgr:disconnectAll()
     
-    -- Simple player events
-    self.connections.playerAdded = Players.PlayerAdded:Connect(function(player)
+    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
         task.wait(0.1)
         self:scheduleUpdate()
-    end)
+    end))
     
-    self.connections.playerRemoving = Players.PlayerRemoving:Connect(function(player)
+    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
         if self.currentCameraTarget == player then
             self:resetCameraToLocalPlayer()
         end
-        
-        -- Clean up frame connections for this player
         local connectionKey = "player_" .. player.UserId
-        if self.frameConnections[connectionKey] then
-            for _, connection in pairs(self.frameConnections[connectionKey]) do
-                if connection and connection.Connected then
-                    connection:Disconnect()
-                end
-            end
-            self.frameConnections[connectionKey] = nil
+        if self._frameConnMgrs[connectionKey] then
+            self._frameConnMgrs[connectionKey]:disconnectAll()
+            self._frameConnMgrs[connectionKey] = nil
         end
-        
         if self.playerFrames[player] then
             self.playerFrames[player] = nil
         end
-        
         self:scheduleUpdate()
-    end)
+    end))
     
-    -- Character events for existing players
     for _, player in pairs(Players:GetPlayers()) do
         if player and player.Parent then
             local characterAddedKey = "charAdded_" .. player.UserId
             local characterRemovingKey = "charRemoving_" .. player.UserId
-            
-            self.connections[characterAddedKey] = player.CharacterAdded:Connect(function()
+            self._connMgr:add(player.CharacterAdded:Connect(function()
                 task.wait(0.1)
                 self:scheduleUpdate()
-            end)
-            
-            self.connections[characterRemovingKey] = player.CharacterRemoving:Connect(function()
+            end))
+            self._connMgr:add(player.CharacterRemoving:Connect(function()
                 if self.currentCameraTarget == player then
                     self:resetCameraToLocalPlayer()
                 end
                 self:scheduleUpdate()
-            end)
+            end))
         end
     end
     
-    -- Update colors periodically
-    self.connections.colorUpdate = RunService.Heartbeat:Connect(function()
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
         if self.enabled then
             self:updatePlayerColors()
         end
-    end)
+    end))
 end
 
 function BetterLeaderboard:hideOriginalLeaderboard()
@@ -482,38 +461,21 @@ function BetterLeaderboard:disable()
     
     self.enabled = false
     
-    -- Disconnect all connections
-    for key, connection in pairs(self.connections) do
-        if connection and connection.Connected then
-            connection:Disconnect()
-        end
-    end
-    self.connections = {}
-    
-    -- Clean up frame connections
+    self._connMgr:disconnectAll()
     self:cleanupFrameConnections()
-    
-    -- Reset camera
     self:resetCameraToLocalPlayer()
-    
-    -- Clean up frames
     for player, frame in pairs(self.playerFrames) do
         if frame and frame.Parent then
             frame:Destroy()
         end
     end
     self.playerFrames = {}
-    
-    -- Clean up GUI
     if self.customLeaderboardGui and self.customLeaderboardGui.Parent then
         self.customLeaderboardGui:Destroy()
     end
     self.customLeaderboardGui = nil
     self.scrollingFrame = nil
-    
-    -- Show original leaderboard
     self:showOriginalLeaderboard()
-    
     print("BetterLeaderboard disabled")
 end
 
