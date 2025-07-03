@@ -32,7 +32,7 @@ local MESH_ID_MAP = {
 local SPECIAL_TRINKET_MATCHERS = {
     function(part)
         -- Idol of the Forgotten
-        if not part:IsA("UnionOperation") then return nil end
+        if not part:IsA("Part") then return nil end
         if tostring(part.Color) ~= tostring(Color3.new(37/85,113/255,25/51)) then return nil end
         if part.Material ~= Enum.Material.Slate then return nil end
         local size = part.Size
@@ -50,7 +50,7 @@ local SPECIAL_TRINKET_MATCHERS = {
     end,
     function(part)
         -- Amulet of the White King
-        if not part:IsA("UnionOperation") then return nil end
+        if not part:IsA("Part") then return nil end
         if tostring(part.Color) ~= tostring(Color3.new(248/255, 248/255, 248/255)) then return nil end
         if part.Material ~= Enum.Material.Neon then return nil end
         local size = part.Size
@@ -68,7 +68,7 @@ local SPECIAL_TRINKET_MATCHERS = {
     end,
     function(part)
         -- Nightstone
-        if not part:IsA("UnionOperation") then return nil end
+        if not part:IsA("Part") then return nil end
         if tostring(part.Color) ~= tostring(Color3.new(29/255,46/255,58/255)) then return nil end
         if part.Material ~= Enum.Material.Neon then return nil end
         local size = part.Size
