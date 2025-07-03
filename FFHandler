@@ -254,7 +254,7 @@ function FFDetector:updateBillboards()
                 end
                 local timeLeft = utils:getForceFieldTimeLeft(player)
                 local bdata = self.billboards[character]
-                if bdata and math.abs(bdata.lastTimeLeft - timeLeft) > 0.19 then
+                if bdata then
                     bdata.label.Text = string.format('%.1f s until FF is out', timeLeft)
                     bdata.label.TextColor3 = self:getFFColor(timeLeft)
                     bdata.billboard.MaxDistance = self.billboardMaxDistance
