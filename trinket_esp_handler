@@ -33,12 +33,8 @@ local SPECIAL_TRINKET_MATCHERS = {
     function(part)
         -- Idol of the Forgotten
         if not part:IsA("Part") then return nil end
-        if tostring(part.Color) ~= tostring(Color3.new(37/85,113/255,25/51)) then return nil end
+        if tostring(part.Color) ~= tostring(Color3.new(111,113,125)) then return nil end
         if part.Material ~= Enum.Material.Slate then return nil end
-        local size = part.Size
-        if math.abs(size.X - 0.7009) > 0.01 or math.abs(size.Y - 0.6554) > 0.01 or math.abs(size.Z - 0.6830) > 0.01 then
-            return nil
-        end
         local clickPart = part:FindFirstChildOfClass("Part")
         if not (clickPart and clickPart.Transparency == 1) then return nil end
         for _, child in ipairs(part:GetChildren()) do
