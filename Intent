@@ -259,4 +259,10 @@ function Intent.refreshAll()
     end
 end
 
-return Intent
+return {
+    enable = Intent.enable,
+    disable = Intent.disable,
+    isEnabled = Intent.isEnabled,
+    refreshAll = Intent.refreshAll,
+    connectionMgr = connectionMgr
+}
