@@ -28,7 +28,8 @@ FFDetector.__index = FFDetector
 function FFDetector.new()
     local self = setmetatable({}, FFDetector)
     self.enabled = false
-    self._connMgr = ConnectionManager.new()
+    self._connMgr = ConnectionManager.new() -- global
+    self._charConnMgrs = {} -- [character] = ConnectionManager
     self.billboards = {} -- [character] = {billboard, label, lastTimeLeft}
     self.ffData = {} -- [character] = {ff, startTime}
     self.billboardMaxDistance = 125
@@ -94,6 +95,10 @@ function FFDetector:removeBillboard(character)
         data.billboard:Destroy()
     end
     self.billboards[character] = nil
+    if self._charConnMgrs[character] then
+        self._charConnMgrs[character]:disconnectAll()
+        self._charConnMgrs[character] = nil
+    end
 end
 
 function FFDetector:clearCharacterData(character)
@@ -103,6 +108,10 @@ end
 
 function FFDetector:cleanup()
     self._connMgr:disconnectAll()
+    for _, mgr in pairs(self._charConnMgrs) do
+        mgr:disconnectAll()
+    end
+    self._charConnMgrs = {}
     for character, _ in pairs(self.billboards) do
         self:removeBillboard(character)
     end
@@ -115,14 +124,21 @@ function FFDetector:onForceFieldAdded(character, ff)
     if self.ffData[character] and self.ffData[character].ff == ff then return end
     self.ffData[character] = {ff = ff, startTime = getTime()}
     self:createBillboard(character, ff, self.ffData[character].startTime)
-    self._connMgr:add(ff.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            self:clearCharacterData(character)
-        end
-    end))
+    if self._charConnMgrs[character] then
+        self._charConnMgrs[character]:add(ff.AncestryChanged:Connect(function(_, parent)
+            if not parent then
+                self:clearCharacterData(character)
+            end
+        end))
+    end
 end
 
 function FFDetector:registerCharacterFF(character)
+    if self._charConnMgrs[character] then
+        self._charConnMgrs[character]:disconnectAll()
+    end
+    self._charConnMgrs[character] = ConnectionManager.new()
+    local mgr = self._charConnMgrs[character]
     for _, ff in ipairs(character:GetChildren()) do
         if ff:IsA('ForceField') then
             if not ff:GetAttribute("StartTime") then
@@ -134,12 +150,12 @@ function FFDetector:registerCharacterFF(character)
             self:createBillboard(character, ff, self.ffData[character].startTime)
         end
     end
-    self._connMgr:add(character.ChildAdded:Connect(function(child)
+    mgr:add(character.ChildAdded:Connect(function(child)
         if child:IsA('ForceField') then
             self:onForceFieldAdded(character, child)
         end
     end))
-    self._connMgr:add(character.AncestryChanged:Connect(function(_, parent)
+    mgr:add(character.AncestryChanged:Connect(function(_, parent)
         if not parent then
             self:clearCharacterData(character)
         end
