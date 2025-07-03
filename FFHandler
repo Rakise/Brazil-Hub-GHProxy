@@ -60,18 +60,25 @@ end
 
 function FFDetector:createBillboard(character, ff, startTime)
     if not character or not ff then return end
-    if character:FindFirstChild('FFBillboard') then return end
-    
+    local old = character:FindFirstChild('FFBillboard')
+    if old then
+        old:Destroy()
+        print('[FFHandler] Removendo billboard antigo antes de criar novo.')
+    end
     local player = Players:GetPlayerFromCharacter(character)
     local timeLeft = utils:getForceFieldTimeLeft(player)
-    
+    local adornee = getBestAdornee(character)
+    if not adornee then
+        print('[FFHandler] Não foi possível encontrar Adornee para o billboard.')
+        return
+    end
     local billboard = Instance.new('BillboardGui')
     billboard.Name = 'FFBillboard'
     billboard.Size = BILLBOARD_SIZE
     billboard.StudsOffset = BILLBOARD_OFFSET
     billboard.AlwaysOnTop = true
     billboard.MaxDistance = self.billboardMaxDistance
-    billboard.Adornee = getBestAdornee(character)
+    billboard.Adornee = adornee
     billboard.Parent = character
     local label = Instance.new('TextLabel')
     label.Size = UDim2.new(1, 0, 1, 0)
