@@ -1,0 +1,118 @@
+-- AutoBlock: Módulo para bloqueio automático de ataques
+-- Estrutura modular, pronto para integração com lógica de detecção de ataque
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Dependência externa para gerenciamento de conexões
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
+local AutoBlock = {}
+AutoBlock.__index = AutoBlock
+
+AutoBlock.enabled = false
+
+-- Construtor
+function AutoBlock.new()
+    local self = setmetatable({}, AutoBlock)
+    self._connMgr = ConnectionManager.new()
+    return self
+end
+
+-- Função para acionar o bloqueio
+function AutoBlock:triggerBlock()
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return end
+    local char = player.Character
+    local remotes = char:FindFirstChild("CharacterHandler") and char.CharacterHandler:FindFirstChild("Remotes")
+    if not remotes then return end
+    local blockRemote = remotes:FindFirstChild("Block")
+    if blockRemote and blockRemote:IsA("RemoteEvent") then
+        blockRemote:FireServer()
+    end
+end
+
+-- Função para acionar o desbloqueio
+function AutoBlock:triggerUnblock()
+    local player = Players.LocalPlayer
+    if not player or not player.Character then return end
+    local char = player.Character
+    local remotes = char:FindFirstChild("CharacterHandler") and char.CharacterHandler:FindFirstChild("Remotes")
+    if not remotes then return end
+    local unblockRemote = remotes:FindFirstChild("Unblock")
+    if unblockRemote and unblockRemote:IsA("RemoteEvent") then
+        unblockRemote:FireServer()
+    end
+end
+
+-- Lógica de detecção de ataque (Grapple/AIRSLASH)
+function AutoBlock:detectAttack()
+    if self._charConnMgr then return end -- Já está monitorando
+    local player = Players.LocalPlayer
+    if not player then return end
+    local function onCharacter(char)
+        if self._charConnMgr then
+            self._charConnMgr:disconnectAll()
+        end
+        self._charConnMgr = ConnectionManager.new()
+        -- Detecta AIRSLASH adicionado
+        self._charConnMgr:add(char.ChildAdded:Connect(function(child)
+            if child:IsA("Accessory") and child.Name == "AIRSLASH" then
+                self:triggerBlock()
+            end
+        end))
+        -- Detecta AIRSLASH removido
+        self._charConnMgr:add(char.ChildRemoved:Connect(function(child)
+            if child:IsA("Accessory") and child.Name == "AIRSLASH" then
+                self:triggerUnblock()
+            end
+        end))
+    end
+    -- Conecta ao personagem atual
+    if player.Character then
+        onCharacter(player.Character)
+    end
+    -- Reconecta ao trocar de personagem
+    if not self._playerConnMgr then
+        self._playerConnMgr = ConnectionManager.new()
+        self._playerConnMgr:add(player.CharacterAdded:Connect(function(char)
+            onCharacter(char)
+        end))
+    end
+end
+
+-- Ativa o AutoBlock
+function AutoBlock:enable()
+    if self.enabled then return end
+    self.enabled = true
+    -- Exemplo: checar a cada frame
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
+        if self.enabled then
+            self:detectAttack()
+        end
+    end))
+end
+
+-- Desativa o AutoBlock
+function AutoBlock:disable()
+    self.enabled = false
+    self._connMgr:disconnectAll()
+    if self._charConnMgr then
+        self._charConnMgr:disconnectAll()
+        self._charConnMgr = nil
+    end
+    if self._playerConnMgr then
+        self._playerConnMgr:disconnectAll()
+        self._playerConnMgr = nil
+    end
+end
+
+-- Limpeza
+function AutoBlock:destroy()
+    self:disable()
+    self._connMgr = nil
+    self._charConnMgr = nil
+    self._playerConnMgr = nil
+end
+
+return AutoBlock 
