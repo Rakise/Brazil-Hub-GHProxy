@@ -1,0 +1,74 @@
+-- NoFog.lua
+-- Módulo para remover e restaurar fog e efeitos visuais do Lighting
+
+local NoFog = {}
+NoFog.enabled = false
+NoFog._connections = {}
+NoFog._original = nil
+
+function NoFog:apply()
+    local Lighting = game:GetService("Lighting")
+    Lighting.FogEnd = 1e10
+    Lighting.FogStart = 1e10 - 1
+    Lighting.FogColor = Color3.new(1,1,1)
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA("Atmosphere") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+            v:Destroy()
+        end
+    end
+end
+
+function NoFog:saveOriginal()
+    local Lighting = game:GetService("Lighting")
+    self._original = {
+        FogStart = Lighting.FogStart,
+        FogEnd = Lighting.FogEnd,
+        FogColor = Lighting.FogColor,
+        Effects = {}
+    }
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA("Atmosphere") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+            table.insert(self._original.Effects, v:Clone())
+        end
+    end
+end
+
+function NoFog:restoreOriginal()
+    local Lighting = game:GetService("Lighting")
+    if not self._original then return end
+    Lighting.FogStart = self._original.FogStart
+    Lighting.FogEnd = self._original.FogEnd
+    Lighting.FogColor = self._original.FogColor
+    for _, v in ipairs(Lighting:GetChildren()) do
+        if v:IsA("Atmosphere") or v:IsA("BloomEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("SunRaysEffect") then
+            v:Destroy()
+        end
+    end
+    for _, effect in ipairs(self._original.Effects) do
+        effect:Clone().Parent = Lighting
+    end
+end
+
+function NoFog:enable()
+    if self.enabled then return end
+    self.enabled = true
+    self:saveOriginal()
+    self:apply()
+    table.insert(self._connections, game:GetService("Lighting").ChildAdded:Connect(function()
+        if self.enabled then self:apply() end
+    end))
+    table.insert(self._connections, game:GetService("Lighting").ChildRemoved:Connect(function()
+        if self.enabled then self:apply() end
+    end))
+end
+
+function NoFog:disable()
+    self.enabled = false
+    for _, conn in ipairs(self._connections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
+    end
+    self._connections = {}
+    self:restoreOriginal()
+end
+
+return NoFog 
