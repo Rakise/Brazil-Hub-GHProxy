@@ -270,10 +270,15 @@ end
 -- CORREÇÃO CRÍTICA: Função de conexão de player com limpeza adequada
 function PlayerESP:connectPlayer(player)
     if player == Players.LocalPlayer then return end
-    
-    -- Inicializar array de conexões para este player
+
+    -- Desconectar conexões antigas deste player, se existirem
+    if self.playerConnections[player] then
+        for _, conn in pairs(self.playerConnections[player]) do
+            if conn and conn.Disconnect then conn:Disconnect() end
+        end
+    end
     self.playerConnections[player] = {}
-    
+
     -- Conectar eventos específicos do player
     local charAddedConn = player.CharacterAdded:Connect(function(character)
         if self.enabled then
@@ -282,15 +287,14 @@ function PlayerESP:connectPlayer(player)
             self:createBillboard(player)
         end
     end)
-    
+
     local charRemovingConn = player.CharacterRemoving:Connect(function(character)
         self:removeBillboard(player)
     end)
-    
-    -- Armazenar conexões para limpeza posterior
+
     table.insert(self.playerConnections[player], charAddedConn)
     table.insert(self.playerConnections[player], charRemovingConn)
-    
+
     -- Se já tem character, criar billboard
     if player.Character then
         self:createBillboard(player)
