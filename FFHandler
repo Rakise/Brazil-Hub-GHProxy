@@ -13,6 +13,8 @@ local BILLBOARD_SIZE = UDim2.new(0, 80, 0, 24)
 local BILLBOARD_OFFSET = Vector3.new(0, 2.2, 0)
 local getTime = time or tick
 
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager.lua"))()
+
 local function getBestAdornee(character)
     return character:FindFirstChild('Head')
         or character:FindFirstChild('UpperTorso')
@@ -26,8 +28,7 @@ FFDetector.__index = FFDetector
 function FFDetector.new()
     local self = setmetatable({}, FFDetector)
     self.enabled = false
-    self.connections = {}
-    self.updateConnection = nil
+    self._connMgr = ConnectionManager.new()
     self.billboards = {} -- [character] = {billboard, label, lastTimeLeft}
     self.ffData = {} -- [character] = {ff, startTime}
     self.billboardMaxDistance = 125
@@ -101,14 +102,7 @@ function FFDetector:clearCharacterData(character)
 end
 
 function FFDetector:cleanup()
-    for _, conn in ipairs(self.connections) do
-        if conn and conn.Disconnect then conn:Disconnect() end
-    end
-    self.connections = {}
-    if self.updateConnection and self.updateConnection.Disconnect then
-        self.updateConnection:Disconnect()
-    end
-    self.updateConnection = nil
+    self._connMgr:disconnectAll()
     for character, _ in pairs(self.billboards) do
         self:removeBillboard(character)
     end
@@ -121,7 +115,7 @@ function FFDetector:onForceFieldAdded(character, ff)
     if self.ffData[character] and self.ffData[character].ff == ff then return end
     self.ffData[character] = {ff = ff, startTime = getTime()}
     self:createBillboard(character, ff, self.ffData[character].startTime)
-    table.insert(self.connections, ff.AncestryChanged:Connect(function(_, parent)
+    self._connMgr:add(ff.AncestryChanged:Connect(function(_, parent)
         if not parent then
             self:clearCharacterData(character)
         end
@@ -140,12 +134,12 @@ function FFDetector:registerCharacterFF(character)
             self:createBillboard(character, ff, self.ffData[character].startTime)
         end
     end
-    table.insert(self.connections, character.ChildAdded:Connect(function(child)
+    self._connMgr:add(character.ChildAdded:Connect(function(child)
         if child:IsA('ForceField') then
             self:onForceFieldAdded(character, child)
         end
     end))
-    table.insert(self.connections, character.AncestryChanged:Connect(function(_, parent)
+    self._connMgr:add(character.AncestryChanged:Connect(function(_, parent)
         if not parent then
             self:clearCharacterData(character)
         end
@@ -156,12 +150,12 @@ function FFDetector:registerPlayer(player)
     if player.Character then
         self:registerCharacterFF(player.Character)
     end
-    table.insert(self.connections, player.CharacterAdded:Connect(function(character)
+    self._connMgr:add(player.CharacterAdded:Connect(function(character)
         if self.enabled then
             self:registerCharacterFF(character)
         end
     end))
-    table.insert(self.connections, player.AncestryChanged:Connect(function(_, parent)
+    self._connMgr:add(player.AncestryChanged:Connect(function(_, parent)
         if not parent then
             if player.Character then
                 self:clearCharacterData(player.Character)
@@ -208,12 +202,12 @@ function FFDetector:enable()
     for _, player in ipairs(Players:GetPlayers()) do
         self:registerPlayer(player)
     end
-    table.insert(self.connections, Players.PlayerAdded:Connect(function(player)
+    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
         self:registerPlayer(player)
     end))
-    self.updateConnection = RunService.RenderStepped:Connect(function()
+    self._connMgr:add(RunService.RenderStepped:Connect(function()
         self:updateBillboards()
-    end)
+    end))
 end
 
 function FFDetector:disable()
