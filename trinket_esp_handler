@@ -11,6 +11,8 @@ TrinketESP.enabled = false
 
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
+TrinketESP._trinketConnMgrs = {}
+
 -- Tabela de MeshIds conhecidos para identificação de trinkets
 local MESH_ID_MAP = {
     ["rbxassetid://5196551436"] = "Amulet",
@@ -232,12 +234,23 @@ function TrinketESP:createBillboard(trinket)
     scale.Parent = billboard
 
     self.espBillboards[trinket] = billboard
+    -- Gerenciar conexões deste trinket
+    if self._trinketConnMgrs[trinket] then
+        self._trinketConnMgrs[trinket]:disconnectAll()
+    end
+    self._trinketConnMgrs[trinket] = ConnectionManager.new()
+    local mgr = self._trinketConnMgrs[trinket]
+    -- Adicione aqui conexões específicas do trinket, se houver
 end
 
 function TrinketESP:removeBillboard(trinket)
     if self.espBillboards[trinket] then
         self.espBillboards[trinket]:Destroy()
         self.espBillboards[trinket] = nil
+    end
+    if self._trinketConnMgrs[trinket] then
+        self._trinketConnMgrs[trinket]:disconnectAll()
+        self._trinketConnMgrs[trinket] = nil
     end
 end
 
@@ -271,6 +284,10 @@ function TrinketESP:disable()
     for trinket in pairs(self.espBillboards) do
         self:removeBillboard(trinket)
     end
+    for _, mgr in pairs(self._trinketConnMgrs) do
+        mgr:disconnectAll()
+    end
+    self._trinketConnMgrs = {}
 end
 
 return TrinketESP 
