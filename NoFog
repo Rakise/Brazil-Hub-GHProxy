@@ -6,6 +6,9 @@ NoFog.enabled = false
 NoFog._connections = {}
 NoFog._original = nil
 
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+NoFog._connMgr = ConnectionManager.new()
+
 -- Lista de efeitos suportados
 local EFFECT_TYPES = {
     "Atmosphere",
@@ -55,18 +58,8 @@ end
 
 function NoFog:disable()
     if not self.enabled then return end
-    
     self.enabled = false
-    
-    -- Desconecta todos os eventos
-    for _, conn in ipairs(self._connections) do
-        if conn and conn.Disconnect then 
-            conn:Disconnect() 
-        end
-    end
-    self._connections = {}
-    
-    -- Restaura configurações originais
+    self._connMgr:disconnectAll()
     self:restoreOriginal()
 end
 
