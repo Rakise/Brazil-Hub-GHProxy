@@ -1,0 +1,51 @@
+-- ConnectionManager.lua
+-- Utilitário para gerenciar RBXScriptConnections de forma segura e centralizada
+
+local ConnectionManager = {}
+ConnectionManager.__index = ConnectionManager
+
+function ConnectionManager.new()
+    return setmetatable({ _conns = {} }, ConnectionManager)
+end
+
+-- Adiciona uma conexão e retorna a conexão
+function ConnectionManager:connect(signal, callback)
+    local conn = signal:Connect(callback)
+    table.insert(self._conns, conn)
+    return conn
+end
+
+-- Adiciona uma conexão já existente (útil para conexões criadas fora do manager)
+function ConnectionManager:add(conn)
+    if conn and conn.Disconnect then
+        table.insert(self._conns, conn)
+    end
+end
+
+-- Remove e desconecta uma conexão específica
+function ConnectionManager:remove(conn)
+    for i, c in ipairs(self._conns) do
+        if c == conn then
+            if c.Disconnect then c:Disconnect() end
+            table.remove(self._conns, i)
+            break
+        end
+    end
+end
+
+-- Desconecta todas as conexões
+function ConnectionManager:disconnectAll()
+    for _, conn in ipairs(self._conns) do
+        if conn and conn.Disconnect then
+            conn:Disconnect()
+        end
+    end
+    self._conns = {}
+end
+
+-- Conta conexões ativas
+function ConnectionManager:count()
+    return #self._conns
+end
+
+return ConnectionManager 
