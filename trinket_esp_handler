@@ -9,6 +9,8 @@ TrinketESP.defaultTextSize = 14
 TrinketESP.defaultTextColor = Color3.fromRGB(255, 255, 0)
 TrinketESP.enabled = false
 
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
 -- Tabela de MeshIds conhecidos para identificação de trinkets
 local MESH_ID_MAP = {
     ["rbxassetid://5196551436"] = "Amulet",
@@ -176,7 +178,7 @@ end
 function TrinketESP.new()
     local self = setmetatable({}, TrinketESP)
     self.espBillboards = {}
-    self.connections = {}
+    self._connMgr = ConnectionManager.new()
     return self
 end
 
@@ -258,17 +260,14 @@ function TrinketESP:enable()
     if self.enabled then return end
     self.enabled = true
     self:updateESP()
-    table.insert(self.connections, RunService.Heartbeat:Connect(function()
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
         self:updateESP()
     end))
 end
 
 function TrinketESP:disable()
     self.enabled = false
-    for _, conn in ipairs(self.connections) do
-        if conn and conn.Disconnect then conn:Disconnect() end
-    end
-    self.connections = {}
+    self._connMgr:disconnectAll()
     for trinket in pairs(self.espBillboards) do
         self:removeBillboard(trinket)
     end
