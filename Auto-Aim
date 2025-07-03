@@ -72,16 +72,14 @@ function AutoAim:getBestNPC(localChar)
             local head = model:FindFirstChild("Head")
             if head and not model:FindFirstChild("Knocked") then
                 local humanoid = model:FindFirstChild("Humanoid")
-                if humanoid and humanoid.Health > 5 then
-                    local headPos = head.Position
-                    local _, onScreen = camera:WorldToViewportPoint(headPos)
-                    if onScreen then
-                        local npcDir = (headPos - camPos).Unit
-                        local angle = deg(acos(mouseDir:Dot(npcDir)))
-                        if angle < minAngle then
-                            closestNPC = model
-                            minAngle = angle
-                        end
+                local headPos = head.Position
+                local _, onScreen = camera:WorldToViewportPoint(headPos)
+                if onScreen then
+                    local npcDir = (headPos - camPos).Unit
+                    local angle = deg(acos(mouseDir:Dot(npcDir)))
+                    if angle < minAngle then
+                        closestNPC = model
+                        minAngle = angle
                     end
                 end
             end
