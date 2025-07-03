@@ -311,4 +311,16 @@ function FFDetector:setBillboardTextSize(value)
     self:updateBillboardTextSize()
 end
 
+function FFDetector:getFFTimeLeft(player)
+    if not player or not player.Character then return 0 end
+    local ff = player.Character:FindFirstChildOfClass("ForceField")
+    if not ff then return 0 end
+    if not ff:GetAttribute("StartTime") then
+        ff:SetAttribute("StartTime", tick())
+    end
+    local startTime = ff:GetAttribute("StartTime")
+    local elapsed = tick() - startTime
+    return math.max(0, 120 - elapsed)
+end
+
 return FFDetector
