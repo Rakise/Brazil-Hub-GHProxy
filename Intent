@@ -26,8 +26,9 @@ local CONFIG = {
 }
 
 -- Internal state
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 local billboardRegistry = {}
-local connectionRegistry = {}
+local connectionMgr = ConnectionManager.new()
 
 --[[
     Retrieves the name of the currently equipped tool for a player
@@ -116,13 +117,8 @@ local function setupToolChangeMonitoring(player)
         end
     end
     
-    -- Connect to tool add/remove events
-    local addConnection = character.ChildAdded:Connect(onToolChange)
-    local removeConnection = character.ChildRemoved:Connect(onToolChange)
-    
-    -- Store connections for cleanup
-    table.insert(connectionRegistry, addConnection)
-    table.insert(connectionRegistry, removeConnection)
+    connectionMgr:add(character.ChildAdded:Connect(onToolChange))
+    connectionMgr:add(character.ChildRemoved:Connect(onToolChange))
 end
 
 --[[
@@ -196,23 +192,19 @@ end
     Sets up event connections for player join/character spawn events
 ]]
 local function setupPlayerEventConnections()
-    -- Handle new players joining
     local playerAddedConnection = Players.PlayerAdded:Connect(function(player)
-        -- Set up billboard creation when player spawns
         local characterAddedConnection = player.CharacterAdded:Connect(function()
             createPlayerBillboard(player)
         end)
-        table.insert(connectionRegistry, characterAddedConnection)
+        connectionMgr:add(characterAddedConnection)
     end)
-    table.insert(connectionRegistry, playerAddedConnection)
-    
-    -- Handle existing players respawning
+    connectionMgr:add(playerAddedConnection)
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= Players.LocalPlayer then
             local characterAddedConnection = player.CharacterAdded:Connect(function()
                 createPlayerBillboard(player)
             end)
-            table.insert(connectionRegistry, characterAddedConnection)
+            connectionMgr:add(characterAddedConnection)
         end
     end
 end
@@ -221,12 +213,7 @@ end
     Disconnects all event connections and clears the registry
 ]]
 local function disconnectAllConnections()
-    for _, connection in ipairs(connectionRegistry) do
-        if connection and connection.Disconnect then
-            connection:Disconnect()
-        end
-    end
-    connectionRegistry = {}
+    connectionMgr:disconnectAll()
 end
 
 --[[
