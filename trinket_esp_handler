@@ -170,7 +170,7 @@ local function getTrinketNameByMeshId(part)
         end
     end
     -- 4. Fallback: nome do objeto
-    return part.Name
+    return "Unknown"
 end
 
 function TrinketESP.new()
