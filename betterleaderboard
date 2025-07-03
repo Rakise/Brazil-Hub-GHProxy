@@ -408,64 +408,91 @@ local function u11(p11)
     u7()
 end
 
--- Conectar eventos principais
-Players.PlayerAdded:Connect(function(player)
-    task.wait(0.1)
-    u8(player)
-end)
+-- Toggleable Enhanced Leaderboard
+BetterLeaderboard._enabled = false
+BetterLeaderboard._connections = {}
 
-Players.PlayerRemoving:Connect(function(player)
-    u11(player)
-end)
-
--- Sistema de enable/disable baseado em Ingame
-l__LocalPlayer__5.ChildRemoved:Connect(function(ch)
-    if ch.Name == "Ingame" then
-        script.Parent.Enabled = false
+function BetterLeaderboard:enable()
+    if self._enabled then return end
+    self._enabled = true
+    -- Cria a UI se não existir
+    if not script.Parent or not script.Parent:IsA("ScreenGui") then
+        warn("BetterLeaderboard: script.Parent não é ScreenGui!")
+        return
     end
-end)
-
-l__LocalPlayer__5.ChildAdded:Connect(function(ch)
-    if ch.Name == "Ingame" then
-        script.Parent.Enabled = true
-    end
-end)
-
--- Update colors periodically
-RunService.Heartbeat:Connect(function()
-    for player, frameData in pairs(u2) do
-        if frameData and frameData.frame and frameData.frame.Parent and player and player.Parent then
-            local hasCharacter = player.Character ~= nil
-            local isObserved = (currentCameraTarget == player)
-            local currentData = getPlayerData(player)
-            
-            if currentData then
-                local textColor
-                if currentData.uberTitle == "Destroyer Of Heaven" then
-                    textColor = COLORS.RED
-                elseif currentData.maxEdict then
-                    textColor = COLORS.YELLOW
-                elseif isObserved then
-                    textColor = COLORS.BLUE
-                elseif hasCharacter then
-                    textColor = COLORS.WHITE
-                else
-                    textColor = COLORS.GRAY
+    script.Parent.Enabled = true
+    -- Conectar eventos principais
+    table.insert(self._connections, Players.PlayerAdded:Connect(function(player)
+        task.wait(0.1)
+        u8(player)
+    end))
+    table.insert(self._connections, Players.PlayerRemoving:Connect(function(player)
+        u11(player)
+    end))
+    table.insert(self._connections, l__LocalPlayer__5.ChildRemoved:Connect(function(ch)
+        if ch.Name == "Ingame" then
+            script.Parent.Enabled = false
+        end
+    end))
+    table.insert(self._connections, l__LocalPlayer__5.ChildAdded:Connect(function(ch)
+        if ch.Name == "Ingame" then
+            script.Parent.Enabled = true
+        end
+    end))
+    table.insert(self._connections, RunService.Heartbeat:Connect(function()
+        for player, frameData in pairs(u2) do
+            if frameData and frameData.frame and frameData.frame.Parent and player and player.Parent then
+                local hasCharacter = player.Character ~= nil
+                local isObserved = (currentCameraTarget == player)
+                local currentData = getPlayerData(player)
+                if currentData then
+                    local textColor
+                    if currentData.uberTitle == "Destroyer Of Heaven" then
+                        textColor = COLORS.RED
+                    elseif currentData.maxEdict then
+                        textColor = COLORS.YELLOW
+                    elseif isObserved then
+                        textColor = COLORS.BLUE
+                    elseif hasCharacter then
+                        textColor = COLORS.WHITE
+                    else
+                        textColor = COLORS.GRAY
+                    end
+                    frameData.frame.TextColor3 = textColor
+                    frameData.prestige.TextColor3 = textColor
+                    frameData.frame.TextTransparency = hasCharacter and 0 or 0.3
                 end
-                
-                frameData.frame.TextColor3 = textColor
-                frameData.prestige.TextColor3 = textColor
-                frameData.frame.TextTransparency = hasCharacter and 0 or 0.3
             end
         end
+    end))
+    -- Inicializar para jogadores existentes
+    for _, player in pairs(Players:GetPlayers()) do
+        task.spawn(function()
+            u8(player)
+        end)
     end
-end)
+end
 
--- Inicializar para jogadores existentes
-for _, player in pairs(Players:GetPlayers()) do
-    task.spawn(function()
-        u8(player)
-    end)
+function BetterLeaderboard:disable()
+    if not self._enabled then return end
+    self._enabled = false
+    -- Desconectar eventos
+    for _, conn in ipairs(self._connections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
+    end
+    self._connections = {}
+    -- Remover todos os frames de jogadores
+    for player, frameData in pairs(u2) do
+        if frameData and frameData.frame then
+            frameData.frame:Destroy()
+        end
+    end
+    u2 = {}
+    -- Esconder a UI
+    if script.Parent and script.Parent:IsA("ScreenGui") then
+        script.Parent.Enabled = false
+    end
 end
 
 print("Enhanced Leaderboard carregado com sucesso!")
+return BetterLeaderboard
