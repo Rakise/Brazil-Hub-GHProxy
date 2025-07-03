@@ -24,6 +24,9 @@ local function isTargetEffect(obj)
     return false
 end
 
+local lastDestroy = 0
+local DESTROY_COOLDOWN = 0.2 -- segundos
+
 function NoFog:apply()
     local Lighting = game:GetService("Lighting")
     
@@ -94,16 +97,23 @@ end
 
 function NoFog:enable()
     if self.enabled then return end
-    
     self.enabled = true
     self:saveOriginal()
     self:apply()
-    
     -- Conecta eventos para re-aplicar quando novos efeitos forem adicionados
     table.insert(self._connections, game:GetService("Lighting").ChildAdded:Connect(function(child)
-        if self.enabled and isTargetEffect(child) then
-            child:Destroy()
-        end
+        if not self.enabled or not isTargetEffect(child) then return end
+        -- Debounce para evitar loop/crash
+        local now = tick()
+        if now - lastDestroy < DESTROY_COOLDOWN then return end
+        lastDestroy = now
+        -- Pequeno delay para evitar conflito com scripts do jogo
+        task.spawn(function()
+            task.wait(0.1)
+            if self.enabled and isTargetEffect(child) and child.Parent == game:GetService("Lighting") then
+                pcall(function() child:Destroy() end)
+            end
+        end)
     end))
 end
 
