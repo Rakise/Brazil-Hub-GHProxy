@@ -1,0 +1,135 @@
+local Intent = {}
+Intent.enabled = false
+local Players = game:GetService("Players")
+local intentBillboards = {}
+local intentConnections = {}
+
+local function getEquippedToolName(player)
+    local character = player.Character
+    if not character then return "None" end
+    local tool = character:FindFirstChildOfClass("Tool")
+    return tool and tool.Name or "None"
+end
+
+local function updateIntentLabel(player)
+    local bb = intentBillboards[player]
+    if not bb then return end
+    local label = bb:FindFirstChild("IntentLabel")
+    if not label then return end
+    label.Text = getEquippedToolName(player)
+end
+
+local function createIntentBillboard(player)
+    if not player or player == Players.LocalPlayer or intentBillboards[player] then return end
+    local character = player.Character
+    if not character then return end
+    local head = character:FindFirstChild("Head")
+    if not head then return end
+    -- BillboardGui
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "IntentBillboard"
+    bb.LightInfluence = 1
+    bb.SizeOffset = Vector2.new(0,3)
+    bb.Active = true
+    bb.MaxDistance = 60
+    bb.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    bb.ClipsDescendants = true
+    bb.Size = UDim2.new(5,0,1,0)
+    bb.Adornee = head
+    bb.Parent = head
+    -- TextLabel
+    local label = Instance.new("TextLabel")
+    label.Name = "IntentLabel"
+    label.TextSize = 14
+    label.FontSize = Enum.FontSize.Size14
+    label.Size = UDim2.new(1,0,1,0)
+    label.TextColor3 = Color3.new(1,1,1)
+    label.BorderColor3 = Color3.new(0,0,0)
+    label.Text = getEquippedToolName(player)
+    label.TextWrapped = true
+    label.TextStrokeTransparency = 0.1
+    label.AnchorPoint = Vector2.new(0.5,0.5)
+    label.Font = Enum.Font.SourceSans
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0.5,0,0.5,0)
+    label.BackgroundColor3 = Color3.new(1,1,1)
+    label.TextScaled = true
+    label.BorderSizePixel = 0
+    label.TextWrap = true
+    label.Parent = bb
+    intentBillboards[player] = bb
+    -- Atualização dinâmica do nome do tool
+    local function toolUpdate()
+        updateIntentLabel(player)
+    end
+    -- Conectar eventos para atualizar o label
+    local char = player.Character
+    if char then
+        table.insert(intentConnections, char.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") then toolUpdate() end
+        end))
+        table.insert(intentConnections, char.ChildRemoved:Connect(function(child)
+            if child:IsA("Tool") then toolUpdate() end
+        end))
+    end
+end
+
+local function removeIntentBillboard(player)
+    if intentBillboards[player] then
+        intentBillboards[player]:Destroy()
+        intentBillboards[player] = nil
+    end
+end
+
+local function updateAllIntentBillboards()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            createIntentBillboard(player)
+        end
+    end
+end
+
+local function removeAllIntentBillboards()
+    for player, bb in pairs(intentBillboards) do
+        if bb then bb:Destroy() end
+    end
+    intentBillboards = {}
+end
+
+local function connectIntentEvents()
+    table.insert(intentConnections, Players.PlayerAdded:Connect(function(player)
+        table.insert(intentConnections, player.CharacterAdded:Connect(function()
+            createIntentBillboard(player)
+        end))
+    end))
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            table.insert(intentConnections, player.CharacterAdded:Connect(function()
+                createIntentBillboard(player)
+            end))
+        end
+    end
+end
+
+local function disconnectIntentEvents()
+    for _, conn in ipairs(intentConnections) do
+        if conn and conn.Disconnect then conn:Disconnect() end
+    end
+    intentConnections = {}
+end
+
+function Intent.enable()
+    if Intent.enabled then return end
+    Intent.enabled = true
+    updateAllIntentBillboards()
+    connectIntentEvents()
+end
+
+function Intent.disable()
+    if not Intent.enabled then return end
+    Intent.enabled = false
+    removeAllIntentBillboards()
+    disconnectIntentEvents()
+end
+
+return Intent
