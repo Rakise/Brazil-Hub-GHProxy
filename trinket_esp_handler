@@ -173,7 +173,7 @@ local function getTrinketNameByMeshId(part)
             return meshId
         end
     end
-    -- 4. Fallback: nome do objeto
+    -- 4. Fallback: sempre 'Unknown'
     return "Unknown"
 end
 
@@ -218,7 +218,7 @@ function TrinketESP:createBillboard(trinket)
     label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
     label.BorderColor3 = Color3.new(0, 0, 0)
     local meshName = getTrinketNameByMeshId(trinket)
-    label.Text = meshName or trinket.Name
+    label.Text = meshName
     label.TextStrokeTransparency = 0.5
     label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.Font = Enum.Font.SourceSans
