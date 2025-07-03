@@ -51,11 +51,9 @@ end
 local function updateBillboardLabel(player)
     local billboard = billboardRegistry[player]
     if not billboard then return end
-    
-    local label = billboard:FindFirstChild("IntentLabel")
-    if not label then return end
-    
-    label.Text = getEquippedToolName(player)
+    local textBox = billboard:FindFirstChild("Tool")
+    if not textBox then return end
+    textBox.Text = getEquippedToolName(player)
 end
 
 --[[
@@ -66,42 +64,41 @@ end
 local function createBillboardStructure(parentObject)
     -- Create main billboard GUI
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "IntentBillboard"
-    billboard.LightInfluence = 1
-    billboard.SizeOffset = CONFIG.BILLBOARD_OFFSET
-    billboard.Active = true
-    billboard.MaxDistance = CONFIG.MAX_DISTANCE
+    billboard.Name = "Watched"
     billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    billboard.MaxDistance = 9.999999778196308e+22
+    billboard.AutoLocalize = false
+    billboard.Active = true
+    billboard.StudsOffsetWorldSpace = Vector3.new(0,5,0)
     billboard.ClipsDescendants = true
-    billboard.Size = CONFIG.BILLBOARD_SIZE
+    billboard.Size = UDim2.new(25,0,10,0)
     billboard.Adornee = parentObject
     billboard.Parent = parentObject
-    
-    -- Create text label
-    local label = Instance.new("TextLabel")
-    label.Name = "IntentLabel"
-    label.TextSize = CONFIG.LABEL_TEXT_SIZE
-    label.FontSize = Enum.FontSize.Size14
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.TextColor3 = CONFIG.LABEL_COLOR
-    label.BorderColor3 = Color3.new(0, 0, 0)
-    label.TextWrapped = true
-    label.TextStrokeTransparency = CONFIG.STROKE_TRANSPARENCY
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.Font = Enum.Font.SourceSans
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0.5, 0, 0.5, 0)
-    label.BackgroundColor3 = Color3.new(1, 1, 1)
-    label.TextScaled = true
-    label.BorderSizePixel = 0
-    label.TextWrap = true
-    label.Parent = billboard
-    
-    -- Add text stroke for better visibility
-    local stroke = Instance.new("UIStroke")
-    stroke.Thickness = CONFIG.STROKE_THICKNESS
-    stroke.Parent = label
-    
+
+    -- Create TextBox
+    local textBox = Instance.new("TextBox")
+    textBox.Name = "Tool"
+    textBox.TextWrapped = true
+    textBox.TextTransparency = 1
+    textBox.TextStrokeTransparency = 0
+    textBox.TextTruncate = Enum.TextTruncate.AtEnd
+    textBox.BorderSizePixel = 0
+    textBox.Size = UDim2.new(0.5,10,0.25,10)
+    textBox.AutoLocalize = false
+    textBox.TextColor3 = Color3.new(1,1,1)
+    textBox.BorderColor3 = Color3.new(9/85,14/85,53/255)
+    textBox.Text = ""
+    textBox.Selectable = false
+    textBox.PlaceholderColor3 = Color3.new(0,0,0)
+    textBox.BackgroundTransparency = 1
+    textBox.Font = Enum.Font.Antique
+    textBox.Position = UDim2.new(0.25,-5,0.375,-5)
+    textBox.FontSize = Enum.FontSize.Size28
+    textBox.TextSize = 25
+    textBox.BackgroundColor3 = Color3.new(1,1,1)
+    textBox.TextWrap = true
+    textBox.Parent = billboard
+
     return billboard
 end
 
@@ -148,7 +145,7 @@ local function createPlayerBillboard(player)
     local billboard = createBillboardStructure(head)
     
     -- Initialize label text
-    local label = billboard:FindFirstChild("IntentLabel")
+    local label = billboard:FindFirstChild("Tool")
     if label then
         label.Text = getEquippedToolName(player)
     end
