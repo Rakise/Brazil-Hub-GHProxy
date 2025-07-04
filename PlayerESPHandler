@@ -413,38 +413,28 @@ function PlayerESP:setDisplayConfig(config)
             end
         end
         -- Limpa nameFrame (mantém apenas UIListLayout)
-        if data.nameLabel and data.nameLabel.Parent and data.nameLabel.Parent.Parent and data.nameLabel.Parent.Parent:IsA("Frame") then
-            local nameFrame = data.nameLabel.Parent.Parent
+        if data.nameLabel and data.nameLabel.Parent and data.nameLabel.Parent:IsA("Frame") then
+            local nameFrame = data.nameLabel.Parent
             for _, child in ipairs(nameFrame:GetChildren()) do
                 if not child:IsA("UIListLayout") then
                     child.Parent = nil
                 end
             end
+            -- Adiciona os labels conforme config
+            if self.displayConfig.showDistance ~= false and data.distanceLabel then
+                data.distanceLabel.Parent = nameFrame
+            end
+            if self.displayConfig.showPlayerName ~= false and data.nameLabel then
+                data.nameLabel.Parent = nameFrame
+            end
+            nameFrame.Parent = data.billboard
         end
-        -- LayoutOrder dos frames intermediários
-        if data.nameLabel and data.nameLabel.Parent and data.nameLabel.Parent:IsA("Frame") then
-            data.nameLabel.Parent.LayoutOrder = 2
-        end
-        if data.distanceLabel and data.distanceLabel.Parent and data.distanceLabel.Parent:IsA("Frame") then
-            data.distanceLabel.Parent.LayoutOrder = 1
-        end
+        -- LayoutOrder dos frames principais
         if data.infoFrame then
             data.infoFrame.LayoutOrder = 2
         end
         if data.hpFrame then
             data.hpFrame.LayoutOrder = 3
-        end
-        -- Adiciona/remover frames intermediários em nameFrame conforme config
-        if data.nameLabel and data.nameLabel.Parent and data.nameLabel.Parent.Parent and data.nameLabel.Parent.Parent:IsA("Frame")
-            and data.distanceLabel and data.distanceLabel.Parent and data.distanceLabel.Parent.Parent and data.distanceLabel.Parent.Parent:IsA("Frame") then
-            local nameFrame = data.nameLabel.Parent.Parent
-            if self.displayConfig.showDistance ~= false then
-                data.distanceLabel.Parent.Parent = nameFrame
-            end
-            if self.displayConfig.showPlayerName ~= false then
-                data.nameLabel.Parent.Parent = nameFrame
-            end
-            nameFrame.Parent = data.billboard
         end
         -- Adiciona infoFrame e hpFrame ao billboard
         if data.infoFrame then
