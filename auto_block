@@ -308,19 +308,6 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
         local scope = condition.scope or "player"
         if scope == "player" then
             return self:_hasAccessory(player, condition.value)
-        elseif scope == "proximity" then
-            local myChar = player.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if not myRoot then return false end
-            local blockDist = condition.blockDistance or self.blockRadius or 20
-            for _, other in ipairs(game:GetService("Players"):GetPlayers()) do
-                if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (myRoot.Position - other.Character.HumanoidRootPart.Position).Magnitude
-                    if dist <= blockDist then
-                        self:_hasAccessory(other, condition.value)
-                    end
-                end
-            end
         end
         
     elseif condition.type == ConditionType.PLAYER_STATE then
