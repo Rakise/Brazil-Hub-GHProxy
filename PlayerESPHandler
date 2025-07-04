@@ -90,7 +90,7 @@ function PlayerESP:createBillboard(player)
     distanceLabel.AutomaticSize = Enum.AutomaticSize.X
     distanceLabel.BorderSizePixel = 0
     distanceLabel.BackgroundColor3 = Color3.new(1,1,1)
-    distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+    distanceLabel.TextXAlignment = Enum.TextXAlignment.Center
     distanceLabel.Parent = nameFrame
 
     -- Name label (à direita)
@@ -107,7 +107,7 @@ function PlayerESP:createBillboard(player)
     nameLabel.AutomaticSize = Enum.AutomaticSize.X
     nameLabel.BorderSizePixel = 0
     nameLabel.BackgroundColor3 = Color3.new(1,1,1)
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
     nameLabel.Parent = nameFrame
 
     -- Layout horizontal para alinhar distanceLabel e nameLabel
