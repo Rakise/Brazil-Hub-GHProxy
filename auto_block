@@ -52,7 +52,7 @@ local DEFAULT_SINGLE_THREATS = {
         conditions = {
             {
                 type = ConditionType.ACCESSORY,
-                value = "CHARGE"
+                value = "Charge"
             }
         },
         operator = MatchOperator.AND,
