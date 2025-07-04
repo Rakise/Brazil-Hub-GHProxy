@@ -49,6 +49,9 @@ end
 local ANIMATION_ID = "rbxassetid://3110530226"
 local BLOCK_RADIUS = 200 -- studs
 
+-- Flag interna para controle do AutoBlock
+AutoBlock._autoBlocking = false
+
 function AutoBlock:detectAttack()
     local player = Players.LocalPlayer
     if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
@@ -71,9 +74,15 @@ function AutoBlock:detectAttack()
         if found then break end
     end
     if found then
-        self:triggerBlock()
+        if not self._autoBlocking then
+            self:triggerBlock()
+            self._autoBlocking = true
+        end
     else
-        self:triggerUnblock()
+        if self._autoBlocking then
+            self:triggerUnblock()
+            self._autoBlocking = false
+        end
     end
 end
 
@@ -93,12 +102,14 @@ end
 function AutoBlock:disable()
     self.enabled = false
     self._connMgr:disconnectAll()
+    self._autoBlocking = false
 end
 
 -- Limpeza
 function AutoBlock:destroy()
     self:disable()
     self._connMgr = nil
+    self._autoBlocking = false
 end
 
 return AutoBlock 
