@@ -53,6 +53,19 @@ local DEFAULT_SINGLE_THREATS = {
         },
         operator = MatchOperator.AND,
         blockDistance = 50
+    },
+
+    ["heavy_attack"] = {
+        name = "Heavy Attack",
+        priority = 3,
+        conditions = {
+            {
+                type = ConditionType.ACCESSORY,
+                value = "HeavyAttack"
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 50
     }
 }
 
