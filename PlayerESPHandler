@@ -396,8 +396,9 @@ end
 
 function PlayerESP:setDisplayConfig(config)
     self.displayConfig = config or self.displayConfig
+    print(self.displayConfig)
     for _, data in pairs(self.espBillboards) do
-        -- Limpa nameFrame, infoFrame e hpFrame (mantém apenas UIListLayout)
+        -- Clear frames
         for _, frameName in ipairs({"nameFrame", "infoFrame", "hpFrame"}) do
             local frame = data[frameName]
             if frame and frame:IsA("Frame") then
@@ -409,33 +410,46 @@ function PlayerESP:setDisplayConfig(config)
             end
         end
 
-        -- Adiciona labels aos seus frames conforme config
+        -- Reassign labels to nameFrame based on config
+        local nameFrameHasContent = false
         if data.nameFrame then
             if self.displayConfig.showPlayerName ~= false and data.nameLabel then
                 data.nameLabel.Parent = data.nameFrame
+                nameFrameHasContent = true
             end
             if self.displayConfig.showDistance ~= false and data.distanceLabel then
                 data.distanceLabel.Parent = data.nameFrame
-            end
-        end
-        if data.infoFrame then
-            if self.displayConfig.showRogueName ~= false and data.rogueLabel then
-                data.rogueLabel.Parent = data.infoFrame
-            end
-            if self.displayConfig.showEdict ~= false and data.edictLabel then
-                data.edictLabel.Parent = data.infoFrame
-            end
-        end
-        if data.hpFrame then
-            if self.displayConfig.showHealth ~= false and data.hpLabel then
-                data.hpLabel.Parent = data.hpFrame
-            end
-            if self.displayConfig.showHealthPercent ~= false and data.hpPercLabel then
-                data.hpPercLabel.Parent = data.hpFrame
+                nameFrameHasContent = true
             end
         end
 
-        -- Define LayoutOrder dos frames principais
+        -- Reassign labels to infoFrame based on config
+        local infoFrameHasContent = false
+        if data.infoFrame then
+            if self.displayConfig.showRogueName ~= false and data.rogueLabel then
+                data.rogueLabel.Parent = data.infoFrame
+                infoFrameHasContent = true
+            end
+            if self.displayConfig.showEdict ~= false and data.edictLabel then
+                data.edictLabel.Parent = data.infoFrame
+                infoFrameHasContent = true
+            end
+        end
+
+        -- Reassign labels to hpFrame based on config
+        local hpFrameHasContent = false
+        if data.hpFrame then
+            if self.displayConfig.showHealth ~= false and data.hpLabel then
+                data.hpLabel.Parent = data.hpFrame
+                hpFrameHasContent = true
+            end
+            if self.displayConfig.showHealthPercent ~= false and data.hpPercLabel then
+                data.hpPercLabel.Parent = data.hpFrame
+                hpFrameHasContent = true
+            end
+        end
+
+        -- Set LayoutOrder for frames
         if data.nameFrame then
             data.nameFrame.LayoutOrder = 1
         end
@@ -446,15 +460,15 @@ function PlayerESP:setDisplayConfig(config)
             data.hpFrame.LayoutOrder = 3
         end
 
-        -- Adiciona os frames ao billboard
+        -- Only parent frames to billboard if they have content
         if data.nameFrame then
-            data.nameFrame.Parent = data.billboard
+            data.nameFrame.Parent = nameFrameHasContent and data.billboard or nil
         end
         if data.infoFrame then
-            data.infoFrame.Parent = data.billboard
+            data.infoFrame.Parent = infoFrameHasContent and data.billboard or nil
         end
         if data.hpFrame then
-            data.hpFrame.Parent = data.billboard
+            data.hpFrame.Parent = hpFrameHasContent and data.billboard or nil
         end
     end
 end
