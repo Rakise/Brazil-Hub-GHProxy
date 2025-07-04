@@ -57,13 +57,13 @@ function AutoBlock:detectAttack()
         self._charConnMgr = ConnectionManager.new()
         -- Detecta AIRSLASH adicionado
         self._charConnMgr:add(char.ChildAdded:Connect(function(child)
-            if child:IsA("Accessory") and child.Name == "AIRSLASH" then
+            if child:IsA("Accessory") and child.Name == "GrapplePulled" then
                 self:triggerBlock()
             end
         end))
         -- Detecta AIRSLASH removido
         self._charConnMgr:add(char.ChildRemoved:Connect(function(child)
-            if child:IsA("Accessory") and child.Name == "AIRSLASH" then
+            if child:IsA("Accessory") and child.Name == "GrapplePulled" then
                 self:triggerUnblock()
             end
         end))
