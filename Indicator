@@ -110,8 +110,11 @@ function Indicator.monitorPlayers()
         if not humanoid then return end
         if humanoid:FindFirstChild("_IndicatorConn") then return end
         local lastHealth = humanoid.Health
+        local running = false
         local conn = humanoid.HealthChanged:Connect(function(newHealth)
-            if not Indicator._monitoring then return end
+            if running then return end
+            running = true
+            if not Indicator._monitoring then running = false return end
             local delta = newHealth - lastHealth
             if delta ~= 0 then
                 if delta < 0 then
@@ -121,6 +124,7 @@ function Indicator.monitorPlayers()
                 end
             end
             lastHealth = newHealth
+            running = false
         end)
         Indicator._connMgr:add(conn)
         local tag = Instance.new("ObjectValue")
