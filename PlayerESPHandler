@@ -393,68 +393,67 @@ function PlayerESP:setTextColor(color)
     end
 end
 
--- Method to update display config from outside
 function PlayerESP:setDisplayConfig(config)
     self.displayConfig = config or self.displayConfig
     for _, data in pairs(self.espBillboards) do
-        -- Limpa infoFrame e hpFrame (mantém apenas UIListLayout)
-        if data.infoFrame and data.infoFrame:IsA("Frame") then
-            for _, child in ipairs(data.infoFrame:GetChildren()) do
-                if not child:IsA("UIListLayout") then
-                    child.Parent = nil
+        -- Limpa nameFrame, infoFrame e hpFrame (mantém apenas UIListLayout)
+        for _, frameName in ipairs({"nameFrame", "infoFrame", "hpFrame"}) do
+            local frame = data[frameName]
+            if frame and frame:IsA("Frame") then
+                for _, child in ipairs(frame:GetChildren()) do
+                    if not child:IsA("UIListLayout") then
+                        child.Parent = nil
+                    end
                 end
             end
         end
-        if data.hpFrame and data.hpFrame:IsA("Frame") then
-            for _, child in ipairs(data.hpFrame:GetChildren()) do
-                if not child:IsA("UIListLayout") then
-                    child.Parent = nil
-                end
-            end
-        end
-        -- Limpa nameFrame (mantém apenas UIListLayout)
-        if data.nameLabel and data.nameLabel.Parent and data.nameLabel.Parent:IsA("Frame") then
-            local nameFrame = data.nameLabel.Parent
-            for _, child in ipairs(nameFrame:GetChildren()) do
-                if not child:IsA("UIListLayout") then
-                    child.Parent = nil
-                end
-            end
-            -- Adiciona os labels conforme config
-            if self.displayConfig.showDistance ~= false and data.distanceLabel then
-                data.distanceLabel.Parent = nameFrame
-            end
+
+        -- Adiciona labels aos seus frames conforme config
+        if data.nameFrame then
             if self.displayConfig.showPlayerName ~= false and data.nameLabel then
-                data.nameLabel.Parent = nameFrame
+                data.nameLabel.Parent = data.nameFrame
             end
-            nameFrame.Parent = data.billboard
+            if self.displayConfig.showDistance ~= false and data.distanceLabel then
+                data.distanceLabel.Parent = data.nameFrame
+            end
         end
-        -- LayoutOrder dos frames principais
+        if data.infoFrame then
+            if self.displayConfig.showRogueName ~= false and data.rogueLabel then
+                data.rogueLabel.Parent = data.infoFrame
+            end
+            if self.displayConfig.showEdict ~= false and data.edictLabel then
+                data.edictLabel.Parent = data.infoFrame
+            end
+        end
+        if data.hpFrame then
+            if self.displayConfig.showHealth ~= false and data.hpLabel then
+                data.hpLabel.Parent = data.hpFrame
+            end
+            if self.displayConfig.showHealthPercent ~= false and data.hpPercLabel then
+                data.hpPercLabel.Parent = data.hpFrame
+            end
+        end
+
+        -- Define LayoutOrder dos frames principais
+        if data.nameFrame then
+            data.nameFrame.LayoutOrder = 1
+        end
         if data.infoFrame then
             data.infoFrame.LayoutOrder = 2
         end
         if data.hpFrame then
             data.hpFrame.LayoutOrder = 3
         end
-        -- Adiciona infoFrame e hpFrame ao billboard
+
+        -- Adiciona os frames ao billboard
+        if data.nameFrame then
+            data.nameFrame.Parent = data.billboard
+        end
         if data.infoFrame then
             data.infoFrame.Parent = data.billboard
         end
         if data.hpFrame then
             data.hpFrame.Parent = data.billboard
-        end
-        -- Adiciona labels aos seus frames conforme config
-        if data.infoFrame and data.rogueLabel and self.displayConfig.showRogueName ~= false then
-            data.rogueLabel.Parent = data.infoFrame
-        end
-        if data.infoFrame and data.edictLabel and self.displayConfig.showEdict ~= false then
-            data.edictLabel.Parent = data.infoFrame
-        end
-        if data.hpFrame and data.hpLabel and self.displayConfig.showHealth ~= false then
-            data.hpLabel.Parent = data.hpFrame
-        end
-        if data.hpFrame and data.hpPercLabel and self.displayConfig.showHealthPercent ~= false then
-            data.hpPercLabel.Parent = data.hpFrame
         end
     end
 end
