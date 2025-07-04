@@ -44,24 +44,10 @@ local DEFAULT_SINGLE_THREATS = {
         blockDistance = 200
     },
 
-    ["punch_m2"] = {
-        name = "Punch M2",
-        category = "attack_type",
-        priority = 2, 
-        conditions = {
-            {
-                type = ConditionType.ANIMATION,
-                value = "rbxassetid://2604537119"
-            }
-        },
-        operator = MatchOperator.AND,
-        blockDistance = 25
-    },
-
     ["heavy_attack"] = {
         name = "Heavy Attack",
         category = "attack_type",
-        priority = 3, 
+        priority = 2, 
         conditions = {
             {
                 type = ConditionType.ACCESSORY,
