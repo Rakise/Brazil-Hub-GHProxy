@@ -218,54 +218,76 @@ function AutoBlock:_getEquippedItem(player)
     return nil
 end
 
--- Check if player has a specific accessory
-function AutoBlock:_hasAccessory(player, accessoryName)
-    if not player.Character then 
-        print("[AutoBlock Debug] No character for player: " .. player.Name)
-        return false 
-    end
-    
-    -- Debug: listar todos os acessórios do player
-    local allAccessories = {}
-    for _, child in pairs(player.Character:GetChildren()) do
-        if child:IsA("Accessory") then
-            table.insert(allAccessories, child.Name)
-        end
-    end
-    if #allAccessories > 0 then
-        print("[AutoBlock Debug] All accessories on " .. player.Name .. ": " .. table.concat(allAccessories, ", "))
-    else
-        print("[AutoBlock Debug] No accessories found on " .. player.Name)
-    end
-    
-    local accessory = player.Character:FindFirstChild(accessoryName)
-    if accessory and accessory:IsA("Accessory") then
-        print("[AutoBlock Debug] Found accessory: " .. accessoryName .. " on " .. player.Name)
-        return true
-    end
-    
-    -- Se não encontrou o acessório, conecta um listener para detectar quando for adicionado
+-- Private method to start accessory monitoring on a player
+function AutoBlock:_startAccessoryMonitor(player, accessoryName)
+    -- Initialize listener table if not present
     if not self._proximityAccessoryListeners[player] then
-        print("[AutoBlock Debug] Connecting ChildAdded listener for " .. accessoryName .. " on " .. player.Name)
+        self._proximityAccessoryListeners[player] = {
+            connection = nil,
+            monitoredAccessories = {}
+        }
         
-        self._proximityAccessoryListeners[player] = player.Character.ChildAdded:Connect(function(child)
-            print("[AutoBlock Debug] ChildAdded event: " .. child.Name .. " on " .. player.Name .. " (IsAccessory: " .. tostring(child:IsA("Accessory")) .. ")")
-            
-            if child.Name == accessoryName and child:IsA("Accessory") then
-                -- Acessório foi adicionado, aciona o bloqueio imediatamente
-                print("[AutoBlock] Accessory detected: " .. accessoryName .. " on " .. player.Name .. " - Triggering block!")
-                
-                -- Força uma verificação imediata de ameaças para acionar o bloqueio
+        -- Connect to player leaving event
+        self._connectionManager:add(player.AncestryChanged:Connect(function(_, parent)
+            if not parent then
+                -- Player left the game, clean up listeners
+                self:_cleanupPlayerListeners(player)
+            end
+        end))
+        
+        -- Connect to character removing event
+        self._connectionManager:add(player.CharacterRemoving:Connect(function()
+            self:_cleanupPlayerListeners(player)
+        end))
+    end
+    
+    local listenerData = self._proximityAccessoryListeners[player]
+    
+    -- Register the accessory for monitoring
+    listenerData.monitoredAccessories[accessoryName] = true
+    
+    -- Connect ChildAdded if not already connected
+    if not listenerData.connection or not listenerData.connection.Connected then
+        listenerData.connection = player.Character.ChildAdded:Connect(function(child)
+            if child:IsA("Accessory") and listenerData.monitoredAccessories[child.Name] then
+                print("[AutoBlock] Accessory detected via ChildAdded: " .. child.Name .. " on " .. player.Name)
                 if self.enabled then
                     self:detectThreats()
                 end
             end
         end)
     end
+end
+
+-- Clean up listeners for a specific player
+function AutoBlock:_cleanupPlayerListeners(player)
+    if self._proximityAccessoryListeners and self._proximityAccessoryListeners[player] then
+        local listenerData = self._proximityAccessoryListeners[player]
+        if listenerData.connection and listenerData.connection.Connected then
+            listenerData.connection:Disconnect()
+        end
+        self._proximityAccessoryListeners[player] = nil
+        print("[AutoBlock] Cleaned up listeners for player: " .. player.Name)
+    end
+end
+
+-- Improved accessory check method
+function AutoBlock:_hasAccessory(player, accessoryName)
+    if not player.Character then return false end
+
+    -- Check for accessory immediately
+    local accessory = player.Character:FindFirstChild(accessoryName)
+    if accessory and accessory:IsA("Accessory") then
+        print("[AutoBlock Debug] Found accessory: " .. accessoryName .. " on " .. player.Name)
+        return true
+    end
     
-    print("[AutoBlock Debug] No accessory found: " .. accessoryName .. " on " .. player.Name)
+    -- Start monitoring for future additions
+    self:_startAccessoryMonitor(player, accessoryName)
+    
     return false
 end
+
 
 -- Get player's current states
 function AutoBlock:_getPlayerStates(player)
@@ -766,6 +788,16 @@ function AutoBlock:disable()
     self.enabled = false
     self._connectionManager:disconnectAll()
     
+    -- Clean up accessory listeners
+    if self._proximityAccessoryListeners then
+        for player, listenerData in pairs(self._proximityAccessoryListeners) do
+            if listenerData.connection and listenerData.connection.Connected then
+                listenerData.connection:Disconnect()
+            end
+        end
+        self._proximityAccessoryListeners = {}
+    end
+    
     -- Ensure we're not stuck in blocking state
     if self._isCurrentlyBlocking then
         self:triggerUnblock()
@@ -809,8 +841,19 @@ end
 function AutoBlock:destroy()
     self:disable()
     
+    -- Clean up accessory listeners
+    if self._proximityAccessoryListeners then
+        for player, listenerData in pairs(self._proximityAccessoryListeners) do
+            if listenerData.connection and listenerData.connection.Connected then
+                listenerData.connection:Disconnect()
+            end
+        end
+        self._proximityAccessoryListeners = {}
+    end
+    
     -- Clean up references
     if self._connectionManager then
+        self._connectionManager:disconnectAll()
         self._connectionManager = nil
     end
     
