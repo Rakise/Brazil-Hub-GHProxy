@@ -1,0 +1,116 @@
+-- Indicator.lua
+-- Módulo para exibir indicadores visuais acima de personagens (ex: dano, status, etc)
+
+local Players = game:GetService("Players")
+
+local Indicator = {}
+Indicator.__index = Indicator
+
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
+-- Cria um novo indicador acima de um personagem
+-- @param character: Instance (Character)
+-- @param text: string (texto a ser exibido)
+-- @param color: Color3 (cor do texto)
+-- @param duration: number (tempo em segundos)
+function Indicator.show(character, text, color, duration)
+    if not character or not character:FindFirstChild("Head") then return end
+    local head = character.Head
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "Indicator"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 100, 0, 40)
+    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.AlwaysOnTop = true
+    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    billboard.Parent = head
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = color or Color3.new(1, 1, 1)
+    label.TextStrokeTransparency = 0.5
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSansBold
+    label.Parent = billboard
+
+    -- Animação de fade out
+    spawn(function()
+        local fadeTime = duration or 1.2
+        local startTime = tick()
+        while tick() - startTime < fadeTime do
+            local alpha = 1 - ((tick() - startTime) / fadeTime)
+            label.TextTransparency = 1 - alpha
+            label.TextStrokeTransparency = 0.5 + 0.5 * (1 - alpha)
+            wait(0.03)
+        end
+        billboard:Destroy()
+    end)
+    return billboard
+end
+
+-- Remove todos os indicadores de um character
+function Indicator.clear(character)
+    if not character then return end
+    for _, child in ipairs(character:GetChildren()) do
+        if child:IsA("BillboardGui") and child.Name == "Indicator" then
+            child:Destroy()
+        end
+    end
+end
+
+-- Exibe um indicador de dano acima do personagem
+function Indicator.damage(character, amount, duration)
+    local text = string.format("-%d", math.abs(amount))
+    local color = Color3.fromRGB(255, 60, 60)
+    return Indicator.show(character, text, color, duration or 1.2)
+end
+
+-- Exibe um indicador de regeneração de vida acima do personagem
+function Indicator.regen(character, amount, duration)
+    local text = string.format("+%d", math.abs(amount))
+    local color = Color3.fromRGB(60, 255, 60)
+    return Indicator.show(character, text, color, duration or 1.2)
+end
+
+-- Sistema global: monitora todos os jogadores e exibe indicadores de dano/regen automaticamente
+function Indicator.monitorPlayers()
+    if Indicator._monitoring then return end
+    Indicator._monitoring = true
+    if not Indicator._connMgr then
+        Indicator._connMgr = ConnectionManager.new()
+    end
+    local Players = game:GetService("Players")
+    local function hook(character)
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+        if humanoid:FindFirstChild("_IndicatorConn") then return end
+        local lastHealth = humanoid.Health
+        local conn = humanoid.HealthChanged:Connect(function(newHealth)
+            local delta = newHealth - lastHealth
+            if delta ~= 0 then
+                if delta < 0 then
+                    Indicator.damage(character, math.abs(delta), 1.2)
+                else
+                    Indicator.regen(character, math.abs(delta), 1.2)
+                end
+            end
+            lastHealth = newHealth
+        end)
+        Indicator._connMgr:add(conn)
+        local tag = Instance.new("ObjectValue")
+        tag.Name = "_IndicatorConn"
+        tag.Value = conn
+        tag.Parent = humanoid
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then hook(player.Character) end
+        Indicator._connMgr:add(player.CharacterAdded:Connect(hook))
+    end
+    Indicator._connMgr:add(Players.PlayerAdded:Connect(function(player)
+        Indicator._connMgr:add(player.CharacterAdded:Connect(hook))
+    end))
+end
+
+return Indicator 
