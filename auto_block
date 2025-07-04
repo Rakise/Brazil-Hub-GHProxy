@@ -44,6 +44,20 @@ local DEFAULT_SINGLE_THREATS = {
         blockDistance = 200
     },
 
+    ["verdien"] = {
+        name = "Verdien",
+        category = "skills",
+        priority = 1,
+        conditions = {
+            {
+                type = ConditionType.ANIMATION,
+                value = "rbxassetid://2960432568"
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 200
+    },
+
     ["spear_strikes"] = {
         name = "Spear Strikes",
         category = "skills",
@@ -102,7 +116,7 @@ local DEFAULT_SINGLE_THREATS = {
             }
         },
         operator = MatchOperator.AND,
-        blockDistance = 10
+        blockDistance = 15
     },
 }
 
