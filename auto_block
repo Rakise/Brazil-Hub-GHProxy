@@ -17,7 +17,8 @@ local ConditionType = {
     PLAYER_STATE = "playerState",
     PROXIMITY = "proximity",
     HEALTH = "health",
-    WALKSPEED = "walkspeed"
+    WALKSPEED = "walkspeed",
+    ACCESSORY = "accessory" -- New condition type for accessories
 }
 
 -- Threat matching operators
@@ -39,6 +40,19 @@ local DEFAULT_SINGLE_THREATS = {
         },
         operator = MatchOperator.AND,
         blockDistance = 200
+    },
+    
+    ["light_attack"] = {
+        name = "Light Attack",
+        priority = 2,
+        conditions = {
+            {
+                type = ConditionType.ACCESSORY,
+                value = "LightAttack"
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 50
     }
 }
 
@@ -198,6 +212,18 @@ function AutoBlock:_getEquippedItem(player)
     return nil
 end
 
+-- Check if player has a specific accessory
+function AutoBlock:_hasAccessory(player, accessoryName)
+    if not player.Character then return false end
+    
+    local accessory = player.Character:FindFirstChild(accessoryName)
+    if accessory and accessory:IsA("Accessory") then
+        return true
+    end
+    
+    return false
+end
+
 -- Get player's current states
 function AutoBlock:_getPlayerStates(player)
     if not player.Character or not player.Character:FindFirstChild("Humanoid") then
@@ -274,6 +300,9 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
             -- Single item
             return equippedItem == condition.value
         end
+        
+    elseif condition.type == ConditionType.ACCESSORY then
+        return self:_hasAccessory(player, condition.value)
         
     elseif condition.type == ConditionType.PLAYER_STATE then
         local playerStates = self:_getPlayerStates(player)
