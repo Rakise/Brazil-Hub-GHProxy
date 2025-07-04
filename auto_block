@@ -699,7 +699,7 @@ function AutoBlock:enable()
         #singleThreats, #comboThreats))
     
     -- Connect to heartbeat for continuous monitoring
-    self._connectionManager:add(RunService.Heartbeat:Connect(function()
+    self._connectionManager:add(RunService.Stepped:Connect(function()
         if self.enabled then
             self:detectThreats()
         end
