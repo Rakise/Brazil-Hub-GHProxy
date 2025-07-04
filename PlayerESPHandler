@@ -25,7 +25,8 @@ PlayerESP.displayConfig = {
     showRogueName = true,
     showEdict = true,
     showHealth = true,
-    showHealthPercent = true
+    showHealthPercent = true,
+    showDistance = true
 }
 
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
@@ -66,6 +67,33 @@ function PlayerESP:createBillboard(player)
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = billboard
 
+    -- Criação do frame para nome e distância
+    local nameFrame = Instance.new("Frame")
+    nameFrame.BackgroundTransparency = 1
+    nameFrame.BorderColor3 = Color3.new(0,0,0)
+    nameFrame.Size = UDim2.new(1,0,0.1,0)
+    nameFrame.BorderSizePixel = 0
+    nameFrame.BackgroundColor3 = Color3.new(1,1,1)
+    nameFrame.Parent = billboard
+
+    -- Distance label (à esquerda)
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.FontSize = Enum.FontSize.Size14
+    distanceLabel.TextColor3 = Color3.new(1,1,1)
+    distanceLabel.BorderColor3 = Color3.new(0,0,0)
+    distanceLabel.Text = "[0m]"
+    distanceLabel.TextStrokeTransparency = 0.5
+    distanceLabel.Font = Enum.Font.SourceSansSemibold
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextSize = 14
+    distanceLabel.Size = UDim2.new(0,0,0.1,0)
+    distanceLabel.AutomaticSize = Enum.AutomaticSize.X
+    distanceLabel.BorderSizePixel = 0
+    distanceLabel.BackgroundColor3 = Color3.new(1,1,1)
+    distanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+    distanceLabel.Parent = nameFrame
+
+    -- Name label (à direita)
     local nameLabel = Instance.new("TextLabel")
     nameLabel.FontSize = Enum.FontSize.Size14
     nameLabel.TextColor3 = Color3.new(1,1,1)
@@ -75,10 +103,20 @@ function PlayerESP:createBillboard(player)
     nameLabel.Font = Enum.Font.SourceSansSemibold
     nameLabel.BackgroundTransparency = 1
     nameLabel.TextSize = 14
-    nameLabel.Size = UDim2.new(1,0,0.1,0)
+    nameLabel.Size = UDim2.new(0,0,0.1,0)
+    nameLabel.AutomaticSize = Enum.AutomaticSize.X
     nameLabel.BorderSizePixel = 0
     nameLabel.BackgroundColor3 = Color3.new(1,1,1)
-    nameLabel.Parent = billboard
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.Parent = nameFrame
+
+    -- Layout horizontal para alinhar distanceLabel e nameLabel
+    local nameLayout = Instance.new("UIListLayout")
+    nameLayout.FillDirection = Enum.FillDirection.Horizontal
+    nameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    nameLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    nameLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    nameLayout.Parent = nameFrame
 
     local infoFrame = Instance.new("Frame")
     infoFrame.BackgroundTransparency = 1
@@ -173,6 +211,7 @@ function PlayerESP:createBillboard(player)
     self.espBillboards[player] = {
         billboard = billboard,
         nameLabel = nameLabel,
+        distanceLabel = distanceLabel,
         rogueLabel = rogueLabel,
         edictLabel = edictLabel,
         hpLabel = hpLabel,
@@ -239,6 +278,19 @@ function PlayerESP:updatePlayerData(player)
         data.edictLabel.Text = "[" .. cache.edict .. "]"
         data.hpLabel.Text = "[" .. cache.healthDisplay .. "]"
         data.hpPercLabel.Text = "[" .. cache.healthPercentDisplay .. "]"
+        -- Atualizar distância
+        local localChar = Players.LocalPlayer and Players.LocalPlayer.Character
+        local targetChar = player.Character
+        if data.distanceLabel and localChar and targetChar then
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+            if localRoot and targetRoot then
+                local dist = (localRoot.Position - targetRoot.Position).Magnitude
+                data.distanceLabel.Text = string.format("[%dm]", math.floor(dist))
+            else
+                data.distanceLabel.Text = "[0m]"
+            end
+        end
     end
 end
 
@@ -362,6 +414,15 @@ function PlayerESP:setDisplayConfig(config)
                 end
             end
         end
+        -- Remove all children from nameFrame except the layout
+        if data.nameLabel and data.distanceLabel and data.nameLabel.Parent and data.distanceLabel.Parent then
+            local nameFrame = data.nameLabel.Parent
+            for _, child in ipairs(nameFrame:GetChildren()) do
+                if not child:IsA("UIListLayout") then
+                    child.Parent = nil
+                end
+            end
+        end
         -- Remove all children from billboard except UIListLayout
         if data.billboard then
             for _, child in ipairs(data.billboard:GetChildren()) do
@@ -372,7 +433,10 @@ function PlayerESP:setDisplayConfig(config)
         end
         -- Set LayoutOrder explicitly
         if data.nameLabel then
-            data.nameLabel.LayoutOrder = 1
+            data.nameLabel.LayoutOrder = 2
+        end
+        if data.distanceLabel then
+            data.distanceLabel.LayoutOrder = 1
         end
         if data.infoFrame then
             data.infoFrame.LayoutOrder = 2
@@ -380,10 +444,18 @@ function PlayerESP:setDisplayConfig(config)
         if data.hpFrame then
             data.hpFrame.LayoutOrder = 3
         end
-        -- Add back in the correct visual order:
-        if data.nameLabel and self.displayConfig.showPlayerName ~= false then
-            data.nameLabel.Parent = data.billboard
+        -- Adiciona distanceLabel e nameLabel ao nameFrame conforme config
+        if data.nameLabel and data.distanceLabel and data.nameLabel.Parent and data.distanceLabel.Parent then
+            local nameFrame = data.nameLabel.Parent
+            if self.displayConfig.showDistance ~= false then
+                data.distanceLabel.Parent = nameFrame
+            end
+            if self.displayConfig.showPlayerName ~= false then
+                data.nameLabel.Parent = nameFrame
+            end
+            nameFrame.Parent = data.billboard
         end
+        -- Add back in the correct visual order:
         if data.infoFrame then
             data.infoFrame.Parent = data.billboard
         end
