@@ -30,8 +30,9 @@ local MatchOperator = {
 
 -- Default single-condition threats
 local DEFAULT_SINGLE_THREATS = {
-    ["basic_grapple"] = {
-        name = "Basic Grapple",
+    ["grapple"] = {
+        name = "Grapple",
+        category = "skills",
         priority = 1,
         conditions = {
             {
@@ -45,6 +46,7 @@ local DEFAULT_SINGLE_THREATS = {
     
     ["light_attack"] = {
         name = "Light Attack",
+        category = "attack_type",
         priority = 2,
         conditions = {
             {
@@ -62,6 +64,7 @@ local DEFAULT_SINGLE_THREATS = {
 
     ["heavy_attack"] = {
         name = "Heavy Attack",
+        category = "attack_type",
         priority = 3, 
         conditions = {
             {
@@ -836,6 +839,18 @@ function AutoBlock:_isFacing(player, target, maxAngle)
     local dot = lookVector:Dot(direction)
     local angle = math.deg(math.acos(dot))
     return angle <= (maxAngle or 45)
+end
+
+function AutoBlock:setThreatBlockDistance(threatId, distance)
+    local config = self._threatConfigs[threatId]
+    if config and distance and distance > 0 then
+        config.blockDistance = distance
+        print(string.format("[AutoBlock] Block distance for '%s' set to %d", config.name, distance))
+        return true
+    else
+        warn("[AutoBlock] Invalid threatId or distance for setThreatBlockDistance")
+        return false
+    end
 end
 
 return AutoBlock
