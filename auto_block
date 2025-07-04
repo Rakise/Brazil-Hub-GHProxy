@@ -37,6 +37,7 @@ local DEFAULT_SINGLE_THREATS = {
         conditions = {
             {
                 type = ConditionType.ANIMATION,
+                scope = "proximity",
                 value = "rbxassetid://3110530226"
             }
         },
@@ -148,6 +149,9 @@ function AutoBlock.new(blockRadius)
     self._currentThreats = {}
     self._blockStartTime = 0
     self._lastDetectionTime = 0
+    
+    -- Tabela para listeners de acessórios de proximidade
+    self._proximityAccessoryListeners = self._proximityAccessoryListeners or {}
     
     -- Initialize with default configurations
     self:_initializeDefaultThreats()
@@ -307,6 +311,39 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
         local scope = condition.scope or "player"
         if scope == "player" then
             return self:_hasAccessory(player, condition.value)
+        elseif scope == "proximity" then
+            local myChar = player.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myRoot then return false end
+            local blockDist = condition.blockDistance or self.blockRadius or 20
+            local found = false
+            for _, other in ipairs(game:GetService("Players"):GetPlayers()) do
+                if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myRoot.Position - other.Character.HumanoidRootPart.Position).Magnitude
+                    if dist <= blockDist then
+                        -- Checa se já tem o acessório
+                        if self:_hasAccessory(other, condition.value) then
+                            found = true
+                        end
+                        -- Conecta listener se não existir
+                        if not self._proximityAccessoryListeners[other] then
+                            self._proximityAccessoryListeners[other] = other.Character.ChildAdded:Connect(function(child)
+                                if child.Name == condition.value and child:IsA("Accessory") then
+                                    -- Aciona lógica de bloqueio imediatamente
+                                    found = true
+                                end
+                            end)
+                        end
+                    else
+                        -- Fora do range, desconecta listener se existir
+                        if self._proximityAccessoryListeners[other] then
+                            self._proximityAccessoryListeners[other]:Disconnect()
+                            self._proximityAccessoryListeners[other] = nil
+                        end
+                    end
+                end
+            end
+            return found
         end
         
     elseif condition.type == ConditionType.PLAYER_STATE then
