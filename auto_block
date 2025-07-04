@@ -227,6 +227,16 @@ function AutoBlock:_hasAccessory(player, accessoryName)
         return true
     end
     
+    -- Se não encontrou o acessório, conecta um listener para detectar quando for adicionado
+    if not self._proximityAccessoryListeners[player] then
+        self._proximityAccessoryListeners[player] = player.Character.ChildAdded:Connect(function(child)
+            if child.Name == accessoryName and child:IsA("Accessory") then
+                -- Acessório foi adicionado, pode acionar lógica de bloqueio aqui se necessário
+                print("[AutoBlock] Accessory detected: " .. accessoryName .. " on " .. player.Name)
+            end
+        end)
+    end
+    
     return false
 end
 
@@ -312,38 +322,9 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
         if scope == "player" then
             return self:_hasAccessory(player, condition.value)
         elseif scope == "proximity" then
-            local myChar = player.Character
-            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if not myRoot then return false end
-            local blockDist = condition.blockDistance or self.blockRadius or 20
-            local found = false
-            for _, other in ipairs(game:GetService("Players"):GetPlayers()) do
-                if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
-                    local dist = (myRoot.Position - other.Character.HumanoidRootPart.Position).Magnitude
-                    if dist <= blockDist then
-                        -- Checa se já tem o acessório
-                        if self:_hasAccessory(other, condition.value) then
-                            found = true
-                        end
-                        -- Conecta listener se não existir
-                        if not self._proximityAccessoryListeners[other] then
-                            self._proximityAccessoryListeners[other] = other.Character.ChildAdded:Connect(function(child)
-                                if child.Name == condition.value and child:IsA("Accessory") then
-                                    -- Aciona lógica de bloqueio imediatamente
-                                    found = true
-                                end
-                            end)
-                        end
-                    else
-                        -- Fora do range, desconecta listener se existir
-                        if self._proximityAccessoryListeners[other] then
-                            self._proximityAccessoryListeners[other]:Disconnect()
-                            self._proximityAccessoryListeners[other] = nil
-                        end
-                    end
-                end
-            end
-            return found
+            -- Para scope "proximity", simplesmente checa se o player atual tem o acessório
+            -- O loop principal já itera por todos os players próximos
+            return self:_hasAccessory(player, condition.value)
         end
         
     elseif condition.type == ConditionType.PLAYER_STATE then
