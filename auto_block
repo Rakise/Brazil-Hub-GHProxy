@@ -44,6 +44,35 @@ local DEFAULT_SINGLE_THREATS = {
         blockDistance = 200
     },
 
+    ["spear_strikes"] = {
+        name = "Spear Strikes",
+        category = "skills",
+        priority = 1,
+        conditions = {
+            {
+                type = ConditionType.ANIMATION,
+                value = "rbxassetid://2981817530"
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 25
+    },
+
+    ["spear_m2"] = {
+        name = "Spear M2",
+        category = "attack_type",
+        priority = 2, 
+        conditions = {
+            {
+                type = ConditionType.ANIMATION,
+                value = "rbxassetid://2890507639"
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 25
+    },
+
+
     ["heavy_attack"] = {
         name = "Heavy Attack",
         category = "attack_type",
