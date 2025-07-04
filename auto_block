@@ -1,115 +1,775 @@
--- AutoBlock: Módulo para bloqueio automático de ataques
--- Estrutura modular, pronto para integração com lógica de detecção de ataque
+-- AutoBlock: Advanced multi-condition threat detection system
+-- Supports single and combo threats (animation + item + state combinations)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
--- Dependência externa para gerenciamento de conexões
+-- External dependency for connection management
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
+-- Constants
+local DEFAULT_BLOCK_RADIUS = 200 -- studs
+
+-- Threat condition types
+local ConditionType = {
+    ANIMATION = "animation",
+    EQUIPPED_ITEM = "equippedItem",
+    PLAYER_STATE = "playerState",
+    PROXIMITY = "proximity",
+    HEALTH = "health",
+    WALKSPEED = "walkspeed"
+}
+
+-- Threat matching operators
+local MatchOperator = {
+    AND = "and", -- All conditions must be met
+    OR = "or"    -- Any condition can trigger
+}
+
+-- Default single-condition threats
+local DEFAULT_SINGLE_THREATS = {
+    ["basic_grapple"] = {
+        name = "Basic Grapple",
+        priority = 1,
+        conditions = {
+            {
+                type = ConditionType.ANIMATION,
+                value = "rbxassetid://3110530226"
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 200
+    }
+}
+
+-- Default combo threats (multiple conditions)
+--[[
+local DEFAULT_COMBO_THREATS = {
+    ["katana_slash"] = {
+        name = "Katana Slash Combo",
+        priority = 3,
+        conditions = {
+            {
+                type = ConditionType.EQUIPPED_ITEM,
+                value = "Katana"
+            },
+            {
+                type = ConditionType.ANIMATION,
+                value = "rbxassetid://123456789" -- Slash animation
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 150,
+        blockDuration = 2.5
+    },
+    
+    ["sprint_bat_attack"] = {
+        name = "Sprint Bat Attack",
+        priority = 2,
+        conditions = {
+            {
+                type = ConditionType.EQUIPPED_ITEM,
+                value = "Bat"
+            },
+            {
+                type = ConditionType.PLAYER_STATE,
+                value = "Sprinting"
+            },
+            {
+                type = ConditionType.PROXIMITY,
+                value = 80 -- Max distance
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 100
+    },
+    
+    ["dangerous_approach"] = {
+        name = "Dangerous Approach",
+        priority = 1,
+        conditions = {
+            {
+                type = ConditionType.WALKSPEED,
+                value = 25, -- Minimum walkspeed
+                comparison = ">="
+            },
+            {
+                type = ConditionType.EQUIPPED_ITEM,
+                value = {"Knife", "Sword", "Katana"} -- Multiple possible items
+            }
+        },
+        operator = MatchOperator.AND,
+        blockDistance = 120
+    }
+}
+]]
 
 local AutoBlock = {}
 AutoBlock.__index = AutoBlock
 
-AutoBlock.enabled = false
-
--- Construtor
-function AutoBlock.new()
+-- Constructor
+function AutoBlock.new(blockRadius)
     local self = setmetatable({}, AutoBlock)
-    self._connMgr = ConnectionManager.new()
+    
+    -- Core properties
+    self.enabled = false
+    self.blockRadius = blockRadius or DEFAULT_BLOCK_RADIUS
+    self._connectionManager = ConnectionManager.new()
+    self._isCurrentlyBlocking = false
+    
+    -- Threat configurations
+    self._threatConfigs = {}
+    
+    -- Detection settings
+    self._detectionSettings = {
+        enableSingleThreats = true,
+        enableComboThreats = true,
+        priorityThreshold = 0,
+        debugMode = false
+    }
+    
+    -- Current threat tracking
+    self._currentThreats = {}
+    self._blockStartTime = 0
+    self._lastDetectionTime = 0
+    
+    -- Initialize with default configurations
+    self:_initializeDefaultThreats()
+    
     return self
 end
 
--- Função para acionar o bloqueio
-function AutoBlock:triggerBlock()
-    local player = Players.LocalPlayer
-    if not player or not player.Character then return end
-    local char = player.Character
-    local remotes = char:FindFirstChild("CharacterHandler") and char.CharacterHandler:FindFirstChild("Remotes")
-    if not remotes then return end
-    local blockRemote = remotes:FindFirstChild("Block")
-    if blockRemote and blockRemote:IsA("RemoteEvent") then
-        blockRemote:FireServer()
+-- Private Methods
+
+-- Initialize with default threat configurations
+function AutoBlock:_initializeDefaultThreats()
+    -- Add single condition threats
+    for threatId, config in pairs(DEFAULT_SINGLE_THREATS) do
+        self._threatConfigs[threatId] = config
     end
+    
+    -- Add combo threats
+    --[[
+    for threatId, config in pairs(DEFAULT_COMBO_THREATS) do
+        self._threatConfigs[threatId] = config
+    end
+    ]]
 end
 
--- Função para acionar o desbloqueio
-function AutoBlock:triggerUnblock()
+-- Get the local player's character and validate it
+function AutoBlock:_getValidatedLocalCharacter()
     local player = Players.LocalPlayer
-    if not player or not player.Character then return end
-    local char = player.Character
-    local remotes = char:FindFirstChild("CharacterHandler") and char.CharacterHandler:FindFirstChild("Remotes")
-    if not remotes then return end
-    local unblockRemote = remotes:FindFirstChild("Unblock")
-    if unblockRemote and unblockRemote:IsA("RemoteEvent") then
-        unblockRemote:FireServer()
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return nil
     end
+    return player.Character
 end
 
--- Lógica de detecção de ataque baseada em animação
-local ANIMATION_ID = "rbxassetid://3110530226"
-local BLOCK_RADIUS = 200 -- studs
-
--- Flag interna para controle do AutoBlock
-AutoBlock._autoBlocking = false
-
-function AutoBlock:detectAttack()
-    local player = Players.LocalPlayer
-    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
-    local myPos = player.Character.HumanoidRootPart.Position
-    local found = false
-    for _, otherPlayer in ipairs(Players:GetPlayers()) do
-        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("Humanoid") and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local humanoid = otherPlayer.Character.Humanoid
-            local pos = otherPlayer.Character.HumanoidRootPart.Position
-            if (myPos - pos).Magnitude <= BLOCK_RADIUS then
-                -- Checar animações ativas
-                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
-                    if track.Animation and (track.Animation.AnimationId == ANIMATION_ID or track.Animation.AnimationId == "3110530226") then
-                        found = true
-                        break
-                    end
-                end
-            end
-        end
-        if found then break end
+-- Get character remotes for blocking/unblocking
+function AutoBlock:_getCharacterRemotes(character)
+    local remotes = character:FindFirstChild("CharacterHandler") 
+    if remotes then
+        remotes = remotes:FindFirstChild("Remotes")
     end
-    if found then
-        if not self._autoBlocking then
-            self:triggerBlock()
-            self._autoBlocking = true
+    return remotes
+end
+
+-- Execute remote event if it exists and is valid
+function AutoBlock:_executeRemoteEvent(remotes, remoteName)
+    if not remotes then return false end
+    
+    local remote = remotes:FindFirstChild(remoteName)
+    if remote and remote:IsA("RemoteEvent") then
+        remote:FireServer()
+        return true
+    end
+    return false
+end
+
+-- Get player's currently equipped item
+function AutoBlock:_getEquippedItem(player)
+    if not player.Character then return nil end
+    
+    local equippedTool = player.Character:FindFirstChildOfClass("Tool")
+    if equippedTool then
+        return equippedTool.Name
+    end
+    
+    return nil
+end
+
+-- Get player's current states
+function AutoBlock:_getPlayerStates(player)
+    if not player.Character or not player.Character:FindFirstChild("Humanoid") then
+        return {}
+    end
+    
+    local humanoid = player.Character.Humanoid
+    local states = {}
+    
+    -- Movement states
+    if humanoid.MoveDirection.Magnitude > 0 then
+        if humanoid.WalkSpeed > 20 then
+            states.Sprinting = true
+        else
+            states.Walking = true
         end
     else
-        if self._autoBlocking then
-            self:triggerUnblock()
-            self._autoBlocking = false
+        states.Idle = true
+    end
+    
+    -- Action states
+    if humanoid.Jump then
+        states.Jumping = true
+    end
+    
+    if humanoid.PlatformStand then
+        states.Stunned = true
+    end
+    
+    -- Health state
+    if humanoid.Health < humanoid.MaxHealth * 0.3 then
+        states.LowHealth = true
+    end
+    
+    return states
+end
+
+-- Get player's active animations
+function AutoBlock:_getActiveAnimations(player)
+    if not player.Character or not player.Character:FindFirstChild("Humanoid") then
+        return {}
+    end
+    
+    local animations = {}
+    local humanoid = player.Character.Humanoid
+    local animationTracks = humanoid:GetPlayingAnimationTracks()
+    
+    for _, track in ipairs(animationTracks) do
+        if track.Animation and track.Animation.AnimationId then
+            animations[track.Animation.AnimationId] = true
+        end
+    end
+    
+    return animations
+end
+
+-- Check if a single condition is met
+function AutoBlock:_checkCondition(condition, player, myPosition)
+    if condition.type == ConditionType.ANIMATION then
+        local activeAnimations = self:_getActiveAnimations(player)
+        return activeAnimations[condition.value] == true
+        
+    elseif condition.type == ConditionType.EQUIPPED_ITEM then
+        local equippedItem = self:_getEquippedItem(player)
+        if type(condition.value) == "table" then
+            -- Multiple possible items
+            for _, item in ipairs(condition.value) do
+                if equippedItem == item then
+                    return true
+                end
+            end
+            return false
+        else
+            -- Single item
+            return equippedItem == condition.value
+        end
+        
+    elseif condition.type == ConditionType.PLAYER_STATE then
+        local playerStates = self:_getPlayerStates(player)
+        return playerStates[condition.value] == true
+        
+    elseif condition.type == ConditionType.PROXIMITY then
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+            return false
+        end
+        local distance = (myPosition - player.Character.HumanoidRootPart.Position).Magnitude
+        return distance <= condition.value
+        
+    elseif condition.type == ConditionType.HEALTH then
+        if not player.Character or not player.Character:FindFirstChild("Humanoid") then
+            return false
+        end
+        local humanoid = player.Character.Humanoid
+        local healthPercent = humanoid.Health / humanoid.MaxHealth
+        
+        if condition.comparison == "<=" then
+            return healthPercent <= condition.value
+        elseif condition.comparison == ">=" then
+            return healthPercent >= condition.value
+        elseif condition.comparison == "<" then
+            return healthPercent < condition.value
+        elseif condition.comparison == ">" then
+            return healthPercent > condition.value
+        else
+            return healthPercent == condition.value
+        end
+        
+    elseif condition.type == ConditionType.WALKSPEED then
+        if not player.Character or not player.Character:FindFirstChild("Humanoid") then
+            return false
+        end
+        local walkSpeed = player.Character.Humanoid.WalkSpeed
+        
+        if condition.comparison == "<=" then
+            return walkSpeed <= condition.value
+        elseif condition.comparison == ">=" then
+            return walkSpeed >= condition.value
+        elseif condition.comparison == "<" then
+            return walkSpeed < condition.value
+        elseif condition.comparison == ">" then
+            return walkSpeed > condition.value
+        else
+            return walkSpeed == condition.value
+        end
+    end
+    
+    return false
+end
+
+-- Check if a threat configuration matches current conditions
+function AutoBlock:_evaluateThreat(threatConfig, player, myPosition)
+    if not threatConfig.conditions or #threatConfig.conditions == 0 then
+        return false
+    end
+    
+    -- Check if player is within threat's block distance
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local distance = (myPosition - player.Character.HumanoidRootPart.Position).Magnitude
+    local maxDistance = threatConfig.blockDistance or self.blockRadius
+    
+    if distance > maxDistance then
+        return false
+    end
+    
+    -- Evaluate all conditions
+    local conditionResults = {}
+    for i, condition in ipairs(threatConfig.conditions) do
+        conditionResults[i] = self:_checkCondition(condition, player, myPosition)
+        
+        if self._detectionSettings.debugMode then
+            print(string.format("[AutoBlock Debug] Condition %d (%s): %s", 
+                i, condition.type, tostring(conditionResults[i])))
+        end
+    end
+    
+    -- Apply operator logic
+    local threatMatched = false
+    
+    if threatConfig.operator == MatchOperator.AND then
+        -- All conditions must be true
+        threatMatched = true
+        for _, result in ipairs(conditionResults) do
+            if not result then
+                threatMatched = false
+                break
+            end
+        end
+    elseif threatConfig.operator == MatchOperator.OR then
+        -- Any condition can be true
+        threatMatched = false
+        for _, result in ipairs(conditionResults) do
+            if result then
+                threatMatched = true
+                break
+            end
+        end
+    end
+    
+    if self._detectionSettings.debugMode and threatMatched then
+        print("[AutoBlock Debug] Threat matched: " .. threatConfig.name)
+    end
+    
+    return threatMatched
+end
+
+-- Scan a player for all configured threats
+function AutoBlock:_scanPlayerForThreats(player, myPosition)
+    local detectedThreats = {}
+    
+    for threatId, threatConfig in pairs(self._threatConfigs) do
+        -- Check if this threat type is enabled
+        local isCombo = #threatConfig.conditions > 1
+        if (isCombo and not self._detectionSettings.enableComboThreats) or 
+           (not isCombo and not self._detectionSettings.enableSingleThreats) then
+            continue
+        end
+        
+        -- Check priority threshold
+        if threatConfig.priority < self._detectionSettings.priorityThreshold then
+            continue
+        end
+        
+        -- Evaluate threat conditions
+        if self:_evaluateThreat(threatConfig, player, myPosition) then
+            table.insert(detectedThreats, {
+                id = threatId,
+                config = threatConfig,
+                player = player.Name,
+                distance = (myPosition - player.Character.HumanoidRootPart.Position).Magnitude,
+                detectedAt = tick()
+            })
+        end
+        
+        continue
+    end
+    
+    return detectedThreats
+end
+
+-- Get the highest priority threat from detected threats
+function AutoBlock:_getHighestPriorityThreat(allThreats)
+    if #allThreats == 0 then return nil end
+    
+    local highestPriority = 0
+    local priorityThreat = nil
+    
+    for _, threat in ipairs(allThreats) do
+        if threat.config.priority > highestPriority then
+            highestPriority = threat.config.priority
+            priorityThreat = threat
+        end
+    end
+    
+    return priorityThreat
+end
+
+-- Update blocking state based on threat detection
+function AutoBlock:_updateBlockingState(threats)
+    local shouldBlock = #threats > 0
+    
+    if shouldBlock and not self._isCurrentlyBlocking then
+        local primaryThreat = self:_getHighestPriorityThreat(threats)
+        self:_activateBlock(primaryThreat, threats)
+    elseif not shouldBlock and self._isCurrentlyBlocking then
+        self:_deactivateBlock()
+    end
+    
+    -- Update current threats tracking
+    self._currentThreats = threats
+end
+
+-- Activate blocking and update state
+function AutoBlock:_activateBlock(primaryThreat, allThreats)
+    if self:triggerBlock() then
+        self._isCurrentlyBlocking = true
+        self._blockStartTime = tick()
+        
+        local threatDescription = string.format("%s (Priority: %d) from %s at %.1f studs", 
+            primaryThreat.config.name, 
+            primaryThreat.config.priority,
+            primaryThreat.player,
+            primaryThreat.distance)
+        
+        print("[AutoBlock] Block activated against: " .. threatDescription)
+        
+        if #allThreats > 1 then
+            print("[AutoBlock] Additional threats detected: " .. (#allThreats - 1))
+        end
+        
+        -- Show conditions that triggered (debug mode)
+        if self._detectionSettings.debugMode then
+            print("[AutoBlock Debug] Triggered conditions:")
+            for i, condition in ipairs(primaryThreat.config.conditions) do
+                print(string.format("  %d. %s: %s", i, condition.type, tostring(condition.value)))
+            end
         end
     end
 end
 
--- Ativa o AutoBlock
+-- Deactivate blocking and update state
+function AutoBlock:_deactivateBlock()
+    if self:triggerUnblock() then
+        local blockDuration = tick() - self._blockStartTime
+        self._isCurrentlyBlocking = false
+        self._currentThreats = {}
+        
+        print(string.format("[AutoBlock] Block deactivated (duration: %.2fs)", blockDuration))
+    end
+end
+
+-- Public Methods
+
+-- Trigger block action
+function AutoBlock:triggerBlock()
+    local character = self:_getValidatedLocalCharacter()
+    if not character then return false end
+    
+    local remotes = self:_getCharacterRemotes(character)
+    return self:_executeRemoteEvent(remotes, "Block")
+end
+
+-- Trigger unblock action
+function AutoBlock:triggerUnblock()
+    local character = self:_getValidatedLocalCharacter()
+    if not character then return false end
+    
+    local remotes = self:_getCharacterRemotes(character)
+    return self:_executeRemoteEvent(remotes, "Unblock")
+end
+
+-- Add a new threat configuration
+function AutoBlock:addThreat(threatId, config)
+    if not threatId or not config then
+        warn("[AutoBlock] Invalid threat configuration")
+        return false
+    end
+    
+    -- Validate required fields
+    if not config.name or not config.conditions or #config.conditions == 0 then
+        warn("[AutoBlock] Threat must have name and conditions")
+        return false
+    end
+    
+    -- Set default values
+    config.priority = config.priority or 1
+    config.operator = config.operator or MatchOperator.AND
+    config.blockDistance = config.blockDistance or self.blockRadius
+    config.blockDuration = config.blockDuration or 2.0
+    
+    -- Validate conditions
+    for i, condition in ipairs(config.conditions) do
+        if not condition.type or not condition.value then
+            warn("[AutoBlock] Invalid condition " .. i .. " in threat: " .. threatId)
+            return false
+        end
+    end
+    
+    self._threatConfigs[threatId] = config
+    
+    local threatType = #config.conditions > 1 and "combo" or "single"
+    print(string.format("[AutoBlock] Added %s threat: %s (%d conditions)", 
+        threatType, config.name, #config.conditions))
+    
+    return true
+end
+
+-- Remove a threat configuration
+function AutoBlock:removeThreat(threatId)
+    local config = self._threatConfigs[threatId]
+    if config then
+        self._threatConfigs[threatId] = nil
+        print("[AutoBlock] Removed threat: " .. config.name)
+        return true
+    end
+    
+    warn("[AutoBlock] Threat not found: " .. threatId)
+    return false
+end
+
+-- Get all configured threats
+function AutoBlock:getAllThreats()
+    local threats = {}
+    for threatId, config in pairs(self._threatConfigs) do
+        threats[threatId] = config
+    end
+    return threats
+end
+
+-- Get threats by type (single or combo)
+function AutoBlock:getThreatsByType(isCombo)
+    local threats = {}
+    for threatId, config in pairs(self._threatConfigs) do
+        local configIsCombo = #config.conditions > 1
+        if configIsCombo == isCombo then
+            threats[threatId] = config
+        end
+    end
+    return threats
+end
+
+-- Configure detection settings
+function AutoBlock:configureDetection(settings)
+    for setting, value in pairs(settings) do
+        if self._detectionSettings[setting] ~= nil then
+            self._detectionSettings[setting] = value
+            print("[AutoBlock] Updated detection setting: " .. setting .. " = " .. tostring(value))
+        else
+            warn("[AutoBlock] Unknown detection setting: " .. setting)
+        end
+    end
+end
+
+-- Get current detection settings
+function AutoBlock:getDetectionSettings()
+    return self._detectionSettings
+end
+
+-- Set the blocking radius
+function AutoBlock:setBlockRadius(radius)
+    if radius and radius > 0 then
+        self.blockRadius = radius
+        print("[AutoBlock] Block radius updated to: " .. radius .. " studs")
+    else
+        warn("[AutoBlock] Invalid block radius provided")
+    end
+end
+
+-- Get current blocking radius
+function AutoBlock:getBlockRadius()
+    return self.blockRadius
+end
+
+-- Get currently detected threats
+function AutoBlock:getCurrentThreats()
+    return self._currentThreats
+end
+
+-- Main threat detection logic
+function AutoBlock:detectThreats()
+    local localCharacter = self:_getValidatedLocalCharacter()
+    if not localCharacter then return end
+    
+    local currentTime = tick()
+    self._lastDetectionTime = currentTime
+    
+    local myPosition = localCharacter.HumanoidRootPart.Position
+    local allDetectedThreats = {}
+    
+    -- Scan all other players for threats
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= Players.LocalPlayer and 
+           otherPlayer.Character and 
+           otherPlayer.Character:FindFirstChild("Humanoid") then
+            
+            local playerThreats = self:_scanPlayerForThreats(otherPlayer, myPosition)
+            for _, threat in ipairs(playerThreats) do
+                table.insert(allDetectedThreats, threat)
+            end
+        end
+    end
+    
+    -- Update blocking state based on detected threats
+    self:_updateBlockingState(allDetectedThreats)
+end
+
+-- Enable AutoBlock system
 function AutoBlock:enable()
-    if self.enabled then return end
+    if self.enabled then 
+        warn("[AutoBlock] System is already enabled")
+        return false
+    end
+    
     self.enabled = true
-    -- Exemplo: checar a cada frame
-    self._connMgr:add(RunService.Heartbeat:Connect(function()
+    
+    local singleThreats = self:getThreatsByType(false)
+    local comboThreats = self:getThreatsByType(true)
+    
+    print(string.format("[AutoBlock] System activated with %d single threats and %d combo threats", 
+        #singleThreats, #comboThreats))
+    
+    -- Connect to heartbeat for continuous monitoring
+    self._connectionManager:add(RunService.Heartbeat:Connect(function()
         if self.enabled then
-            self:detectAttack()
+            self:detectThreats()
         end
     end))
+    
+    return true
 end
 
--- Desativa o AutoBlock
+-- Disable AutoBlock system
 function AutoBlock:disable()
+    if not self.enabled then
+        warn("[AutoBlock] System is already disabled")
+        return false
+    end
+    
     self.enabled = false
-    self._connMgr:disconnectAll()
-    self._autoBlocking = false
+    self._connectionManager:disconnectAll()
+    
+    -- Ensure we're not stuck in blocking state
+    if self._isCurrentlyBlocking then
+        self:triggerUnblock()
+        self._isCurrentlyBlocking = false
+        self._currentThreats = {}
+    end
+    
+    print("[AutoBlock] System deactivated")
+    return true
 end
 
--- Limpeza
+-- Check if system is currently enabled
+function AutoBlock:isEnabled()
+    return self.enabled
+end
+
+-- Check if currently blocking
+function AutoBlock:isCurrentlyBlocking()
+    return self._isCurrentlyBlocking
+end
+
+-- Get comprehensive system status
+function AutoBlock:getStatus()
+    local singleThreats = self:getThreatsByType(false)
+    local comboThreats = self:getThreatsByType(true)
+    
+    return {
+        enabled = self.enabled,
+        currentlyBlocking = self._isCurrentlyBlocking,
+        blockRadius = self.blockRadius,
+        singleThreats = #singleThreats,
+        comboThreats = #comboThreats,
+        totalThreats = #singleThreats + #comboThreats,
+        currentActiveThreats = #self._currentThreats,
+        detectionSettings = self._detectionSettings,
+        lastDetectionTime = self._lastDetectionTime
+    }
+end
+
+-- Clean up and destroy the AutoBlock instance
 function AutoBlock:destroy()
     self:disable()
-    self._connMgr = nil
-    self._autoBlocking = false
+    
+    -- Clean up references
+    if self._connectionManager then
+        self._connectionManager = nil
+    end
+    
+    self._threatConfigs = nil
+    self._currentThreats = nil
+    self._isCurrentlyBlocking = false
+    
+    print("[AutoBlock] Instance destroyed")
 end
 
-return AutoBlock 
+-- Legacy compatibility methods
+function AutoBlock:addAutoBlockableAnimation(animationId, skillName)
+    return self:addThreat("legacy_" .. animationId, {
+        name = skillName,
+        priority = 1,
+        conditions = {
+            {
+                type = ConditionType.ANIMATION,
+                value = animationId
+            }
+        }
+    })
+end
+
+function AutoBlock:removeAutoBlockableAnimation(animationId)
+    return self:removeThreat("legacy_" .. animationId)
+end
+
+function AutoBlock:getAutoBlockableAnimations()
+    local animationList = {}
+    for threatId, config in pairs(self._threatConfigs) do
+        if threatId:sub(1, 7) == "legacy_" and #config.conditions == 1 and 
+           config.conditions[1].type == ConditionType.ANIMATION then
+            table.insert(animationList, {
+                id = config.conditions[1].value,
+                name = config.name
+            })
+        end
+    end
+    return animationList
+end
+
+function AutoBlock:detectAttack()
+    self:detectThreats()
+end
+
+return AutoBlock
