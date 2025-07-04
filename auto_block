@@ -142,7 +142,7 @@ function AutoBlock.new(blockRadius)
         enableSingleThreats = true,
         enableComboThreats = true,
         priorityThreshold = 0,
-        debugMode = false
+        debugMode = true  -- Habilitado por padrão para debug
     }
     
     -- Current threat tracking
@@ -220,16 +220,37 @@ end
 
 -- Check if player has a specific accessory
 function AutoBlock:_hasAccessory(player, accessoryName)
-    if not player.Character then return false end
+    if not player.Character then 
+        print("[AutoBlock Debug] No character for player: " .. player.Name)
+        return false 
+    end
+    
+    -- Debug: listar todos os acessórios do player
+    local allAccessories = {}
+    for _, child in pairs(player.Character:GetChildren()) do
+        if child:IsA("Accessory") then
+            table.insert(allAccessories, child.Name)
+        end
+    end
+    if #allAccessories > 0 then
+        print("[AutoBlock Debug] All accessories on " .. player.Name .. ": " .. table.concat(allAccessories, ", "))
+    else
+        print("[AutoBlock Debug] No accessories found on " .. player.Name)
+    end
     
     local accessory = player.Character:FindFirstChild(accessoryName)
     if accessory and accessory:IsA("Accessory") then
+        print("[AutoBlock Debug] Found accessory: " .. accessoryName .. " on " .. player.Name)
         return true
     end
     
     -- Se não encontrou o acessório, conecta um listener para detectar quando for adicionado
     if not self._proximityAccessoryListeners[player] then
+        print("[AutoBlock Debug] Connecting ChildAdded listener for " .. accessoryName .. " on " .. player.Name)
+        
         self._proximityAccessoryListeners[player] = player.Character.ChildAdded:Connect(function(child)
+            print("[AutoBlock Debug] ChildAdded event: " .. child.Name .. " on " .. player.Name .. " (IsAccessory: " .. tostring(child:IsA("Accessory")) .. ")")
+            
             if child.Name == accessoryName and child:IsA("Accessory") then
                 -- Acessório foi adicionado, aciona o bloqueio imediatamente
                 print("[AutoBlock] Accessory detected: " .. accessoryName .. " on " .. player.Name .. " - Triggering block!")
@@ -242,6 +263,7 @@ function AutoBlock:_hasAccessory(player, accessoryName)
         end)
     end
     
+    print("[AutoBlock Debug] No accessory found: " .. accessoryName .. " on " .. player.Name)
     return false
 end
 
