@@ -50,8 +50,9 @@ local DEFAULT_SINGLE_THREATS = {
         priority = 1,
         conditions = {
             {
-                type = ConditionType.ANIMATION,
-                value = "rbxassetid://2960432568"
+                type = ConditionType.ACCESSORY,
+                scope = "proximity",
+                value = "CHARGE"
             }
         },
         operator = MatchOperator.AND,
@@ -304,7 +305,26 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
         end
         
     elseif condition.type == ConditionType.ACCESSORY then
-        return self:_hasAccessory(player, condition.value)
+        local scope = condition.scope or "player"
+        if scope == "player" then
+            return self:_hasAccessory(player, condition.value)
+        elseif scope == "proximity" then
+            local myChar = player.Character
+            local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if not myRoot then return false end
+            local blockDist = condition.blockDistance or self.blockRadius or 20
+            for _, other in ipairs(game:GetService("Players"):GetPlayers()) do
+                if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (myRoot.Position - other.Character.HumanoidRootPart.Position).Magnitude
+                    if dist <= blockDist then
+                        if self:_hasAccessory(other, condition.value) then
+                            return true
+                        end
+                    end
+                end
+            end
+            return false
+        end
         
     elseif condition.type == ConditionType.PLAYER_STATE then
         local playerStates = self:_getPlayerStates(player)
