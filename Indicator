@@ -75,9 +75,21 @@ function Indicator.regen(character, amount, duration)
 end
 
 -- Sistema global: monitora todos os jogadores e exibe indicadores de dano/regen automaticamente
-function Indicator.monitorPlayers()
+function Indicator.enable()
     if Indicator._monitoring then return end
     Indicator._monitoring = true
+    Indicator.monitorPlayers()
+end
+
+function Indicator.disable()
+    Indicator._monitoring = false
+    if Indicator._connMgr then
+        Indicator._connMgr:disconnectAll()
+    end
+end
+
+function Indicator.monitorPlayers()
+    if not Indicator._monitoring then return end
     if not Indicator._connMgr then
         Indicator._connMgr = ConnectionManager.new()
     end
@@ -88,6 +100,7 @@ function Indicator.monitorPlayers()
         if humanoid:FindFirstChild("_IndicatorConn") then return end
         local lastHealth = humanoid.Health
         local conn = humanoid.HealthChanged:Connect(function(newHealth)
+            if not Indicator._monitoring then return end
             local delta = newHealth - lastHealth
             if delta ~= 0 then
                 if delta < 0 then
