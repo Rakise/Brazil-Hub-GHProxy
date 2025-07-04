@@ -47,7 +47,7 @@ end
 
 -- Lógica de detecção de ataque baseada em animação
 local ANIMATION_ID = "rbxassetid://3110530226"
-local BLOCK_RADIUS = 40 -- studs
+local BLOCK_RADIUS = 50 -- studs
 
 function AutoBlock:detectAttack()
     local player = Players.LocalPlayer
