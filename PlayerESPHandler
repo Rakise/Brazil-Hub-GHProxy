@@ -215,7 +215,8 @@ function PlayerESP:createBillboard(player)
         hpLabel = hpLabel,
         hpPercLabel = hpPercLabel,
         infoFrame = infoFrame,
-        hpFrame = hpFrame
+        hpFrame = hpFrame,
+        nameFrame = nameFrame
     }
     
     -- OTIMIZAÇÃO: Inicializar cache de dados para o player
