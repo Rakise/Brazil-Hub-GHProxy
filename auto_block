@@ -231,8 +231,13 @@ function AutoBlock:_hasAccessory(player, accessoryName)
     if not self._proximityAccessoryListeners[player] then
         self._proximityAccessoryListeners[player] = player.Character.ChildAdded:Connect(function(child)
             if child.Name == accessoryName and child:IsA("Accessory") then
-                -- Acessório foi adicionado, pode acionar lógica de bloqueio aqui se necessário
-                print("[AutoBlock] Accessory detected: " .. accessoryName .. " on " .. player.Name)
+                -- Acessório foi adicionado, aciona o bloqueio imediatamente
+                print("[AutoBlock] Accessory detected: " .. accessoryName .. " on " .. player.Name .. " - Triggering block!")
+                
+                -- Força uma verificação imediata de ameaças para acionar o bloqueio
+                if self.enabled then
+                    self:detectThreats()
+                end
             end
         end)
     end
