@@ -317,13 +317,10 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
                 if other ~= player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
                     local dist = (myRoot.Position - other.Character.HumanoidRootPart.Position).Magnitude
                     if dist <= blockDist then
-                        if self:_hasAccessory(other, condition.value) then
-                            return true
-                        end
+                        self:_hasAccessory(other, condition.value)
                     end
                 end
             end
-            return false
         end
         
     elseif condition.type == ConditionType.PLAYER_STATE then
