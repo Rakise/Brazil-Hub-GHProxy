@@ -120,7 +120,7 @@ function PlayerESP:createBillboard(player)
     -- Layout horizontal para alinhar distanceLabel e nameLabel
     local nameLayout = Instance.new("UIListLayout")
     nameLayout.FillDirection = Enum.FillDirection.Horizontal
-    nameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    nameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
     nameLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     nameLayout.SortOrder = Enum.SortOrder.LayoutOrder
     nameLayout.Parent = nameFrame
