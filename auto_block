@@ -18,7 +18,8 @@ local ConditionType = {
     PROXIMITY = "proximity",
     HEALTH = "health",
     WALKSPEED = "walkspeed",
-    ACCESSORY = "accessory" -- New condition type for accessories
+    ACCESSORY = "accessory", -- New condition type for accessories
+    FACING = "facing" -- Novo tipo de condição para checar se o player está encarando o inimigo
 }
 
 -- Threat matching operators
@@ -49,6 +50,10 @@ local DEFAULT_SINGLE_THREATS = {
             {
                 type = ConditionType.ACCESSORY,
                 value = "LightAttack"
+            },
+            {
+                type = ConditionType.FACING,
+                angle = 80 -- Ângulo máximo em graus (mais tolerante)
             }
         },
         operator = MatchOperator.AND,
@@ -364,6 +369,12 @@ function AutoBlock:_checkCondition(condition, player, myPosition)
         else
             return walkSpeed == condition.value
         end
+    elseif condition.type == ConditionType.FACING then
+        -- O player local deve estar encarando o inimigo (player = local, target = inimigo)
+        -- myPosition é a posição do local player, player é o inimigo
+        local localPlayer = Players.LocalPlayer
+        local angle = condition.angle or 45
+        return self:_isFacing(localPlayer, player, angle)
     end
     
     return false
@@ -812,6 +823,19 @@ end
 
 function AutoBlock:detectAttack()
     self:detectThreats()
+end
+
+-- Função utilitária para checar se player está encarando target
+function AutoBlock:_isFacing(player, target, maxAngle)
+    if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return false end
+    if not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then return false end
+    local fromPos = player.Character.HumanoidRootPart.Position
+    local toPos = target.Character.HumanoidRootPart.Position
+    local lookVector = player.Character.HumanoidRootPart.CFrame.LookVector
+    local direction = (toPos - fromPos).Unit
+    local dot = lookVector:Dot(direction)
+    local angle = math.deg(math.acos(dot))
+    return angle <= (maxAngle or 45)
 end
 
 return AutoBlock
