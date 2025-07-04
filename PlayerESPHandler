@@ -92,15 +92,6 @@ function PlayerESP:createBillboard(player)
     nameLabel.TextXAlignment = Enum.TextXAlignment.Center
     nameLabel.Parent = nameFrame
 
-    -- Frame para a distância
-    local distanceLabelFrame = Instance.new("Frame")
-    distanceLabelFrame.BackgroundTransparency = 1
-    distanceLabelFrame.Size = UDim2.new(0,0,0.1,0)
-    distanceLabelFrame.AutomaticSize = Enum.AutomaticSize.X
-    distanceLabelFrame.BorderSizePixel = 0
-    distanceLabelFrame.BackgroundColor3 = Color3.new(1,1,1)
-    distanceLabelFrame.Parent = nameFrame
-
     local distanceLabel = Instance.new("TextLabel")
     distanceLabel.FontSize = Enum.FontSize.Size14
     distanceLabel.TextColor3 = Color3.new(1,1,1)
@@ -115,7 +106,7 @@ function PlayerESP:createBillboard(player)
     distanceLabel.BorderSizePixel = 0
     distanceLabel.BackgroundColor3 = Color3.new(1,1,1)
     distanceLabel.TextXAlignment = Enum.TextXAlignment.Center
-    distanceLabel.Parent = distanceLabelFrame
+    distanceLabel.Parent = nameFrame
 
     -- Layout horizontal para alinhar distanceLabel e nameLabel
     local nameLayout = Instance.new("UIListLayout")
