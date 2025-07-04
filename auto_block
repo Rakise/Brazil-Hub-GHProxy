@@ -45,39 +45,35 @@ function AutoBlock:triggerUnblock()
     end
 end
 
--- Lógica de detecção de ataque (Grapple/AIRSLASH)
+-- Lógica de detecção de ataque baseada em animação
+local ANIMATION_ID = "rbxassetid://3110530226"
+local BLOCK_RADIUS = 20 -- studs
+
 function AutoBlock:detectAttack()
-    if self._charConnMgr then return end -- Já está monitorando
     local player = Players.LocalPlayer
-    if not player then return end
-    local function onCharacter(char)
-        if self._charConnMgr then
-            self._charConnMgr:disconnectAll()
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
+    local myPos = player.Character.HumanoidRootPart.Position
+    local found = false
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("Humanoid") and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local humanoid = otherPlayer.Character.Humanoid
+            local pos = otherPlayer.Character.HumanoidRootPart.Position
+            if (myPos - pos).Magnitude <= BLOCK_RADIUS then
+                -- Checar animações ativas
+                for _, track in ipairs(humanoid:GetPlayingAnimationTracks()) do
+                    if track.Animation and (track.Animation.AnimationId == ANIMATION_ID or track.Animation.AnimationId == "3110530226") then
+                        found = true
+                        break
+                    end
+                end
+            end
         end
-        self._charConnMgr = ConnectionManager.new()
-        -- Detecta AIRSLASH adicionado
-        self._charConnMgr:add(char.ChildAdded:Connect(function(child)
-            if child:IsA("Accessory") and child.Name == "GrapplePulled" then
-                self:triggerBlock()
-            end
-        end))
-        -- Detecta AIRSLASH removido
-        self._charConnMgr:add(char.ChildRemoved:Connect(function(child)
-            if child:IsA("Accessory") and child.Name == "GrapplePulled" then
-                self:triggerUnblock()
-            end
-        end))
+        if found then break end
     end
-    -- Conecta ao personagem atual
-    if player.Character then
-        onCharacter(player.Character)
-    end
-    -- Reconecta ao trocar de personagem
-    if not self._playerConnMgr then
-        self._playerConnMgr = ConnectionManager.new()
-        self._playerConnMgr:add(player.CharacterAdded:Connect(function(char)
-            onCharacter(char)
-        end))
+    if found then
+        self:triggerBlock()
+    else
+        self:triggerUnblock()
     end
 end
 
@@ -97,22 +93,12 @@ end
 function AutoBlock:disable()
     self.enabled = false
     self._connMgr:disconnectAll()
-    if self._charConnMgr then
-        self._charConnMgr:disconnectAll()
-        self._charConnMgr = nil
-    end
-    if self._playerConnMgr then
-        self._playerConnMgr:disconnectAll()
-        self._playerConnMgr = nil
-    end
 end
 
 -- Limpeza
 function AutoBlock:destroy()
     self:disable()
     self._connMgr = nil
-    self._charConnMgr = nil
-    self._playerConnMgr = nil
 end
 
 return AutoBlock 
