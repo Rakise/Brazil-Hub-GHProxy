@@ -43,29 +43,11 @@ local DEFAULT_SINGLE_THREATS = {
         operator = MatchOperator.AND,
         blockDistance = 200
     },
-    
-    ["light_attack"] = {
-        name = "Light Attack",
-        category = "attack_type",
-        priority = 2,
-        conditions = {
-            {
-                type = ConditionType.ACCESSORY,
-                value = "LightAttack"
-            },
-            {
-                type = ConditionType.FACING,
-                angle = 80 -- Ângulo máximo em graus (mais tolerante)
-            }
-        },
-        operator = MatchOperator.AND,
-        blockDistance = 25
-    },
 
     ["heavy_attack"] = {
         name = "Heavy Attack",
         category = "attack_type",
-        priority = 3, 
+        priority = 2, 
         conditions = {
             {
                 type = ConditionType.ACCESSORY,
@@ -74,70 +56,26 @@ local DEFAULT_SINGLE_THREATS = {
         },
         operator = MatchOperator.AND,
         blockDistance = 25
-    }
-}
+    },
 
--- Default combo threats (multiple conditions)
---[[
-local DEFAULT_COMBO_THREATS = {
-    ["katana_slash"] = {
-        name = "Katana Slash Combo",
+    ["light_attack"] = {
+        name = "Light Attack",
+        category = "attack_type",
         priority = 3,
         conditions = {
             {
-                type = ConditionType.EQUIPPED_ITEM,
-                value = "Katana"
+                type = ConditionType.ACCESSORY,
+                value = "LightAttack"
             },
             {
-                type = ConditionType.ANIMATION,
-                value = "rbxassetid://123456789" -- Slash animation
+                type = ConditionType.FACING,
+                angle = 80
             }
         },
         operator = MatchOperator.AND,
-        blockDistance = 150,
-        blockDuration = 2.5
+        blockDistance = 25
     },
-    
-    ["sprint_bat_attack"] = {
-        name = "Sprint Bat Attack",
-        priority = 2,
-        conditions = {
-            {
-                type = ConditionType.EQUIPPED_ITEM,
-                value = "Bat"
-            },
-            {
-                type = ConditionType.PLAYER_STATE,
-                value = "Sprinting"
-            },
-            {
-                type = ConditionType.PROXIMITY,
-                value = 80 -- Max distance
-            }
-        },
-        operator = MatchOperator.AND,
-        blockDistance = 100
-    },
-    
-    ["dangerous_approach"] = {
-        name = "Dangerous Approach",
-        priority = 1,
-        conditions = {
-            {
-                type = ConditionType.WALKSPEED,
-                value = 25, -- Minimum walkspeed
-                comparison = ">="
-            },
-            {
-                type = ConditionType.EQUIPPED_ITEM,
-                value = {"Knife", "Sword", "Katana"} -- Multiple possible items
-            }
-        },
-        operator = MatchOperator.AND,
-        blockDistance = 120
-    }
 }
-]]
 
 local AutoBlock = {}
 AutoBlock.__index = AutoBlock
