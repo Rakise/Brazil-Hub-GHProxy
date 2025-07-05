@@ -1,148 +1,91 @@
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local Debris = game:GetService("Debris")
-
-local LIVE_FOLDER = Workspace:WaitForChild("Live")
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local RemoteFunction
-if game.PlaceId == 14341521240 then
-    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
-        if obj:IsA("RemoteFunction") and obj.Name == "" then
-            RemoteFunction = obj
-            break
-        end
-    end
-else
-    RemoteFunction = ReplicatedStorage:WaitForChild("Requests"):WaitForChild("GetMouse")
-end
-
-local AutoAim = {}
-AutoAim.__index = AutoAim
-
-local cos, deg, acos, random = math.cos, math.deg, math.acos, math.random
-local Vector3new, Vector2new = Vector3.new, Vector2.new
-
-function AutoAim.new()
-    return setmetatable({
-        enabled = false,
-        maxRange = 200,
-        timeToHit = 0.15,
-        toolNames = {Fimbulvetr=true, Perflora=true, Armis=true, Grapple=true, Percutiens=true, Inferi=true},
-        studsBehindMin = 20,
-        studsBehindMax = 30,
-        fovMax = 20
-    }, AutoAim)
-end
-
-function AutoAim:setRange(range) self.maxRange = range end
-function AutoAim:setTimeToHit(time) self.timeToHit = time end
-function AutoAim:setFOV(fov) self.fovMax = fov end
-function AutoAim:setStudsBehindRange(min, max) self.studsBehindMin, self.studsBehindMax = min, max end
-
-function AutoAim:setTools(toolTable)
-    if type(toolTable) == "table" then
-        if toolTable[1] then
-            local hash = {}
-            for i = 1, #toolTable do hash[toolTable[i]] = true end
-            self.toolNames = hash
-        else
-            self.toolNames = toolTable
-        end
-    end
-end
-
-function AutoAim:getBestNPC(localChar)
-    local hrp = localChar.HumanoidRootPart
-    if not hrp then return end
-    
-    local camera = Workspace.CurrentCamera
-    local mouseRay = camera:ScreenPointToRay(Mouse.X, Mouse.Y)
-    local mouseDir = mouseRay.Direction
-    local camPos = camera.CFrame.Position
-    local fovHalf = self.fovMax * 0.5
-    
-    local closestNPC, minAngle = nil, fovHalf
-    local children = LIVE_FOLDER:GetChildren()
-    
-    for i = 1, #children do
-        local model = children[i]
-        if model ~= localChar then
-            local head = model:FindFirstChild("Head")
-            if head and not model:FindFirstChild("Knocked") then
-                local humanoid = model:FindFirstChild("Humanoid")
-                local headPos = head.Position
-                local _, onScreen = camera:WorldToViewportPoint(headPos)
-                if onScreen then
-                    local npcDir = (headPos - camPos).Unit
-                    local angle = deg(acos(mouseDir:Dot(npcDir)))
-                    if angle < minAngle then
-                        closestNPC = model
-                        minAngle = angle
-                    end
-                end
-            end
-        end
-    end
-    
-    return closestNPC
-end
-
 function AutoAim:enable()
     if self.enabled then return end
     self.enabled = true
-    
+
     RemoteFunction.OnClientInvoke = function()
         local character = LocalPlayer.Character
         if not character then
-            return {Hit=Mouse.Hit, Target=Mouse.Target, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
+            return {
+                Hit     = Mouse.Hit,
+                Target  = Mouse.Target,
+                UnitRay = Mouse.UnitRay,
+                X       = Mouse.X,
+                Y       = Mouse.Y
+            }
         end
 
         local equippedTool = character:FindFirstChildOfClass("Tool")
-        local areaMarkers = Workspace:FindFirstChild("AreaMarkers")
+        local areaMarkers  = Workspace:FindFirstChild("AreaMarkers")
         if areaMarkers then
             Mouse.TargetFilter = areaMarkers:FindFirstChild("The Arena")
         end
 
         if equippedTool and self.toolNames[equippedTool.Name] then
             local targetNPC = self:getBestNPC(character)
-            print(targetNPC)
+            --print(targetNPC)
+
             if targetNPC then
-                local npcHRP = targetNPC:FindFirstChild("HumanoidRootPart")
+                local npcHRP  = targetNPC:FindFirstChild("HumanoidRootPart")
                 local npcHead = targetNPC:FindFirstChild("Head")
                 if npcHead and npcHRP then
-                    local hitPosition
+                    local projectileSpeed = 300 -- Ajuste conforme necessário
+                    local attackDelay = 0
                     if equippedTool.Name == "Percutiens" then
-                        local direction = (npcHRP.Position - character.HumanoidRootPart.Position).Unit
-                        hitPosition = npcHead.Position + direction * random(self.studsBehindMin, self.studsBehindMax)
-                    else
-                        hitPosition = npcHead.Position + npcHRP.Velocity * self.timeToHit + Vector3new(0, -2, 0)
+                        attackDelay = 1.5
                     end
 
-                    local marker = Instance.new("Part")
-                    marker.Anchored = true
-                    marker.CanCollide = false
-                    marker.Size = Vector3new(0.5, 0.5, 0.5)
-                    marker.Color = Color3.new(0, 1, 0)
-                    marker.Material = Enum.Material.Neon
-                    marker.Position = hitPosition
-                    marker.Parent = Workspace
-                    Debris:AddItem(marker, 2)
+                    -- Distância inicial e cálculo do tempo para o projétil atingir o alvo
+                    local distance = (npcHead.Position - character.HumanoidRootPart.Position).Magnitude
+                    local timeToHit = distance / projectileSpeed
+                    local totalTime = timeToHit + attackDelay
 
-                    return {Hit=CFrame.new(hitPosition), Target=targetNPC, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
+                    -- Predição iterativa para ajustar a posição prevista baseado na velocidade do NPC
+                    local predictedPosition = npcHead.Position
+                    for i = 1, 2 do
+                        predictedPosition = npcHead.Position + npcHRP.Velocity * totalTime
+                        distance = (predictedPosition - character.HumanoidRootPart.Position).Magnitude
+                        timeToHit = distance / projectileSpeed
+                        totalTime = timeToHit + attackDelay
+                    end
+
+                    -- Ajuste do ponto de impacto com base na arma
+                    local hitPosition
+                    if equippedTool.Name == "Percutiens" then
+                        local direction = (predictedPosition - character.HumanoidRootPart.Position).Unit
+                        hitPosition = predictedPosition + direction * math.random(self.studsBehindMin, self.studsBehindMax)
+                    else
+                        hitPosition = predictedPosition + Vector3.new(0, -2, 0)
+                    end
+
+                    -- Visualização do ponto de mira predito
+                    local marker = Instance.new("Part")
+                    marker.Anchored   = true
+                    marker.CanCollide = false
+                    marker.Size       = Vector3.new(0.5, 0.5, 0.5)
+                    marker.Color      = Color3.new(0, 1, 0)
+                    marker.Material   = Enum.Material.Neon
+                    marker.Position   = hitPosition
+                    marker.Parent     = Workspace
+                    game:GetService("Debris"):AddItem(marker, 2)
+
+                    return {
+                        Hit     = CFrame.new(hitPosition),
+                        Target  = targetNPC,
+                        UnitRay = Mouse.UnitRay,
+                        X       = Mouse.X,
+                        Y       = Mouse.Y
+                    }
                 end
             end
         end
 
-        return {Hit=Mouse.Hit, Target=Mouse.Target, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
+        -- Caso não encontre alvo ou ferramenta, retorna dados do mouse padrão
+        return {
+            Hit     = Mouse.Hit,
+            Target  = Mouse.Target,
+            UnitRay = Mouse.UnitRay,
+            X       = Mouse.X,
+            Y       = Mouse.Y
+        }
     end
 end
-
-function AutoAim:disable()
-    if not self.enabled then return end
-    self.enabled = false
-    RemoteFunction.OnClientInvoke = nil
-end
-
-return AutoAim
