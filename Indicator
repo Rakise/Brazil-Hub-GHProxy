@@ -143,19 +143,18 @@ function IndicatorController:_trackCharacter(character)
 	}
 
 	instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
-		local delta = newHealth - instance.lastHealth
-		local absDelta = math.abs(delta)
-
-		if absDelta >= 0.1 then
-			if delta < 0 then
-				self:_showIndicator(instance, absDelta, "Damage")
-			elseif delta > 0 then
-				self:_showIndicator(instance, absDelta, "Regen")
-			end
-		end
-
-		instance.lastHealth = newHealth
-	end)
+        local delta = newHealth - instance.lastHealth
+        local absDelta = math.abs(delta)
+    
+        if delta < 0 and absDelta >= 0.1 then
+            self:_showIndicator(instance, absDelta, "Damage")
+        elseif delta > 0 and absDelta >= 0.01 then
+            self:_showIndicator(instance, absDelta, "Regen")
+        end
+    
+        instance.lastHealth = newHealth
+    end)
+    
 
 	self._instances[character] = instance
 
