@@ -154,30 +154,29 @@ function IndicatorController:_trackCharacter(character)
     end)
     
 
-    -- Dentro do instance:
-    instance._regenRunning = true
-    instance._regenLoop = task.spawn(function()
-    	local regenAccumulated = 0
-    	while instance._regenRunning and character.Parent and humanoid.Parent do
-    		task.wait(0.1)
-    		local newHealth = humanoid.Health
-    		local delta = newHealth - instance.lastHealth
-        
-    		if delta > 0 then
-    			regenAccumulated = regenAccumulated + delta
-    			if regenAccumulated >= 0.1 then
-    				self:_showIndicator(instance, regenAccumulated, "Regen")
-    				regenAccumulated = 0
-    			end
-    		end
-        
-    		instance.lastHealth = newHealth
-    	end
-    end)
+    local RunService = game:GetService("RunService")
 
-
-
+    instance._regenAccumulated = 0
+    instance._lastRegenHealth = humanoid.Health
     
+    instance._regenConn = RunService.Heartbeat:Connect(function()
+    	if not character.Parent or not humanoid.Parent then return end
+    
+    	local currentHealth = humanoid.Health
+    	local delta = currentHealth - instance._lastRegenHealth
+    
+    	if delta > 0 then
+    		instance._regenAccumulated = instance._regenAccumulated + delta
+        
+    		if instance._regenAccumulated >= 0.1 then
+    			-- Exibe quando acumulado for suficiente
+    			self:_showIndicator(instance, instance._regenAccumulated, "Regen")
+    			instance._regenAccumulated = 0
+    		end
+    	end
+    
+    	instance._lastRegenHealth = currentHealth
+    end)
 
 	self._instances[character] = instance
 
