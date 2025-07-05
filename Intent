@@ -13,6 +13,10 @@ Intent.enabled = false
 -- Services
 local Players = game:GetService("Players")
 
+-- Load UtilsService
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
+local utils = Utils.new()
+
 -- Configuration constants
 local CONFIG = {
     BILLBOARD_SIZE = UDim2.new(5, 0, 1, 0),
@@ -32,21 +36,6 @@ local connectionMgr = ConnectionManager.new() -- global (PlayerAdded, etc)
 local connectionMgrs = {} -- [player] = ConnectionManager para tool monitoring
 
 --[[
-    Retrieves the name of the currently equipped tool for a player
-    @param player: Player - The player to check
-    @return string - The name of the equipped tool or "None" if no tool is equipped
-]]
-local function getEquippedToolName(player)
-    local character = player.Character
-    if not character then 
-        return CONFIG.DEFAULT_TOOL_TEXT 
-    end
-    
-    local equippedTool = character:FindFirstChildOfClass("Tool")
-    return equippedTool and equippedTool.Name or CONFIG.DEFAULT_TOOL_TEXT
-end
-
---[[
     Updates the text label of a player's intent billboard
     @param player: Player - The player whose billboard should be updated
 ]]
@@ -55,7 +44,7 @@ local function updateBillboardLabel(player)
     if not billboard then return end
     local textBox = billboard:FindFirstChild("Tool")
     if not textBox then return end
-    textBox.Text = getEquippedToolName(player)
+    textBox.Text = utils:getEquippedToolName(player)
 end
 
 --[[
@@ -144,10 +133,10 @@ local function createPlayerBillboard(player)
     -- Create billboard structure
     local billboard = createBillboardStructure(head)
     
-    -- Initialize label text
+    -- Initialize label text using UtilsService
     local label = billboard:FindFirstChild("Tool")
     if label then
-        label.Text = getEquippedToolName(player)
+        label.Text = utils:getEquippedToolName(player)
     end
     
     -- Register billboard
