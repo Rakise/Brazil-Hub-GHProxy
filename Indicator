@@ -2,6 +2,7 @@
 -- Simple module for displaying visual indicators above characters
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
 local Indicator = {}
@@ -15,41 +16,131 @@ function Indicator.new()
     return self
 end
 
--- Creates a visual indicator above character
-function Indicator:show(character, text, color, duration)
-    if not character or not character:FindFirstChild("Head") then return end
+-- Gets random position around character's body
+function Indicator:_getRandomBodyPosition(character)
+    local bodyParts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+    local hrp = character:FindFirstChild("HumanoidRootPart")
     
-    local head = character.Head
+    -- Try to find a random body part, fallback to HumanoidRootPart
+    for i = 1, #bodyParts do
+        local randomPart = character:FindFirstChild(bodyParts[math.random(1, #bodyParts)])
+        if randomPart then
+            return randomPart
+        end
+    end
+    
+    return hrp or character:FindFirstChild("Head")
+end
+
+-- Creates a beautiful animated indicator
+function Indicator:show(character, text, color, duration)
+    local bodyPart = self:_getRandomBodyPosition(character)
+    if not bodyPart then return end
+    
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "Indicator"
-    billboard.Adornee = head
-    billboard.Size = UDim2.new(0, 100, 0, 40)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+    billboard.Adornee = bodyPart
+    billboard.Size = UDim2.new(0, 120, 0, 50)
+    billboard.StudsOffset = Vector3.new(
+        math.random(-25, 25) / 10, -- Random X offset (-2.5 to 2.5)
+        math.random(10, 30) / 10,  -- Random Y offset (1 to 3)
+        math.random(-15, 15) / 10  -- Random Z offset (-1.5 to 1.5)
+    )
     billboard.AlwaysOnTop = true
-    billboard.Parent = head
+    billboard.Parent = bodyPart
 
+    -- Main frame with gradient background
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundColor3 = Color3.new(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 0
+    frame.Parent = billboard
+    
+    -- Add corner radius
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = frame
+    
+    -- Add gradient effect
+    local gradient = Instance.new("UIGradient")
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+        ColorSequenceKeypoint.new(1, Color3.new(0.8, 0.8, 0.8))
+    }
+    gradient.Rotation = 45
+    gradient.Parent = frame
+
+    -- Main damage/heal label
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = color or Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0.5
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.new(0, 0, 0)
     label.TextScaled = true
-    label.Font = Enum.Font.SourceSansBold
-    label.Parent = billboard
+    label.Font = Enum.Font.GothamBold
+    label.Parent = frame
+    
+    -- Add text shadow effect
+    local shadow = Instance.new("TextLabel")
+    shadow.Size = UDim2.new(1, 2, 1, 2)
+    shadow.Position = UDim2.new(0, 2, 0, 2)
+    shadow.BackgroundTransparency = 1
+    shadow.Text = text
+    shadow.TextColor3 = Color3.new(0, 0, 0)
+    shadow.TextTransparency = 0.5
+    shadow.TextScaled = true
+    shadow.Font = Enum.Font.GothamBold
+    shadow.ZIndex = label.ZIndex - 1
+    shadow.Parent = frame
 
+    -- Smooth animations using TweenService
+    local fadeTime = duration or 1.5
+    
+    -- Entry animation (pop in)
+    billboard.Size = UDim2.new(0, 0, 0, 0)
+    local popIn = TweenService:Create(billboard, 
+        TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {Size = UDim2.new(0, 120, 0, 50)}
+    )
+    
+    -- Float up animation
+    local originalOffset = billboard.StudsOffset
+    local floatUp = TweenService:Create(billboard,
+        TweenInfo.new(fadeTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {StudsOffset = originalOffset + Vector3.new(0, 3, 0)}
+    )
+    
     -- Fade out animation
-    task.spawn(function()
-        local fadeTime = duration or 1.2
-        local startTime = tick()
-        
-        while tick() - startTime < fadeTime do
-            local alpha = 1 - ((tick() - startTime) / fadeTime)
-            label.TextTransparency = 1 - alpha
-            label.TextStrokeTransparency = 0.5 + 0.5 * (1 - alpha)
-            task.wait(0.03)
-        end
-        
+    local fadeOut = TweenService:Create(frame,
+        TweenInfo.new(fadeTime * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {BackgroundTransparency = 1}
+    )
+    
+    local labelFade = TweenService:Create(label,
+        TweenInfo.new(fadeTime * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {TextTransparency = 1, TextStrokeTransparency = 1}
+    )
+    
+    local shadowFade = TweenService:Create(shadow,
+        TweenInfo.new(fadeTime * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+        {TextTransparency = 1}
+    )
+    
+    -- Play animations
+    popIn:Play()
+    floatUp:Play()
+    
+    -- Start fade out after delay
+    task.wait(fadeTime * 0.7)
+    fadeOut:Play()
+    labelFade:Play()
+    shadowFade:Play()
+    
+    -- Clean up
+    labelFade.Completed:Connect(function()
         billboard:Destroy()
     end)
     
@@ -60,7 +151,7 @@ end
 function Indicator:clear(character)
     if not character then return end
     
-    for _, child in ipairs(character:GetChildren()) do
+    for _, child in ipairs(character:GetDescendants()) do
         if child:IsA("BillboardGui") and child.Name == "Indicator" then
             child:Destroy()
         end
@@ -69,15 +160,31 @@ end
 
 -- Shows damage indicator (red, negative)
 function Indicator:damage(character, amount, duration)
-    local text = string.format("-%d", math.abs(amount))
-    local color = Color3.fromRGB(255, 60, 60)
+    if amount <= 0 then return end -- Don't show zero or negative damage
+    
+    local text
+    if amount >= 1 then
+        text = string.format("-%d", math.floor(amount + 0.5))
+    else
+        text = string.format("-%.1f", amount)
+    end
+    
+    local color = Color3.fromRGB(255, 85, 85)
     return self:show(character, text, color, duration)
 end
 
--- Shows heal indicator (green, positive)
+-- Shows heal indicator (green, positive)  
 function Indicator:heal(character, amount, duration)
-    local text = string.format("+%d", math.abs(amount))
-    local color = Color3.fromRGB(60, 255, 60)
+    if amount <= 0 then return end -- Don't show zero or negative healing
+    
+    local text
+    if amount >= 1 then
+        text = string.format("+%d", math.floor(amount + 0.5))
+    else
+        text = string.format("+%.1f", amount)
+    end
+    
+    local color = Color3.fromRGB(85, 255, 85)
     return self:show(character, text, color, duration)
 end
 
@@ -117,10 +224,15 @@ function Indicator:_setupMonitoring()
             if not self.monitoring then return end
             
             local delta = newHealth - lastHealth
-            if delta < 0 then
-                self:damage(character, math.abs(delta))
-            elseif delta > 0 then
-                self:heal(character, math.abs(delta))
+            local absDelta = math.abs(delta)
+            
+            -- Show indicators for any change greater than 0.01
+            if absDelta > 0.01 then
+                if delta < 0 then
+                    self:damage(character, absDelta)
+                else
+                    self:heal(character, absDelta)
+                end
             end
             
             lastHealth = newHealth
