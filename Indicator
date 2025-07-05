@@ -145,36 +145,36 @@ function IndicatorController:_trackCharacter(character)
     -- HealthChanged (para dano imediato)
     instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
         local delta = newHealth - instance.lastHealth
-        local absDelta = math.abs(delta)
-
-        if delta < 0 and absDelta >= 0.1 then
-            self:_showIndicator(instance, absDelta, "Damage")
+    
+        if delta < 0 and math.abs(delta) >= 0.1 then
+            self:_showIndicator(instance, math.abs(delta), "Damage")
         end
-
+    
         instance.lastHealth = newHealth
     end)
+    
 
+    -- Dentro do instance:
+    instance._regenRunning = true
     instance._regenLoop = task.spawn(function()
-	    local regenAccumulated = 0
-	    while character.Parent and humanoid.Parent do
-	    	task.wait(0.1) -- Checagem frequente (leve, só lê número)
-
-	    	local newHealth = humanoid.Health
-	    	local delta = newHealth - instance.lastHealth
-
-	    	if delta > 0 then
-	    		regenAccumulated = regenAccumulated + delta
-
-	    		if regenAccumulated >= 0.1 then
-	    			-- Apenas mostra quando acumular o suficiente
-	    			self:_showIndicator(instance, regenAccumulated, "Regen")
-	    			regenAccumulated = 0
-	    		end
-	    	end
-
-	    	instance.lastHealth = newHealth
-	    end
+    	local regenAccumulated = 0
+    	while instance._regenRunning and character.Parent and humanoid.Parent do
+    		task.wait(0.1)
+    		local newHealth = humanoid.Health
+    		local delta = newHealth - instance.lastHealth
+        
+    		if delta > 0 then
+    			regenAccumulated = regenAccumulated + delta
+    			if regenAccumulated >= 0.1 then
+    				self:_showIndicator(instance, regenAccumulated, "Regen")
+    				regenAccumulated = 0
+    			end
+    		end
+        
+    		instance.lastHealth = newHealth
+    	end
     end)
+
 
 
     
@@ -185,8 +185,9 @@ function IndicatorController:_trackCharacter(character)
 	character.AncestryChanged:Connect(function(_, parent)
 		if not parent then
 			if instance._conn then
-				instance._conn:Disconnect()
-			end
+                instance._conn:Disconnect()
+            end
+            instance._regenRunning = false -- O loop para sozinho            
 			self._instances[character] = nil
 		end
 	end)
