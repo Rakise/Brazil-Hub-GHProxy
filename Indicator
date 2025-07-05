@@ -160,7 +160,7 @@ end
 
 -- Shows damage indicator (red, negative)
 function Indicator:damage(character, amount, duration)
-    if amount <= 0 then return end -- Don't show zero or negative damage
+    if amount <= 0.05 then return end -- Ignore very small amounts
     
     local text
     if amount >= 1 then
@@ -175,7 +175,7 @@ end
 
 -- Shows heal indicator (green, positive)  
 function Indicator:heal(character, amount, duration)
-    if amount <= 0 then return end -- Don't show zero or negative healing
+    if amount <= 0.05 then return end -- Ignore very small amounts
     
     local text
     if amount >= 1 then
@@ -220,14 +220,18 @@ function Indicator:_setupMonitoring()
         if not humanoid or humanoid:FindFirstChild("_IndicatorTag") then return end
         
         local lastHealth = humanoid.Health
+        local isProcessing = false
+        
         local conn = humanoid.HealthChanged:Connect(function(newHealth)
-            if not self.monitoring then return end
+            if not self.monitoring or isProcessing then return end
+            
+            isProcessing = true
             
             local delta = newHealth - lastHealth
             local absDelta = math.abs(delta)
             
-            -- Show indicators for any change greater than 0.01
-            if absDelta > 0.01 then
+            -- Show indicators for any significant change
+            if absDelta > 0.1 then
                 if delta < 0 then
                     self:damage(character, absDelta)
                 else
@@ -236,6 +240,10 @@ function Indicator:_setupMonitoring()
             end
             
             lastHealth = newHealth
+            
+            -- Small delay to prevent spam
+            task.wait(0.05)
+            isProcessing = false
         end)
         
         self.connMgr:add(conn)
