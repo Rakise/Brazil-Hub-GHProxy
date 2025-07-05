@@ -1,5 +1,5 @@
 -- IndicatorController.lua
--- Stacking damage/heal indicator system with 1-second intervals
+-- Stacking damage/heal indicator system with optimized billboard reusage
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -12,171 +12,97 @@ Indicator.__index = Indicator
 -- Configuration
 local CONFIG = {
     STACK_INTERVAL = 1.0, -- Stack damage/regen every 1 second
-    MIN_DAMAGE_SHOW = 0.1, -- Minimum damage to show
-    MIN_REGEN_SHOW = 0.05, -- Minimum regen to show
+    MIN_DAMAGE_SHOW = 0.1,
+    MIN_REGEN_SHOW = 0.05,
     INDICATOR_LIFETIME = 2.5,
-    FADE_START_TIME = 1.8,
-    REGEN_THRESHOLD = 0.6, -- Max amount per tick to be considered regen
+    REGEN_THRESHOLD = 0.6,
 }
 
--- Constructor
 function Indicator.new()
     local self = setmetatable({}, Indicator)
     self.connMgr = ConnectionManager.new()
     self.monitoring = false
-    self.playerStacks = {} -- Store stacking data per player
+    self.playerStacks = {}
     return self
 end
 
--- Gets optimal position around character's torso/head area
 function Indicator:_getIndicatorPosition(character)
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
-    local head = character:FindFirstChild("Head")
-    
-    return torso or head or humanoidRootPart
+    return character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
 end
 
--- Creates GPO-style damage indicator with stacked amount
-function Indicator:_createStackedIndicator(character, totalAmount, isDamage, isRegen)
+-- Reusable indicator (no spam)
+function Indicator:_updateOrCreateIndicator(character, totalAmount, isDamage, isRegen)
     local attachPart = self:_getIndicatorPosition(character)
     if not attachPart then return end
-    
-    -- Create billboard GUI
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "DamageIndicator"
-    billboard.Adornee = attachPart
-    billboard.Size = UDim2.new(0, 200, 0, 80)
-    billboard.AlwaysOnTop = true
-    billboard.LightInfluence = 0
-    
-    -- Random offset position (GPO style)
-    local randomX = math.random(-30, 30) / 10
-    local randomY = math.random(15, 35) / 10
-    local randomZ = math.random(-20, 20) / 10
-    billboard.StudsOffset = Vector3.new(randomX, randomY, randomZ)
-    billboard.Parent = attachPart
 
-    -- Create main text label
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.Font = Enum.Font.GothamBold
-    label.TextScaled = false
-    label.TextStrokeTransparency = 0
-    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.Parent = billboard
-    
-    -- Format text and color based on type
+    local indicatorName
+    if isDamage then
+        indicatorName = "DamageIndicator"
+    elseif isRegen then
+        indicatorName = "RegenIndicator"
+    else
+        indicatorName = "HealIndicator"
+    end
+
+    local billboard = attachPart:FindFirstChild(indicatorName)
+    local label
+
+    if billboard and billboard:IsA("BillboardGui") then
+        label = billboard:FindFirstChild("TextLabel")
+    else
+        billboard = Instance.new("BillboardGui")
+        billboard.Name = indicatorName
+        billboard.Adornee = attachPart
+        billboard.Size = UDim2.new(0, 200, 0, 80)
+        billboard.AlwaysOnTop = true
+        billboard.LightInfluence = 0
+        billboard.StudsOffset = Vector3.new(math.random(-30, 30) / 10, math.random(15, 35) / 10, math.random(-20, 20) / 10)
+        billboard.Parent = attachPart
+
+        label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.GothamBold
+        label.TextStrokeTransparency = 0
+        label.TextStrokeColor3 = Color3.new(0, 0, 0)
+        label.Parent = billboard
+    end
+
     local text, color
     if isDamage then
-        -- Damage (red, bold)
-        if totalAmount >= 1 then
-            text = string.format("-%d", math.floor(totalAmount + 0.5))
-        else
-            text = string.format("-%.1f", totalAmount)
-        end
-        color = Color3.fromRGB(255, 60, 60) -- Bright red like GPO
+        text = string.format("-%d", math.floor(totalAmount + 0.5))
+        color = Color3.fromRGB(255, 60, 60)
         label.TextSize = 32
     elseif isRegen then
-        -- Regeneration (light blue/cyan)
-        if totalAmount >= 1 then
-            text = string.format("+%d", math.floor(totalAmount + 0.5))
-        else
-            text = string.format("+%.1f", totalAmount)
-        end
-        color = Color3.fromRGB(85, 255, 255) -- Light cyan for regen
+        text = string.format("+%d", math.floor(totalAmount + 0.5))
+        color = Color3.fromRGB(85, 255, 255)
         label.TextSize = 24
     else
-        -- Healing (green)
-        if totalAmount >= 1 then
-            text = string.format("+%d", math.floor(totalAmount + 0.5))
-        else
-            text = string.format("+%.1f", totalAmount)
-        end
-        color = Color3.fromRGB(85, 255, 85) -- Bright green
+        text = string.format("+%d", math.floor(totalAmount + 0.5))
+        color = Color3.fromRGB(85, 255, 85)
         label.TextSize = 28
     end
-    
+
     label.Text = text
     label.TextColor3 = color
-    
-    -- GPO-style animation sequence
-    self:_animateGPOStyle(billboard, label, isDamage)
-    
-    return billboard
-end
 
--- GPO-style animation (pop, float up, fade)
-function Indicator:_animateGPOStyle(billboard, label, isDamage)
-    local originalOffset = billboard.StudsOffset
-    local lifetime = CONFIG.INDICATOR_LIFETIME
-    local fadeStart = CONFIG.FADE_START_TIME
-    
-    -- Initial scale animation (pop effect)
-    label.TextTransparency = 0.3
-    label.Size = UDim2.new(0.3, 0, 0.3, 0)
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.Position = UDim2.new(0.5, 0, 0.5, 0)
-    
-    -- Pop-in animation
-    local popTween = TweenService:Create(label,
-        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        {
-            Size = UDim2.new(1, 0, 1, 0),
-            TextTransparency = 0
-        }
-    )
-    
-    -- Float up animation
-    local floatDistance = isDamage and 4 or 3
-    local floatTween = TweenService:Create(billboard,
-        TweenInfo.new(lifetime, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-        {StudsOffset = originalOffset + Vector3.new(0, floatDistance, 0)}
-    )
-    
-    -- Slight side drift (GPO style)
-    local driftX = math.random(-10, 10) / 20
-    local driftTween = TweenService:Create(billboard,
-        TweenInfo.new(lifetime * 0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-        {StudsOffset = originalOffset + Vector3.new(driftX, floatDistance, 0)}
-    )
-    
-    -- Start animations
-    popTween:Play()
-    floatTween:Play()
-    
-    -- Delayed drift
+    if billboard:FindFirstChild("FadeTask") then
+        billboard.FadeTask:Destroy()
+    end
+
+    local fadeMarker = Instance.new("ObjectValue")
+    fadeMarker.Name = "FadeTask"
+    fadeMarker.Parent = billboard
+
     task.spawn(function()
-        task.wait(0.3)
-        if billboard.Parent then
-            driftTween:Play()
-        end
-    end)
-    
-    -- Fade out animation
-    task.spawn(function()
-        task.wait(fadeStart)
-        if billboard.Parent then
-            local fadeTween = TweenService:Create(label,
-                TweenInfo.new(lifetime - fadeStart, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
-                {
-                    TextTransparency = 1,
-                    TextStrokeTransparency = 1
-                }
-            )
-            
-            fadeTween:Play()
-            fadeTween.Completed:Connect(function()
-                if billboard then
-                    billboard:Destroy()
-                end
-            end)
+        task.wait(CONFIG.INDICATOR_LIFETIME)
+        if billboard and billboard.Parent then
+            billboard:Destroy()
         end
     end)
 end
 
--- Initialize stacking system for a player
 function Indicator:_initializePlayerStack(playerKey)
     self.playerStacks[playerKey] = {
         damageStack = 0,
@@ -188,93 +114,79 @@ function Indicator:_initializePlayerStack(playerKey)
     }
 end
 
--- Process stacked indicators for a player
 function Indicator:_processStacks(player, character, playerKey)
     local stack = self.playerStacks[playerKey]
     if not stack then return end
-    
+
     local currentTime = tick()
-    
-    -- Show damage stack if any
+
     if stack.damageStack >= CONFIG.MIN_DAMAGE_SHOW then
-        self:_createStackedIndicator(character, stack.damageStack, true, false)
+        self:_updateOrCreateIndicator(character, stack.damageStack, true, false)
     end
-    
-    -- Show heal stack if any
+
     if stack.healStack >= CONFIG.MIN_REGEN_SHOW then
-        self:_createStackedIndicator(character, stack.healStack, false, false)
+        self:_updateOrCreateIndicator(character, stack.healStack, false, false)
     end
-    
-    -- Show regen stack if any
+
     if stack.regenStack >= CONFIG.MIN_REGEN_SHOW then
-        self:_createStackedIndicator(character, stack.regenStack, false, true)
+        self:_updateOrCreateIndicator(character, stack.regenStack, false, true)
     end
-    
-    -- Reset stacks
+
     stack.damageStack = 0
     stack.healStack = 0
     stack.regenStack = 0
     stack.lastStackTime = currentTime
 end
 
--- Enhanced health tracking with stacking system
 function Indicator:_trackPlayerHealth(player, character)
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     if not humanoid then return end
-    
+
     local playerKey = tostring(player.UserId)
     self:_initializePlayerStack(playerKey)
-    
     local stack = self.playerStacks[playerKey]
     stack.lastHealth = humanoid.Health
-    
-    -- Start stack timer
+
     local function startStackTimer()
         if stack.stackTimer then
             stack.stackTimer:Disconnect()
         end
-        
+
         stack.stackTimer = task.spawn(function()
             while self.monitoring and character.Parent and humanoid.Parent do
                 task.wait(CONFIG.STACK_INTERVAL)
-                
                 if self.monitoring and character.Parent then
                     self:_processStacks(player, character, playerKey)
                 end
             end
         end)
     end
-    
+
     startStackTimer()
-    
+
     local healthConnection = humanoid.HealthChanged:Connect(function(newHealth)
         if not self.monitoring or not stack then return end
-        
+
         local deltaHealth = newHealth - stack.lastHealth
         local absChange = math.abs(deltaHealth)
-        
-        if absChange > 0.01 then -- Ignore very tiny changes
+
+        if absChange > 0.01 then
             if deltaHealth < 0 then
-                -- Damage taken - add to damage stack
                 stack.damageStack = stack.damageStack + absChange
             elseif deltaHealth > 0 then
-                -- Health gained - determine if regen or heal
                 if absChange <= CONFIG.REGEN_THRESHOLD then
-                    -- Small amount = likely regeneration
                     stack.regenStack = stack.regenStack + absChange
                 else
-                    -- Large amount = likely healing/potion
                     stack.healStack = stack.healStack + absChange
                 end
             end
         end
-        
+
         stack.lastHealth = newHealth
     end)
-    
+
     self.connMgr:add(healthConnection)
-    
-    -- Cleanup when character is removed
+
     local cleanupConnection
     cleanupConnection = character.AncestryChanged:Connect(function()
         if not character.Parent then
@@ -286,67 +198,57 @@ function Indicator:_trackPlayerHealth(player, character)
             cleanupConnection:Disconnect()
         end
     end)
-    
+
     self.connMgr:add(cleanupConnection)
-    
-    -- Tag to prevent duplicate connections
+
     local tag = Instance.new("BoolValue")
     tag.Name = "_IndicatorTag"
     tag.Parent = humanoid
 end
 
--- Manual damage indicator (instant, doesn't stack)
+-- Manual (instant) indicators
 function Indicator:showDamage(character, amount)
     if amount <= 0 then return end
-    return self:_createStackedIndicator(character, amount, true, false)
+    return self:_updateOrCreateIndicator(character, amount, true, false)
 end
 
--- Manual heal indicator (instant, doesn't stack)
 function Indicator:showHeal(character, amount)
     if amount <= 0 then return end
-    return self:_createStackedIndicator(character, amount, false, false)
+    return self:_updateOrCreateIndicator(character, amount, false, false)
 end
 
--- Manual regen indicator (instant, doesn't stack)
 function Indicator:showRegen(character, amount)
     if amount <= 0 then return end
-    return self:_createStackedIndicator(character, amount, false, true)
+    return self:_updateOrCreateIndicator(character, amount, false, true)
 end
 
--- Clear all indicators from character
 function Indicator:clear(character)
     if not character then return end
-    
     for _, descendant in ipairs(character:GetDescendants()) do
-        if descendant:IsA("BillboardGui") and descendant.Name == "DamageIndicator" then
+        if descendant:IsA("BillboardGui") and (descendant.Name == "DamageIndicator" or descendant.Name == "HealIndicator" or descendant.Name == "RegenIndicator") then
             descendant:Destroy()
         end
     end
 end
 
--- Enable automatic monitoring
 function Indicator:enable()
     if self.monitoring then return end
-    
     self.monitoring = true
     self:_setupMonitoring()
 end
 
--- Disable automatic monitoring
 function Indicator:disable()
     self.monitoring = false
     self.connMgr:disconnectAll()
-    
-    -- Stop all stack timers
+
     for _, stack in pairs(self.playerStacks) do
         if stack.stackTimer then
             stack.stackTimer:Disconnect()
         end
     end
-    
+
     self.playerStacks = {}
-    
-    -- Clean up existing tags
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character then
             local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
@@ -358,53 +260,48 @@ function Indicator:disable()
     end
 end
 
--- Setup monitoring for all players
 function Indicator:_setupMonitoring()
     local function connectCharacter(player, character)
         if not character then return end
-        
+
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid:FindFirstChild("_IndicatorTag") then return end
-        
-        -- Wait for character to fully load
+
         task.wait(0.5)
-        
+
         if humanoid.Parent and self.monitoring then
             self:_trackPlayerHealth(player, character)
         end
     end
-    
-    -- Connect existing players
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character then
             task.spawn(function()
                 connectCharacter(player, player.Character)
             end)
         end
-        
+
         self.connMgr:add(player.CharacterAdded:Connect(function(character)
             task.spawn(function()
                 connectCharacter(player, character)
             end)
         end))
     end
-    
-    -- Connect new players
+
     self.connMgr:add(Players.PlayerAdded:Connect(function(player)
         if player.Character then
             task.spawn(function()
                 connectCharacter(player, player.Character)
             end)
         end
-        
+
         self.connMgr:add(player.CharacterAdded:Connect(function(character)
             task.spawn(function()
                 connectCharacter(player, character)
             end)
         end))
     end))
-    
-    -- Cleanup disconnected players
+
     self.connMgr:add(Players.PlayerRemoving:Connect(function(player)
         local playerKey = tostring(player.UserId)
         local stack = self.playerStacks[playerKey]
