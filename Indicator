@@ -16,7 +16,7 @@ local CONFIG = {
     MIN_REGEN_SHOW = 0.05, -- Minimum regen to show
     INDICATOR_LIFETIME = 2.5,
     FADE_START_TIME = 1.8,
-    REGEN_THRESHOLD = 0.3, -- Max amount per tick to be considered regen
+    REGEN_THRESHOLD = 0.6, -- Max amount per tick to be considered regen
 }
 
 -- Constructor
