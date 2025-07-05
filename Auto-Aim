@@ -35,7 +35,7 @@ function AutoAim.new()
         fovMax = 20,
         targetHistory = {}, -- Store target movement history
         historyMaxSize = 10, -- Maximum number of positions to track
-        skillActivationTime = 0.5, -- Time it takes for skill to activate
+        skillActivationTime = 0.8, -- Time it takes for skill to activate
         skillTravelTime = 0.15 -- Time for skill to travel to target
     }, AutoAim)
 end
