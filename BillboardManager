@@ -1,0 +1,292 @@
+--[[
+    BillboardManager.lua
+    Centralized utility module for managing billboard creation and components
+    Provides reusable functions for ESP systems to create their own billboards
+]]
+
+local BillboardManager = {}
+BillboardManager.__index = BillboardManager
+
+-- Configuration constants
+local CONFIG = {
+    DEFAULT_TEXT_SIZE = 14,
+    DEFAULT_TEXT_COLOR = Color3.new(1, 1, 1),
+    DEFAULT_TEXT_STROKE_TRANSPARENCY = 0.5,
+    DEFAULT_FONT = Enum.Font.SourceSansSemibold,
+    DEFAULT_BILLBOARD_SIZE = UDim2.new(0, 500, 0, 100),
+    DEFAULT_FRAME_SIZE = UDim2.new(1, 0, 0.1, 0),
+    DEFAULT_PADDING = UDim2.new(0, 3)
+}
+
+--[[
+    Creates a new BillboardManager instance
+]]
+function BillboardManager.new()
+    local self = setmetatable({}, BillboardManager)
+    return self
+end
+
+--[[
+    Gets the best adornee for a character
+    @param character: The character to find adornee for
+    @return BasePart: The best adornee part
+]]
+function BillboardManager:getBestAdornee(character)
+    return character:FindFirstChild("Head")
+        or character:FindFirstChild("UpperTorso")
+        or character:FindFirstChild("Torso")
+        or character:FindFirstChildWhichIsA("BasePart")
+end
+
+--[[
+    Creates a basic billboard GUI
+    @param name: Name for the billboard
+    @param adornee: The part to attach the billboard to
+    @param size: Optional custom size (default: CONFIG.DEFAULT_BILLBOARD_SIZE)
+    @return BillboardGui: The created billboard
+]]
+function BillboardManager:createBillboard(name, adornee, size)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = name
+    billboard.LightInfluence = 1
+    billboard.Active = true
+    billboard.Adornee = adornee
+    billboard.ClipsDescendants = true
+    billboard.AlwaysOnTop = true
+    billboard.Size = size or CONFIG.DEFAULT_BILLBOARD_SIZE
+    billboard.Parent = adornee
+
+    return billboard
+end
+
+--[[
+    Creates a text label with standard styling
+    @param text: Initial text for the label
+    @param textSize: Optional text size (default: CONFIG.DEFAULT_TEXT_SIZE)
+    @param textColor: Optional text color (default: CONFIG.DEFAULT_TEXT_COLOR)
+    @param parent: Parent for the label
+    @return TextLabel: The created text label
+]]
+function BillboardManager:createTextLabel(text, textSize, textColor, parent)
+    local label = Instance.new("TextLabel")
+    label.FontSize = Enum.FontSize.Size14
+    label.TextColor3 = textColor or CONFIG.DEFAULT_TEXT_COLOR
+    label.BorderColor3 = Color3.new(0, 0, 0)
+    label.Text = text or ""
+    label.TextStrokeTransparency = CONFIG.DEFAULT_TEXT_STROKE_TRANSPARENCY
+    label.Font = CONFIG.DEFAULT_FONT
+    label.BackgroundTransparency = 1
+    label.TextSize = textSize or CONFIG.DEFAULT_TEXT_SIZE
+    label.Size = CONFIG.DEFAULT_FRAME_SIZE
+    label.AutomaticSize = Enum.AutomaticSize.X
+    label.BorderSizePixel = 0
+    label.BackgroundColor3 = Color3.new(1, 1, 1)
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.Parent = parent
+
+    return label
+end
+
+--[[
+    Creates a frame with layout
+    @param parent: Parent for the frame
+    @param fillDirection: Layout fill direction (default: Vertical)
+    @param horizontalAlignment: Horizontal alignment (default: Center)
+    @return Frame: The created frame
+]]
+function BillboardManager:createFrame(parent, fillDirection, horizontalAlignment)
+    local frame = Instance.new("Frame")
+    frame.BackgroundTransparency = 1
+    frame.BorderColor3 = Color3.new(0, 0, 0)
+    frame.Size = CONFIG.DEFAULT_FRAME_SIZE
+    frame.BorderSizePixel = 0
+    frame.BackgroundColor3 = Color3.new(1, 1, 1)
+    frame.Parent = parent
+
+    local layout = Instance.new("UIListLayout")
+    layout.VerticalAlignment = Enum.VerticalAlignment.Center
+    layout.FillDirection = fillDirection or Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = horizontalAlignment or Enum.HorizontalAlignment.Center
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = frame
+
+    return frame
+end
+
+--[[
+    Creates a horizontal frame with centered layout
+    @param parent: Parent for the frame
+    @return Frame: The created horizontal frame
+]]
+function BillboardManager:createHorizontalFrame(parent)
+    return self:createFrame(parent, Enum.FillDirection.Horizontal, Enum.HorizontalAlignment.Center)
+end
+
+--[[
+    Creates a vertical layout for billboard
+    @param billboard: The billboard to add layout to
+    @param padding: Optional padding (default: CONFIG.DEFAULT_PADDING)
+    @return UIListLayout: The created layout
+]]
+function BillboardManager:createVerticalLayout(billboard, padding)
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = padding or CONFIG.DEFAULT_PADDING
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = billboard
+    return layout
+end
+
+--[[
+    Creates a player ESP billboard with all components
+    @param player: The player to create ESP for
+    @return table: Table containing all ESP components
+]]
+function BillboardManager:createPlayerESPBillboard(player)
+    local character = player.Character
+    if not character or character:FindFirstChild("PlayerESP") then
+        return nil
+    end
+
+    local adornee = self:getBestAdornee(character)
+    if not adornee then
+        return nil
+    end
+
+    -- Create main billboard
+    local billboard = self:createBillboard("PlayerESP", adornee)
+
+    -- Create name frame (horizontal layout for name and distance)
+    local nameFrame = self:createHorizontalFrame(billboard)
+    
+    local nameLabel = self:createTextLabel("[" .. player.Name .. "]", nil, nil, nameFrame)
+    local distanceLabel = self:createTextLabel("[0m]", nil, nil, nameFrame)
+
+    -- Create info frame (horizontal layout for rogue and edict)
+    local infoFrame = self:createHorizontalFrame(billboard)
+    
+    local rogueLabel = self:createTextLabel("[Lord Abadon Terrified]", nil, nil, infoFrame)
+    local edictLabel = self:createTextLabel("[Healer]", nil, nil, infoFrame)
+
+    -- Create HP frame (horizontal layout for health and percentage)
+    local hpFrame = self:createHorizontalFrame(billboard)
+    
+    local hpLabel = self:createTextLabel("[100/100]", nil, nil, hpFrame)
+    local hpPercLabel = self:createTextLabel("[100%]", nil, nil, hpFrame)
+
+    return {
+        billboard = billboard,
+        nameLabel = nameLabel,
+        distanceLabel = distanceLabel,
+        rogueLabel = rogueLabel,
+        edictLabel = edictLabel,
+        hpLabel = hpLabel,
+        hpPercLabel = hpPercLabel
+    }
+end
+
+--[[
+    Creates a trinket ESP billboard
+    @param trinketPart: The trinket part to create ESP for
+    @param trinketName: Name of the trinket
+    @return table: Table containing trinket ESP components
+]]
+function BillboardManager:createTrinketESPBillboard(trinketPart, trinketName)
+    if trinketPart:FindFirstChild("TrinketESP") then
+        return nil
+    end
+
+    -- Create billboard with smaller size for trinkets
+    local billboard = self:createBillboard("TrinketESP", trinketPart, UDim2.new(0, 100, 0, 50))
+
+    -- Create trinket name label
+    local nameLabel = self:createTextLabel(trinketName, nil, Color3.fromRGB(255, 255, 0), billboard)
+
+    return {
+        billboard = billboard,
+        nameLabel = nameLabel
+    }
+end
+
+--[[
+    Creates a simple billboard with single text label
+    @param name: Name for the billboard
+    @param adornee: The part to attach the billboard to
+    @param text: Text for the label
+    @param textColor: Optional text color
+    @param textSize: Optional text size
+    @return table: Table containing billboard and label
+]]
+function BillboardManager:createSimpleBillboard(name, adornee, text, textColor, textSize)
+    local billboard = self:createBillboard(name, adornee, UDim2.new(0, 200, 0, 50))
+    local label = self:createTextLabel(text, textSize, textColor, billboard)
+
+    return {
+        billboard = billboard,
+        label = label
+    }
+end
+
+--[[
+    Updates text label with new text
+    @param label: The text label to update
+    @param text: New text to set
+]]
+function BillboardManager:updateLabel(label, text)
+    if label and label:IsA("TextLabel") then
+        label.Text = text or ""
+    end
+end
+
+--[[
+    Updates text label color
+    @param label: The text label to update
+    @param color: New color to set
+]]
+function BillboardManager:updateLabelColor(label, color)
+    if label and label:IsA("TextLabel") then
+        label.TextColor3 = color or CONFIG.DEFAULT_TEXT_COLOR
+    end
+end
+
+--[[
+    Updates text label size
+    @param label: The text label to update
+    @param size: New text size to set
+]]
+function BillboardManager:updateLabelSize(label, size)
+    if label and label:IsA("TextLabel") then
+        label.TextSize = size or CONFIG.DEFAULT_TEXT_SIZE
+    end
+end
+
+--[[
+    Destroys a billboard and all its children
+    @param billboard: The billboard to destroy
+]]
+function BillboardManager:destroyBillboard(billboard)
+    if billboard and billboard:IsA("BillboardGui") then
+        billboard:Destroy()
+    end
+end
+
+--[[
+    Gets the configuration constants
+    @return table: Configuration table
+]]
+function BillboardManager:getConfig()
+    return CONFIG
+end
+
+--[[
+    Sets custom configuration
+    @param newConfig: New configuration table
+]]
+function BillboardManager:setConfig(newConfig)
+    for key, value in pairs(newConfig) do
+        if CONFIG[key] ~= nil then
+            CONFIG[key] = value
+        end
+    end
+end
+
+return BillboardManager 
