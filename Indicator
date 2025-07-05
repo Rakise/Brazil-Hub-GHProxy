@@ -146,29 +146,36 @@ function IndicatorController:_trackCharacter(character)
     instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
         local delta = newHealth - instance.lastHealth
         local absDelta = math.abs(delta)
-    
+
         if delta < 0 and absDelta >= 0.1 then
             self:_showIndicator(instance, absDelta, "Damage")
         end
-    
+
         instance.lastHealth = newHealth
     end)
-    
-    -- Loop dedicado à regeneração (para garantir detecção de regen natural)
+
     instance._regenLoop = task.spawn(function()
-        while character.Parent and humanoid.Parent do
-            task.wait(0.2) -- Ajustável
-            local newHealth = humanoid.Health
-            local delta = newHealth - instance.lastHealth
-            local absDelta = math.abs(delta)
-        
-            if delta > 0 and absDelta >= 0.01 then
-                self:_showIndicator(instance, absDelta, "Regen")
-            end
-        
-            instance.lastHealth = newHealth
-        end
+	    local regenAccumulated = 0
+	    while character.Parent and humanoid.Parent do
+	    	task.wait(0.1) -- Checagem frequente (leve, só lê número)
+
+	    	local newHealth = humanoid.Health
+	    	local delta = newHealth - instance.lastHealth
+
+	    	if delta > 0 then
+	    		regenAccumulated = regenAccumulated + delta
+
+	    		if regenAccumulated >= 0.1 then
+	    			-- Apenas mostra quando acumular o suficiente
+	    			self:_showIndicator(instance, regenAccumulated, "Regen")
+	    			regenAccumulated = 0
+	    		end
+	    	end
+
+	    	instance.lastHealth = newHealth
+	    end
     end)
+
 
     
 
