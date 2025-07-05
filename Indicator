@@ -1,194 +1,287 @@
 -- IndicatorController.lua
--- Simple module for displaying visual indicators above characters
+-- Advanced damage/heal indicator system similar to Grand Piece Online
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
 local Indicator = {}
 Indicator.__index = Indicator
+
+-- Configuration
+local CONFIG = {
+    DAMAGE_THRESHOLD = 0.1,
+    REGEN_THRESHOLD = 0.05,
+    REGEN_DETECTION_DELAY = 0.2, -- Delay to distinguish regen from heal
+    MAX_HEALTH_HISTORY = 10,
+    INDICATOR_LIFETIME = 2.5,
+    FADE_START_TIME = 1.8,
+}
 
 -- Constructor
 function Indicator.new()
     local self = setmetatable({}, Indicator)
     self.connMgr = ConnectionManager.new()
     self.monitoring = false
+    self.playerData = {} -- Store health tracking data per player
     return self
 end
 
--- Gets random position around character's body
-function Indicator:_getRandomBodyPosition(character)
-    local bodyParts = {"Head", "Torso", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-    local hrp = character:FindFirstChild("HumanoidRootPart")
+-- Gets optimal position around character's torso/head area
+function Indicator:_getIndicatorPosition(character)
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+    local head = character:FindFirstChild("Head")
     
-    -- Try to find a random body part, fallback to HumanoidRootPart
-    for i = 1, #bodyParts do
-        local randomPart = character:FindFirstChild(bodyParts[math.random(1, #bodyParts)])
-        if randomPart then
-            return randomPart
-        end
-    end
-    
-    return hrp or character:FindFirstChild("Head")
+    -- Prefer torso, then head, then HRP
+    return torso or head or humanoidRootPart
 end
 
--- Creates a beautiful animated indicator
-function Indicator:show(character, text, color, duration)
-    local bodyPart = self:_getRandomBodyPosition(character)
-    if not bodyPart then return end
+-- Creates GPO-style damage indicator
+function Indicator:_createDamageIndicator(character, amount, isDamage)
+    local attachPart = self:_getIndicatorPosition(character)
+    if not attachPart then return end
     
+    -- Create billboard GUI
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Indicator"
-    billboard.Adornee = bodyPart
-    billboard.Size = UDim2.new(0, 120, 0, 50)
-    billboard.StudsOffset = Vector3.new(
-        math.random(-25, 25) / 10, -- Random X offset (-2.5 to 2.5)
-        math.random(10, 30) / 10,  -- Random Y offset (1 to 3)
-        math.random(-15, 15) / 10  -- Random Z offset (-1.5 to 1.5)
-    )
+    billboard.Name = "DamageIndicator"
+    billboard.Adornee = attachPart
+    billboard.Size = UDim2.new(0, 200, 0, 80)
     billboard.AlwaysOnTop = true
-    billboard.Parent = bodyPart
-
-    -- Main frame with gradient background
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, 0, 1, 0)
-    frame.BackgroundColor3 = Color3.new(0, 0, 0)
-    frame.BackgroundTransparency = 0.3
-    frame.BorderSizePixel = 0
-    frame.Parent = billboard
+    billboard.LightInfluence = 0
     
-    -- Add corner radius
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 12)
-    corner.Parent = frame
-    
-    -- Add gradient effect
-    local gradient = Instance.new("UIGradient")
-    gradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-        ColorSequenceKeypoint.new(1, Color3.new(0.8, 0.8, 0.8))
-    }
-    gradient.Rotation = 45
-    gradient.Parent = frame
+    -- Random offset position (GPO style)
+    local randomX = math.random(-30, 30) / 10
+    local randomY = math.random(15, 35) / 10
+    local randomZ = math.random(-20, 20) / 10
+    billboard.StudsOffset = Vector3.new(randomX, randomY, randomZ)
+    billboard.Parent = attachPart
 
-    -- Main damage/heal label
+    -- Create main text label
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 1, 0)
     label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = color or Color3.new(1, 1, 1)
+    label.Font = Enum.Font.GothamBold
+    label.TextScaled = false
+    label.TextSize = isDamage and 28 or 24
     label.TextStrokeTransparency = 0
     label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.TextScaled = true
-    label.Font = Enum.Font.GothamBold
-    label.Parent = frame
+    label.Parent = billboard
     
-    -- Add text shadow effect
-    local shadow = Instance.new("TextLabel")
-    shadow.Size = UDim2.new(1, 2, 1, 2)
-    shadow.Position = UDim2.new(0, 2, 0, 2)
-    shadow.BackgroundTransparency = 1
-    shadow.Text = text
-    shadow.TextColor3 = Color3.new(0, 0, 0)
-    shadow.TextTransparency = 0.5
-    shadow.TextScaled = true
-    shadow.Font = Enum.Font.GothamBold
-    shadow.ZIndex = label.ZIndex - 1
-    shadow.Parent = frame
-
-    -- Smooth animations using TweenService
-    local fadeTime = duration or 1.5
+    -- Format text and color based on type
+    local text, color
+    if isDamage then
+        -- Damage (red, bold)
+        if amount >= 1 then
+            text = string.format("-%d", math.floor(amount + 0.5))
+        else
+            text = string.format("-%.1f", amount)
+        end
+        color = Color3.fromRGB(255, 60, 60) -- Bright red like GPO
+        label.TextSize = 32
+    else
+        -- Heal/Regen (green, softer)
+        if amount >= 1 then
+            text = string.format("+%d", math.floor(amount + 0.5))
+        else
+            text = string.format("+%.1f", amount)
+        end
+        color = Color3.fromRGB(85, 255, 85) -- Bright green
+        label.TextSize = 26
+    end
     
-    -- Entry animation (pop in)
-    billboard.Size = UDim2.new(0, 0, 0, 0)
-    local popIn = TweenService:Create(billboard, 
-        TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-        {Size = UDim2.new(0, 120, 0, 50)}
-    )
+    label.Text = text
+    label.TextColor3 = color
     
-    -- Float up animation
-    local originalOffset = billboard.StudsOffset
-    local floatUp = TweenService:Create(billboard,
-        TweenInfo.new(fadeTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-        {StudsOffset = originalOffset + Vector3.new(0, 3, 0)}
-    )
-    
-    -- Fade out animation
-    local fadeOut = TweenService:Create(frame,
-        TweenInfo.new(fadeTime * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-        {BackgroundTransparency = 1}
-    )
-    
-    local labelFade = TweenService:Create(label,
-        TweenInfo.new(fadeTime * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-        {TextTransparency = 1, TextStrokeTransparency = 1}
-    )
-    
-    local shadowFade = TweenService:Create(shadow,
-        TweenInfo.new(fadeTime * 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-        {TextTransparency = 1}
-    )
-    
-    -- Play animations
-    popIn:Play()
-    floatUp:Play()
-    
-    -- Start fade out after delay
-    task.wait(fadeTime * 0.7)
-    fadeOut:Play()
-    labelFade:Play()
-    shadowFade:Play()
-    
-    -- Clean up
-    labelFade.Completed:Connect(function()
-        billboard:Destroy()
-    end)
+    -- GPO-style animation sequence
+    self:_animateGPOStyle(billboard, label, isDamage)
     
     return billboard
 end
 
--- Removes all indicators from character
+-- GPO-style animation (pop, float up, fade)
+function Indicator:_animateGPOStyle(billboard, label, isDamage)
+    local originalOffset = billboard.StudsOffset
+    local lifetime = CONFIG.INDICATOR_LIFETIME
+    local fadeStart = CONFIG.FADE_START_TIME
+    
+    -- Initial scale animation (pop effect)
+    label.TextTransparency = 0.3
+    label.Size = UDim2.new(0.3, 0, 0.3, 0)
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    
+    -- Pop-in animation
+    local popTween = TweenService:Create(label,
+        TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+        {
+            Size = UDim2.new(1, 0, 1, 0),
+            TextTransparency = 0
+        }
+    )
+    
+    -- Float up animation
+    local floatDistance = isDamage and 4 or 3
+    local floatTween = TweenService:Create(billboard,
+        TweenInfo.new(lifetime, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+        {StudsOffset = originalOffset + Vector3.new(0, floatDistance, 0)}
+    )
+    
+    -- Slight side drift (GPO style)
+    local driftX = math.random(-10, 10) / 20
+    local driftTween = TweenService:Create(billboard,
+        TweenInfo.new(lifetime * 0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+        {StudsOffset = originalOffset + Vector3.new(driftX, floatDistance, 0)}
+    )
+    
+    -- Start animations
+    popTween:Play()
+    floatTween:Play()
+    
+    -- Delayed drift
+    task.wait(0.3)
+    if billboard.Parent then
+        driftTween:Play()
+    end
+    
+    -- Fade out animation
+    task.wait(fadeStart - 0.3)
+    if billboard.Parent then
+        local fadeTween = TweenService:Create(label,
+            TweenInfo.new(lifetime - fadeStart, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut),
+            {
+                TextTransparency = 1,
+                TextStrokeTransparency = 1
+            }
+        )
+        
+        fadeTween:Play()
+        fadeTween.Completed:Connect(function()
+            if billboard then
+                billboard:Destroy()
+            end
+        end)
+    end
+end
+
+-- Enhanced health tracking with regen detection
+function Indicator:_trackPlayerHealth(player, character)
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    -- Initialize player data
+    local playerKey = tostring(player.UserId)
+    self.playerData[playerKey] = {
+        lastHealth = humanoid.Health,
+        maxHealth = humanoid.MaxHealth,
+        healthHistory = {},
+        lastChangeTime = tick(),
+        isRegenerating = false,
+        regenCheckDelay = 0
+    }
+    
+    local data = self.playerData[playerKey]
+    
+    local healthConnection = humanoid.HealthChanged:Connect(function(newHealth)
+        if not self.monitoring then return end
+        
+        local currentTime = tick()
+        local deltaHealth = newHealth - data.lastHealth
+        local absChange = math.abs(deltaHealth)
+        
+        -- Update health history for regen detection
+        table.insert(data.healthHistory, {
+            health = newHealth,
+            time = currentTime,
+            delta = deltaHealth
+        })
+        
+        -- Keep only recent history
+        while #data.healthHistory > CONFIG.MAX_HEALTH_HISTORY do
+            table.remove(data.healthHistory, 1)
+        end
+        
+        -- Detect regeneration pattern
+        local isLikelyRegen = self:_detectRegeneration(data, deltaHealth, currentTime)
+        
+        -- Process health change
+        if absChange >= CONFIG.DAMAGE_THRESHOLD then
+            if deltaHealth < 0 then
+                -- Damage taken
+                self:_createDamageIndicator(character, absChange, true)
+            elseif deltaHealth > 0 and not isLikelyRegen then
+                -- Healing (not regen)
+                self:_createDamageIndicator(character, absChange, false)
+            end
+        end
+        
+        -- Update tracking data
+        data.lastHealth = newHealth
+        data.lastChangeTime = currentTime
+        data.isRegenerating = isLikelyRegen
+    end)
+    
+    self.connMgr:add(healthConnection)
+    
+    -- Tag to prevent duplicate connections
+    local tag = Instance.new("BoolValue")
+    tag.Name = "_IndicatorTag"
+    tag.Parent = humanoid
+end
+
+-- Advanced regeneration detection
+function Indicator:_detectRegeneration(data, deltaHealth, currentTime)
+    if deltaHealth <= 0 then return false end
+    
+    -- Check if this is a small, consistent positive change
+    if deltaHealth <= CONFIG.REGEN_THRESHOLD then return true end
+    
+    -- Analyze recent health history for regen patterns
+    local recentChanges = {}
+    for i = #data.healthHistory, math.max(1, #data.healthHistory - 5), -1 do
+        local entry = data.healthHistory[i]
+        if currentTime - entry.time <= 2 then -- Within last 2 seconds
+            table.insert(recentChanges, entry.delta)
+        end
+    end
+    
+    -- Check for consistent small positive changes (regen pattern)
+    local positiveSmallChanges = 0
+    for _, delta in ipairs(recentChanges) do
+        if delta > 0 and delta <= CONFIG.REGEN_THRESHOLD * 3 then
+            positiveSmallChanges = positiveSmallChanges + 1
+        end
+    end
+    
+    -- If most recent changes were small positive (likely regen)
+    return positiveSmallChanges >= math.min(3, #recentChanges - 1)
+end
+
+-- Manual damage indicator
+function Indicator:showDamage(character, amount, duration)
+    if amount <= 0 then return end
+    return self:_createDamageIndicator(character, amount, true)
+end
+
+-- Manual heal indicator
+function Indicator:showHeal(character, amount, duration)
+    if amount <= 0 then return end
+    return self:_createDamageIndicator(character, amount, false)
+end
+
+-- Clear all indicators from character
 function Indicator:clear(character)
     if not character then return end
     
-    for _, child in ipairs(character:GetDescendants()) do
-        if child:IsA("BillboardGui") and child.Name == "Indicator" then
-            child:Destroy()
+    for _, descendant in ipairs(character:GetDescendants()) do
+        if descendant:IsA("BillboardGui") and descendant.Name == "DamageIndicator" then
+            descendant:Destroy()
         end
     end
 end
 
--- Shows damage indicator (red, negative)
-function Indicator:damage(character, amount, duration)
-    if amount <= 0.05 then return end -- Ignore very small amounts
-    
-    local text
-    if amount >= 1 then
-        text = string.format("-%d", math.floor(amount + 0.5))
-    else
-        text = string.format("-%.1f", amount)
-    end
-    
-    local color = Color3.fromRGB(255, 85, 85)
-    return self:show(character, text, color, duration)
-end
-
--- Shows heal indicator (green, positive)  
-function Indicator:heal(character, amount, duration)
-    if amount <= 0.05 then return end -- Ignore very small amounts
-    
-    local text
-    if amount >= 1 then
-        text = string.format("+%d", math.floor(amount + 0.5))
-    else
-        text = string.format("+%.1f", amount)
-    end
-    
-    local color = Color3.fromRGB(85, 255, 85)
-    return self:show(character, text, color, duration)
-end
-
--- Enables automatic health monitoring for all players
+-- Enable automatic monitoring
 function Indicator:enable()
     if self.monitoring then return end
     
@@ -196,10 +289,11 @@ function Indicator:enable()
     self:_setupMonitoring()
 end
 
--- Disables automatic health monitoring
+-- Disable automatic monitoring
 function Indicator:disable()
     self.monitoring = false
     self.connMgr:disconnectAll()
+    self.playerData = {}
     
     -- Clean up existing tags
     for _, player in ipairs(Players:GetPlayers()) do
@@ -213,58 +307,56 @@ function Indicator:disable()
     end
 end
 
--- Private: Sets up health monitoring for all players
+-- Setup monitoring for all players
 function Indicator:_setupMonitoring()
-    local function connectCharacter(character)
-        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    local function connectCharacter(player, character)
+        if not character then return end
+        
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
         if not humanoid or humanoid:FindFirstChild("_IndicatorTag") then return end
         
-        local lastHealth = humanoid.Health
-        local isProcessing = false
+        -- Wait for character to fully load
+        task.wait(0.5)
         
-        local conn = humanoid.HealthChanged:Connect(function(newHealth)
-            if not self.monitoring or isProcessing then return end
-            
-            isProcessing = true
-            
-            local delta = newHealth - lastHealth
-            local absDelta = math.abs(delta)
-            
-            -- Show indicators for any significant change
-            if absDelta > 0.1 then
-                if delta < 0 then
-                    self:damage(character, absDelta)
-                else
-                    self:heal(character, absDelta)
-                end
-            end
-            
-            lastHealth = newHealth
-            
-            -- Small delay to prevent spam
-            task.wait(0.05)
-            isProcessing = false
-        end)
-        
-        self.connMgr:add(conn)
-        
-        -- Tag to prevent duplicate connections
-        local tag = Instance.new("BoolValue")
-        tag.Name = "_IndicatorTag"
-        tag.Parent = humanoid
+        if humanoid.Parent and self.monitoring then
+            self:_trackPlayerHealth(player, character)
+        end
     end
     
     -- Connect existing players
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character then
-            connectCharacter(player.Character)
+            task.spawn(function()
+                connectCharacter(player, player.Character)
+            end)
         end
-        self.connMgr:add(player.CharacterAdded:Connect(connectCharacter))
+        
+        self.connMgr:add(player.CharacterAdded:Connect(function(character)
+            task.spawn(function()
+                connectCharacter(player, character)
+            end)
+        end))
     end
     
     -- Connect new players
     self.connMgr:add(Players.PlayerAdded:Connect(function(player)
-        self.connMgr:add(player.CharacterAdded:Connect(connectCharacter))
+        if player.Character then
+            task.spawn(function()
+                connectCharacter(player, player.Character)
+            end)
+        end
+        
+        self.connMgr:add(player.CharacterAdded:Connect(function(character)
+            task.spawn(function()
+                connectCharacter(player, character)
+            end)
+        end))
+    end))
+    
+    -- Cleanup disconnected players
+    self.connMgr:add(Players.PlayerRemoving:Connect(function(player)
+        local playerKey = tostring(player.UserId)
+        self.playerData[playerKey] = nil
     end))
 end
 
