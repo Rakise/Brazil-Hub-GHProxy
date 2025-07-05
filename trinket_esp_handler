@@ -7,6 +7,10 @@ local RunService = game:GetService("RunService")
 -- External dependencies
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
+-- Carrega o BillboardManager como ponte
+local BillboardManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/BillboardManager"))()
+local billboardManager = BillboardManager.new()
+
 -- Configuration constants
 local CONFIG = {
     DEFAULT_TEXT_SIZE = 14,
@@ -236,58 +240,38 @@ function TrinketESP:findTrinkets()
     return trinkets
 end
 
--- Create ESP billboard for a trinket
+-- Create ESP billboard for a trinket using BillboardManager as bridge
 -- @param trinket: The trinket part to create billboard for
 function TrinketESP:createBillboard(trinket)
     if self.espBillboards[trinket] then return end
 
-    -- Create billboard GUI
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "TrinketESP"
-    billboard.Adornee = trinket
-    billboard.LightInfluence = 1
-    billboard.Active = true
-    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    billboard.ClipsDescendants = true
-    billboard.AlwaysOnTop = true
-    billboard.Size = CONFIG.BILLBOARD_SIZE
-    billboard.Parent = trinket
-
-    -- Create text label
-    local label = Instance.new("TextLabel")
-    self:configureBillboardLabel(label, trinket)
-    label.Parent = billboard
-
+    local trinketName = TrinketDetector.getTrinketName(trinket)
+    
+    -- Create billboard using BillboardManager
+    local billboard = billboardManager:createBillboard("TrinketESP", trinket, CONFIG.BILLBOARD_SIZE)
+    
+    -- Create text label using BillboardManager
+    local label = billboardManager:createTextLabel(trinketName, CONFIG.DEFAULT_TEXT_SIZE, CONFIG.DEFAULT_TEXT_COLOR, billboard)
+    
+    -- Configure label properties specific to trinkets
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.Font = Enum.Font.SourceSans
+    label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
+    
     -- Create UI scale for responsive sizing
     local scale = Instance.new("UIScale")
     scale.Parent = billboard
 
     -- Store billboard reference
-    self.espBillboards[trinket] = billboard
+    self.espBillboards[trinket] = {
+        billboard = billboard,
+        label = label
+    }
     
     -- Setup connection management for this trinket
     self:setupTrinketConnectionManager(trinket)
-end
-
--- Configure billboard label properties
--- @param label: TextLabel instance to configure
--- @param trinket: Associated trinket part
-function TrinketESP:configureBillboardLabel(label, trinket)
-    local trinketName = TrinketDetector.getTrinketName(trinket)
-    
-    label.FontSize = Enum.FontSize.Size14
-    label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
-    label.BorderColor3 = Color3.new(0, 0, 0)
-    label.Text = trinketName
-    label.TextStrokeTransparency = CONFIG.TEXT_STROKE_TRANSPARENCY
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.Font = Enum.Font.SourceSans
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0.5, 0, 0.5, 0)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.TextSize = CONFIG.DEFAULT_TEXT_SIZE
-    label.BorderSizePixel = 0
-    label.BackgroundColor3 = Color3.new(1, 1, 1)
 end
 
 -- Setup connection manager for individual trinket
@@ -309,9 +293,9 @@ end
 -- Remove ESP billboard for a trinket
 -- @param trinket: The trinket part to remove billboard from
 function TrinketESP:removeBillboard(trinket)
-    -- Destroy billboard
+    -- Destroy billboard using BillboardManager
     if self.espBillboards[trinket] then
-        self.espBillboards[trinket]:Destroy()
+        billboardManager:destroyBillboard(self.espBillboards[trinket].billboard)
         self.espBillboards[trinket] = nil
     end
     
