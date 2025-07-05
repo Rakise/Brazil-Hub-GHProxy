@@ -142,20 +142,18 @@ function IndicatorController:_trackCharacter(character)
 		lastHealth = humanoid.Health
 	}
 
-    -- HealthChanged (para dano e cura)
-    instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
-        local delta = newHealth - instance.lastHealth
-    
-        if delta < 0 and math.abs(delta) >= 0.1 then
-            -- Dano
-            self:_showIndicator(instance, math.abs(delta), "Damage")
-        elseif delta > 0 and math.abs(delta) >= 0.1 then
-            -- Cura
-            self:_showIndicator(instance, math.abs(delta), "Heal")
-        end
-    
-        instance.lastHealth = newHealth
-    end)
+	-- HealthChanged (para dano e cura)
+	instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
+		local delta = newHealth - instance.lastHealth
+
+		if delta < 0 then
+			self:_showIndicator(instance, math.abs(delta), "Damage")
+		elseif delta > 0 then
+			self:_showIndicator(instance, math.abs(delta), "Heal")
+		end
+
+		instance.lastHealth = newHealth
+	end)
 
 	self._instances[character] = instance
 
@@ -163,12 +161,13 @@ function IndicatorController:_trackCharacter(character)
 	character.AncestryChanged:Connect(function(_, parent)
 		if not parent then
 			if instance._conn then
-                instance._conn:Disconnect()
-            end     
+				instance._conn:Disconnect()
+			end
 			self._instances[character] = nil
 		end
 	end)
 end
+
 
 -- Private: Show the indicator
 function IndicatorController:_showIndicator(instance, amount, indicatorType)
