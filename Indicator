@@ -1,315 +1,195 @@
 -- IndicatorController.lua
--- Stacking damage/heal indicator system with optimized billboard reusage
 
-local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+local Debris = game:GetService("Debris")
+local Players = game:GetService("Players")
 
-local Indicator = {}
-Indicator.__index = Indicator
+local TWEEN_INFO = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
 
--- Configuration
-local CONFIG = {
-    STACK_INTERVAL = 1.0, -- Stack damage/regen every 1 second
-    MIN_DAMAGE_SHOW = 0.1,
-    MIN_REGEN_SHOW = 0.05,
-    INDICATOR_LIFETIME = 2.5,
-    REGEN_THRESHOLD = 0.6,
-}
+local IndicatorController = {}
+IndicatorController.__index = IndicatorController
 
-function Indicator.new()
-    local self = setmetatable({}, Indicator)
-    self.connMgr = ConnectionManager.new()
-    self.monitoring = false
-    self.playerStacks = {}
-    return self
+-- Cria o DamageLabel programaticamente (igual ao root enviado)
+function IndicatorController._createDamageLabel()
+	local part = Instance.new("Part")
+	part.Size = Vector3.new(1, 1, 1)
+	part.Transparency = 1
+	part.Name = "DamageLabel"
+	part.CanCollide = false
+	part.Anchored = false
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.TopSurface = Enum.SurfaceType.Smooth
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.LightInfluence = 1
+	billboard.MaxDistance = math.huge
+	billboard.Active = true
+	billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	billboard.ClipsDescendants = true
+	billboard.AlwaysOnTop = true
+	billboard.Size = UDim2.new(5, 0, 1.5, 0)
+	billboard.Parent = part
+
+	local shadow = Instance.new("TextLabel")
+	shadow.FontSize = Enum.FontSize.Size32
+	shadow.BackgroundTransparency = 1
+	shadow.TextColor3 = Color3.new(0, 0, 0)
+	shadow.BorderColor3 = Color3.fromRGB(27, 42, 135)
+	shadow.Text = "100"
+	shadow.TextSize = 30
+	shadow.TextWrapped = true
+	shadow.Size = UDim2.new(1, 0, 1, 0)
+	shadow.Font = Enum.Font.Arcade
+	shadow.Name = "Shadow"
+	shadow.Position = UDim2.new(0.02, 0, 0.03, 0)
+	shadow.BackgroundColor3 = Color3.new(0, 0, 0)
+	shadow.ZIndex = 2
+	shadow.TextScaled = true
+	shadow.TextWrap = true
+	shadow.Parent = billboard
+
+	local theShadow = Instance.new("TextLabel")
+	theShadow.FontSize = Enum.FontSize.Size32
+	theShadow.TextColor3 = Color3.new(1, 0, 0)
+	theShadow.BorderColor3 = Color3.fromRGB(27, 42, 135)
+	theShadow.Text = "100"
+	theShadow.BackgroundTransparency = 1
+	theShadow.Size = UDim2.new(1, 0, 1, 0)
+	theShadow.TextWrapped = true
+	theShadow.Font = Enum.Font.Arcade
+	theShadow.Name = "TheShadow"
+	theShadow.TextSize = 30
+	theShadow.BackgroundColor3 = Color3.new(1, 1, 1)
+	theShadow.ZIndex = 2
+	theShadow.TextScaled = true
+	theShadow.TextWrap = true
+	theShadow.Parent = billboard
+
+	return part
 end
 
-function Indicator:_getIndicatorPosition(character)
-    return character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
-        or character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+-- Constructor
+function IndicatorController.new()
+	local self = setmetatable({}, IndicatorController)
+	self._connections = {}
+	self._instances = {}
+	self._enabled = false
+	return self
 end
 
--- Reusable indicator (no spam)
-function Indicator:_updateOrCreateIndicator(character, totalAmount, isDamage, isRegen)
-    local attachPart = self:_getIndicatorPosition(character)
-    if not attachPart then return end
+-- Enable the system (start monitoring players)
+function IndicatorController:enable()
+	if self._enabled then return end
+	self._enabled = true
 
-    local indicatorName
-    if isDamage then
-        indicatorName = "DamageIndicator"
-    elseif isRegen then
-        indicatorName = "RegenIndicator"
-    else
-        indicatorName = "HealIndicator"
-    end
+	-- Connect all current players
+	for _, player in ipairs(Players:GetPlayers()) do
+		self:_trackPlayer(player)
+	end
 
-    local billboard = attachPart:FindFirstChild(indicatorName)
-    local label
+	-- Connect new players
+	table.insert(self._connections, Players.PlayerAdded:Connect(function(player)
+		self:_trackPlayer(player)
+	end))
 
-    if billboard and billboard:IsA("BillboardGui") then
-        label = billboard:FindFirstChild("TextLabel")
-    else
-        billboard = Instance.new("BillboardGui")
-        billboard.Name = indicatorName
-        billboard.Adornee = attachPart
-        billboard.Size = UDim2.new(0, 200, 0, 80)
-        billboard.AlwaysOnTop = true
-        billboard.LightInfluence = 0
-        billboard.StudsOffset = Vector3.new(math.random(-30, 30) / 10, math.random(15, 35) / 10, math.random(-20, 20) / 10)
-        billboard.Parent = attachPart
-
-        label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 1, 0)
-        label.BackgroundTransparency = 1
-        label.Font = Enum.Font.GothamBold
-        label.TextStrokeTransparency = 0
-        label.TextStrokeColor3 = Color3.new(0, 0, 0)
-        label.Parent = billboard
-    end
-
-    local text, color
-    if isDamage then
-        text = string.format("-%d", math.floor(totalAmount + 0.5))
-        color = Color3.fromRGB(255, 60, 60)
-        label.TextSize = 32
-    elseif isRegen then
-        text = string.format("+%d", math.floor(totalAmount + 0.5))
-        color = Color3.fromRGB(85, 255, 255)
-        label.TextSize = 24
-    else
-        text = string.format("+%d", math.floor(totalAmount + 0.5))
-        color = Color3.fromRGB(85, 255, 85)
-        label.TextSize = 28
-    end
-
-    label.Text = text
-    label.TextColor3 = color
-
-    if billboard:FindFirstChild("FadeTask") then
-        billboard.FadeTask:Destroy()
-    end
-
-    local fadeMarker = Instance.new("ObjectValue")
-    fadeMarker.Name = "FadeTask"
-    fadeMarker.Parent = billboard
-
-    task.spawn(function()
-        task.wait(CONFIG.INDICATOR_LIFETIME)
-        if billboard and billboard.Parent then
-            billboard:Destroy()
-        end
-    end)
+	-- Optional: Handle player leaving (optional, since we use Debris)
 end
 
-function Indicator:_initializePlayerStack(playerKey)
-    self.playerStacks[playerKey] = {
-        damageStack = 0,
-        healStack = 0,
-        regenStack = 0,
-        lastStackTime = tick(),
-        lastHealth = 0,
-        stackTimer = nil
-    }
+-- Disable the system (disconnect everything)
+function IndicatorController:disable()
+	if not self._enabled then return end
+	self._enabled = false
+
+	-- Disconnect all connections
+	for _, conn in ipairs(self._connections) do
+		conn:Disconnect()
+	end
+	self._connections = {}
+
+	-- Disconnect all per-character instances
+	for _, instance in pairs(self._instances) do
+		if instance._conn then
+			instance._conn:Disconnect()
+		end
+	end
+	self._instances = {}
 end
 
-function Indicator:_processStacks(player, character, playerKey)
-    local stack = self.playerStacks[playerKey]
-    if not stack then return end
+-- Private: Track a player's characters
+function IndicatorController:_trackPlayer(player)
+	-- Connect current character
+	if player.Character then
+		self:_trackCharacter(player.Character)
+	end
 
-    local currentTime = tick()
-
-    if stack.damageStack >= CONFIG.MIN_DAMAGE_SHOW then
-        self:_updateOrCreateIndicator(character, stack.damageStack, true, false)
-    end
-
-    if stack.healStack >= CONFIG.MIN_REGEN_SHOW then
-        self:_updateOrCreateIndicator(character, stack.healStack, false, false)
-    end
-
-    if stack.regenStack >= CONFIG.MIN_REGEN_SHOW then
-        self:_updateOrCreateIndicator(character, stack.regenStack, false, true)
-    end
-
-    stack.damageStack = 0
-    stack.healStack = 0
-    stack.regenStack = 0
-    stack.lastStackTime = currentTime
+	-- Connect future characters
+	local charConn = player.CharacterAdded:Connect(function(character)
+		self:_trackCharacter(character)
+	end)
+	table.insert(self._connections, charConn)
 end
 
-function Indicator:_trackPlayerHealth(player, character)
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
+-- Private: Track a character's health changes
+function IndicatorController:_trackCharacter(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not hrp then return end
 
-    local playerKey = tostring(player.UserId)
-    self:_initializePlayerStack(playerKey)
-    local stack = self.playerStacks[playerKey]
-    stack.lastHealth = humanoid.Health
+	local instance = {
+		character = character,
+		humanoid = humanoid,
+		hrp = hrp,
+		lastHealth = humanoid.Health
+	}
 
-    local function startStackTimer()
-        if stack.stackTimer then
-            stack.stackTimer:Disconnect()
-        end
+	instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
+		local delta = newHealth - instance.lastHealth
+		local absDelta = math.abs(delta)
 
-        stack.stackTimer = task.spawn(function()
-            while self.monitoring and character.Parent and humanoid.Parent do
-                task.wait(CONFIG.STACK_INTERVAL)
-                if self.monitoring and character.Parent then
-                    self:_processStacks(player, character, playerKey)
-                end
-            end
-        end)
-    end
+		if absDelta >= 0.1 then
+			if delta < 0 then
+				self:_showIndicator(instance, absDelta, "Damage")
+			elseif delta > 0 then
+				self:_showIndicator(instance, absDelta, "Regen")
+			end
+		end
 
-    startStackTimer()
+		instance.lastHealth = newHealth
+	end)
 
-    local healthConnection = humanoid.HealthChanged:Connect(function(newHealth)
-        if not self.monitoring or not stack then return end
+	self._instances[character] = instance
 
-        local deltaHealth = newHealth - stack.lastHealth
-        local absChange = math.abs(deltaHealth)
-
-        if absChange > 0.01 then
-            if deltaHealth < 0 then
-                stack.damageStack = stack.damageStack + absChange
-            elseif deltaHealth > 0 then
-                if absChange <= CONFIG.REGEN_THRESHOLD then
-                    stack.regenStack = stack.regenStack + absChange
-                else
-                    stack.healStack = stack.healStack + absChange
-                end
-            end
-        end
-
-        stack.lastHealth = newHealth
-    end)
-
-    self.connMgr:add(healthConnection)
-
-    local cleanupConnection
-    cleanupConnection = character.AncestryChanged:Connect(function()
-        if not character.Parent then
-            if stack.stackTimer then
-                stack.stackTimer:Disconnect()
-                stack.stackTimer = nil
-            end
-            self.playerStacks[playerKey] = nil
-            cleanupConnection:Disconnect()
-        end
-    end)
-
-    self.connMgr:add(cleanupConnection)
-
-    local tag = Instance.new("BoolValue")
-    tag.Name = "_IndicatorTag"
-    tag.Parent = humanoid
+	-- Cleanup on character removal
+	character.AncestryChanged:Connect(function(_, parent)
+		if not parent then
+			if instance._conn then
+				instance._conn:Disconnect()
+			end
+			self._instances[character] = nil
+		end
+	end)
 end
 
--- Manual (instant) indicators
-function Indicator:showDamage(character, amount)
-    if amount <= 0 then return end
-    return self:_updateOrCreateIndicator(character, amount, true, false)
+-- Private: Show the indicator
+function IndicatorController:_showIndicator(instance, amount, indicatorType)
+	local label = IndicatorController._createDamageLabel()
+	label.Position = instance.hrp.Position
+	label.Velocity = Vector3.new(math.random(-20, 20), math.random(20, 25), math.random(-20, 20))
+	label.Parent = workspace
+
+	local text = math.floor(amount + 0.5)
+	label.BillboardGui.Shadow.Text = text
+	label.BillboardGui.TheShadow.Text = text
+
+	local color
+	if indicatorType == "Damage" then
+		color = Color3.fromRGB(255, 60, 60) -- Vermelho
+	else
+		color = Color3.fromRGB(85, 255, 255) -- Azul claro
+	end
+
+	TweenService:Create(label.BillboardGui.TheShadow, TWEEN_INFO, {TextColor3 = color}):Play()
+	Debris:AddItem(label, 0.5)
 end
 
-function Indicator:showHeal(character, amount)
-    if amount <= 0 then return end
-    return self:_updateOrCreateIndicator(character, amount, false, false)
-end
-
-function Indicator:showRegen(character, amount)
-    if amount <= 0 then return end
-    return self:_updateOrCreateIndicator(character, amount, false, true)
-end
-
-function Indicator:clear(character)
-    if not character then return end
-    for _, descendant in ipairs(character:GetDescendants()) do
-        if descendant:IsA("BillboardGui") and (descendant.Name == "DamageIndicator" or descendant.Name == "HealIndicator" or descendant.Name == "RegenIndicator") then
-            descendant:Destroy()
-        end
-    end
-end
-
-function Indicator:enable()
-    if self.monitoring then return end
-    self.monitoring = true
-    self:_setupMonitoring()
-end
-
-function Indicator:disable()
-    self.monitoring = false
-    self.connMgr:disconnectAll()
-
-    for _, stack in pairs(self.playerStacks) do
-        if stack.stackTimer then
-            stack.stackTimer:Disconnect()
-        end
-    end
-
-    self.playerStacks = {}
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character then
-            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                local tag = humanoid:FindFirstChild("_IndicatorTag")
-                if tag then tag:Destroy() end
-            end
-        end
-    end
-end
-
-function Indicator:_setupMonitoring()
-    local function connectCharacter(player, character)
-        if not character then return end
-
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if not humanoid or humanoid:FindFirstChild("_IndicatorTag") then return end
-
-        task.wait(0.5)
-
-        if humanoid.Parent and self.monitoring then
-            self:_trackPlayerHealth(player, character)
-        end
-    end
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character then
-            task.spawn(function()
-                connectCharacter(player, player.Character)
-            end)
-        end
-
-        self.connMgr:add(player.CharacterAdded:Connect(function(character)
-            task.spawn(function()
-                connectCharacter(player, character)
-            end)
-        end))
-    end
-
-    self.connMgr:add(Players.PlayerAdded:Connect(function(player)
-        if player.Character then
-            task.spawn(function()
-                connectCharacter(player, player.Character)
-            end)
-        end
-
-        self.connMgr:add(player.CharacterAdded:Connect(function(character)
-            task.spawn(function()
-                connectCharacter(player, character)
-            end)
-        end))
-    end))
-
-    self.connMgr:add(Players.PlayerRemoving:Connect(function(player)
-        local playerKey = tostring(player.UserId)
-        local stack = self.playerStacks[playerKey]
-        if stack and stack.stackTimer then
-            stack.stackTimer:Disconnect()
-        end
-        self.playerStacks[playerKey] = nil
-    end))
-end
-
-return Indicator
+return IndicatorController
