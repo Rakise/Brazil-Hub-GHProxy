@@ -1,5 +1,5 @@
 -- IndicatorController.lua
--- Módulo OOP para exibir indicadores visuais acima de personagens (ex: dano, status, etc)
+-- Simple module for displaying visual indicators above characters
 
 local Players = game:GetService("Players")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
@@ -7,17 +7,18 @@ local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent
 local Indicator = {}
 Indicator.__index = Indicator
 
--- Construtor OOP
+-- Constructor
 function Indicator.new()
     local self = setmetatable({}, Indicator)
-    self._connMgr = ConnectionManager.new()
-    self._monitoring = false
+    self.connMgr = ConnectionManager.new()
+    self.monitoring = false
     return self
 end
 
--- Cria um novo indicador acima de um personagem
+-- Creates a visual indicator above character
 function Indicator:show(character, text, color, duration)
     if not character or not character:FindFirstChild("Head") then return end
+    
     local head = character.Head
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "Indicator"
@@ -25,7 +26,6 @@ function Indicator:show(character, text, color, duration)
     billboard.Size = UDim2.new(0, 100, 0, 40)
     billboard.StudsOffset = Vector3.new(0, 2.5, 0)
     billboard.AlwaysOnTop = true
-    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     billboard.Parent = head
 
     local label = Instance.new("TextLabel")
@@ -38,24 +38,28 @@ function Indicator:show(character, text, color, duration)
     label.Font = Enum.Font.SourceSansBold
     label.Parent = billboard
 
-    -- Animação de fade out
+    -- Fade out animation
     task.spawn(function()
         local fadeTime = duration or 1.2
         local startTime = tick()
+        
         while tick() - startTime < fadeTime do
             local alpha = 1 - ((tick() - startTime) / fadeTime)
             label.TextTransparency = 1 - alpha
             label.TextStrokeTransparency = 0.5 + 0.5 * (1 - alpha)
             task.wait(0.03)
         end
+        
         billboard:Destroy()
     end)
+    
     return billboard
 end
 
--- Remove todos os indicadores de um character
+-- Removes all indicators from character
 function Indicator:clear(character)
     if not character then return end
+    
     for _, child in ipairs(character:GetChildren()) do
         if child:IsA("BillboardGui") and child.Name == "Indicator" then
             child:Destroy()
@@ -63,83 +67,85 @@ function Indicator:clear(character)
     end
 end
 
--- Exibe um indicador de dano acima do personagem
+-- Shows damage indicator (red, negative)
 function Indicator:damage(character, amount, duration)
     local text = string.format("-%d", math.abs(amount))
     local color = Color3.fromRGB(255, 60, 60)
-    return self:show(character, text, color, duration or 1.2)
+    return self:show(character, text, color, duration)
 end
 
--- Exibe um indicador de regeneração de vida acima do personagem
-function Indicator:regen(character, amount, duration)
+-- Shows heal indicator (green, positive)
+function Indicator:heal(character, amount, duration)
     local text = string.format("+%d", math.abs(amount))
     local color = Color3.fromRGB(60, 255, 60)
-    return self:show(character, text, color, duration or 1.2)
+    return self:show(character, text, color, duration)
 end
 
--- Sistema global: monitora todos os jogadores e exibe indicadores de dano/regen automaticamente
+-- Enables automatic health monitoring for all players
 function Indicator:enable()
-    if self._monitoring then return end
-    self._monitoring = true
-    self:_monitorPlayers()
+    if self.monitoring then return end
+    
+    self.monitoring = true
+    self:_setupMonitoring()
 end
 
+-- Disables automatic health monitoring
 function Indicator:disable()
-    self._monitoring = false
-    if self._connMgr then
-        self._connMgr:disconnectAll()
-    end
-    -- Limpa tags de conexão dos Humanoids existentes
+    self.monitoring = false
+    self.connMgr:disconnectAll()
+    
+    -- Clean up existing tags
     for _, player in ipairs(Players:GetPlayers()) do
         if player.Character then
             local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
             if humanoid then
-                local tag = humanoid:FindFirstChild("_IndicatorConn")
+                local tag = humanoid:FindFirstChild("_IndicatorTag")
                 if tag then tag:Destroy() end
             end
         end
     end
 end
 
-function Indicator:_monitorPlayers()
-    if not self._monitoring then return end
-    if not self._connMgr then
-        self._connMgr = ConnectionManager.new()
-    end
-    local function hook(character)
+-- Private: Sets up health monitoring for all players
+function Indicator:_setupMonitoring()
+    local function connectCharacter(character)
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-        if not humanoid then return end
-        if humanoid:FindFirstChild("_IndicatorConn") then return end
+        if not humanoid or humanoid:FindFirstChild("_IndicatorTag") then return end
+        
         local lastHealth = humanoid.Health
-        local running = false
         local conn = humanoid.HealthChanged:Connect(function(newHealth)
-            if running then return end
-            running = true
-            if not self._monitoring then running = false return end
+            if not self.monitoring then return end
+            
             local delta = newHealth - lastHealth
-            if delta ~= 0 then
-                if delta < 0 then
-                    self:damage(character, math.abs(delta), 1.2)
-                else
-                    self:regen(character, math.abs(delta), 1.2)
-                end
+            if delta < 0 then
+                self:damage(character, math.abs(delta))
+            elseif delta > 0 then
+                self:heal(character, math.abs(delta))
             end
+            
             lastHealth = newHealth
-            running = false
         end)
-        self._connMgr:add(conn)
-        local tag = Instance.new("ObjectValue")
-        tag.Name = "_IndicatorConn"
-        tag.Value = conn
+        
+        self.connMgr:add(conn)
+        
+        -- Tag to prevent duplicate connections
+        local tag = Instance.new("BoolValue")
+        tag.Name = "_IndicatorTag"
         tag.Parent = humanoid
     end
+    
+    -- Connect existing players
     for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character then hook(player.Character) end
-        self._connMgr:add(player.CharacterAdded:Connect(hook))
+        if player.Character then
+            connectCharacter(player.Character)
+        end
+        self.connMgr:add(player.CharacterAdded:Connect(connectCharacter))
     end
-    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
-        self._connMgr:add(player.CharacterAdded:Connect(hook))
+    
+    -- Connect new players
+    self.connMgr:add(Players.PlayerAdded:Connect(function(player)
+        self.connMgr:add(player.CharacterAdded:Connect(connectCharacter))
     end))
 end
 
-return Indicator 
+return Indicator
