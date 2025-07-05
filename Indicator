@@ -142,40 +142,19 @@ function IndicatorController:_trackCharacter(character)
 		lastHealth = humanoid.Health
 	}
 
-    -- HealthChanged (para dano imediato)
+    -- HealthChanged (para dano e cura)
     instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
         local delta = newHealth - instance.lastHealth
     
         if delta < 0 and math.abs(delta) >= 0.1 then
+            -- Dano
             self:_showIndicator(instance, math.abs(delta), "Damage")
+        elseif delta > 0 and math.abs(delta) >= 0.1 then
+            -- Cura
+            self:_showIndicator(instance, math.abs(delta), "Heal")
         end
     
         instance.lastHealth = newHealth
-    end)
-    
-
-    local RunService = game:GetService("RunService")
-
-    instance._regenAccumulated = 0
-    instance._lastRegenHealth = humanoid.Health
-    
-    instance._regenConn = RunService.Heartbeat:Connect(function()
-    	if not character.Parent or not humanoid.Parent then return end
-    
-    	local currentHealth = humanoid.Health
-    	local delta = currentHealth - instance._lastRegenHealth
-    
-    	if delta > 0 then
-    		instance._regenAccumulated = instance._regenAccumulated + delta
-        
-    		if instance._regenAccumulated >= 0.1 then
-    			-- Exibe quando acumulado for suficiente
-    			self:_showIndicator(instance, instance._regenAccumulated, "Regen")
-    			instance._regenAccumulated = 0
-    		end
-    	end
-    
-    	instance._lastRegenHealth = currentHealth
     end)
 
 	self._instances[character] = instance
@@ -185,8 +164,7 @@ function IndicatorController:_trackCharacter(character)
 		if not parent then
 			if instance._conn then
                 instance._conn:Disconnect()
-            end
-            instance._regenRunning = false -- O loop para sozinho            
+            end     
 			self._instances[character] = nil
 		end
 	end)
@@ -196,18 +174,35 @@ end
 function IndicatorController:_showIndicator(instance, amount, indicatorType)
 	local label = IndicatorController._createDamageLabel()
 	label.Position = instance.hrp.Position
-	label.Velocity = Vector3.new(math.random(-20, 20), math.random(20, 25), math.random(-20, 20))
+	
+	-- Diferentes velocidades para diferentes tipos
+	if indicatorType == "Heal" then
+		-- Cura sobe mais devagar e com menos movimento horizontal
+		label.Velocity = Vector3.new(math.random(-10, 10), math.random(15, 20), math.random(-10, 10))
+	else
+		-- Dano mantém a velocidade original
+		label.Velocity = Vector3.new(math.random(-20, 20), math.random(20, 25), math.random(-20, 20))
+	end
+	
 	label.Parent = workspace
 
 	local text = math.floor(amount + 0.5)
+	
+	-- Adiciona prefixo para cura
+	if indicatorType == "Heal" then
+		text = "+" .. text
+	end
+	
 	label.BillboardGui.Shadow.Text = text
 	label.BillboardGui.TheShadow.Text = text
 
 	local color
 	if indicatorType == "Damage" then
-		color = Color3.fromRGB(255, 60, 60) -- Vermelho
+		color = Color3.fromRGB(255, 60, 60) -- Vermelho para dano
+	elseif indicatorType == "Heal" then
+		color = Color3.fromRGB(85, 255, 85) -- Verde para cura
 	else
-		color = Color3.fromRGB(85, 255, 255) -- Azul claro
+		color = Color3.fromRGB(85, 255, 255) -- Azul claro (padrão)
 	end
 
 	TweenService:Create(label.BillboardGui.TheShadow, TWEEN_INFO, {TextColor3 = color}):Play()
