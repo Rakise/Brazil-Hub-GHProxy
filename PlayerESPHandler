@@ -6,10 +6,6 @@ local RunService = game:GetService("RunService")
 local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
 local utils = Utils.new()
 
--- Carrega o BillboardManager como ponte
-local BillboardManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/BillboardManager"))()
-local billboardManager = BillboardManager.new()
-
 local function getBestAdornee(character)
     return character:FindFirstChild("Head")
         or character:FindFirstChild("UpperTorso")
@@ -48,274 +44,433 @@ end
 function PlayerESP:createBillboard(player)
     local character = player.Character
     if not character or character:FindFirstChild("PlayerESP") then
-        return nil
+        return
     end
 
-    local adornee = billboardManager:getBestAdornee(character)
+    local adornee = getBestAdornee(character)
     if not adornee then
-        return nil
+        return
     end
 
-    -- Create main billboard using BillboardManager
-    local billboard = billboardManager:createBillboard("PlayerESP", adornee)
-    
-    -- Add vertical layout
-    billboardManager:createVerticalLayout(billboard)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "PlayerESP"
+    billboard.LightInfluence = 1
+    billboard.Active = true
+    billboard.Adornee = adornee
+    billboard.ClipsDescendants = true
+    billboard.AlwaysOnTop = true
+    billboard.Size = UDim2.new(0, 500, 0, 100)
+    billboard.Parent = adornee
 
-    -- Create name frame (horizontal layout for name and distance)
-    local nameFrame = billboardManager:createHorizontalFrame(billboard)
-    
-    local nameLabel = billboardManager:createTextLabel("[" .. player.Name .. "]", nil, nil, nameFrame)
-    local distanceLabel = billboardManager:createTextLabel("[0m]", nil, nil, nameFrame)
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 3)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = billboard
 
-    -- Create info frame (horizontal layout for rogue and edict)
-    local infoFrame = billboardManager:createHorizontalFrame(billboard)
-    
-    local rogueLabel = billboardManager:createTextLabel("[Lord Abadon Terrified]", nil, nil, infoFrame)
-    local edictLabel = billboardManager:createTextLabel("[Healer]", nil, nil, infoFrame)
+    -- Criação do frame para nome e distância
+    local nameFrame = Instance.new("Frame")
+    nameFrame.BackgroundTransparency = 1
+    nameFrame.BorderColor3 = Color3.new(0,0,0)
+    nameFrame.Size = UDim2.new(1,0,0.1,0)
+    nameFrame.BorderSizePixel = 0
+    nameFrame.BackgroundColor3 = Color3.new(1,1,1)
+    nameFrame.Parent = billboard
 
-    -- Create HP frame (horizontal layout for health and percentage)
-    local hpFrame = billboardManager:createHorizontalFrame(billboard)
-    
-    local hpLabel = billboardManager:createTextLabel("[100/100]", nil, nil, hpFrame)
-    local hpPercLabel = billboardManager:createTextLabel("[100%]", nil, nil, hpFrame)
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.FontSize = Enum.FontSize.Size14
+    nameLabel.TextColor3 = Color3.new(1,1,1)
+    nameLabel.BorderColor3 = Color3.new(0,0,0)
+    nameLabel.Text = "[" .. player.Name .. "]"
+    nameLabel.TextStrokeTransparency = 0.5
+    nameLabel.Font = Enum.Font.SourceSansSemibold
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextSize = 14
+    nameLabel.Size = UDim2.new(0,0,0.1,0)
+    nameLabel.AutomaticSize = Enum.AutomaticSize.X
+    nameLabel.BorderSizePixel = 0
+    nameLabel.BackgroundColor3 = Color3.new(1,1,1)
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+    nameLabel.Parent = nameFrame
 
-    -- Store components for easy access
-    local components = {
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.FontSize = Enum.FontSize.Size14
+    distanceLabel.TextColor3 = Color3.new(1,1,1)
+    distanceLabel.BorderColor3 = Color3.new(0,0,0)
+    distanceLabel.Text = "[0m]"
+    distanceLabel.TextStrokeTransparency = 0.5
+    distanceLabel.Font = Enum.Font.SourceSansSemibold
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextSize = 14
+    distanceLabel.Size = UDim2.new(0,0,0.1,0)
+    distanceLabel.AutomaticSize = Enum.AutomaticSize.X
+    distanceLabel.BorderSizePixel = 0
+    distanceLabel.BackgroundColor3 = Color3.new(1,1,1)
+    distanceLabel.TextXAlignment = Enum.TextXAlignment.Center
+    distanceLabel.Parent = nameFrame
+
+    -- Layout horizontal para alinhar distanceLabel e nameLabel
+    local nameLayout = Instance.new("UIListLayout")
+    nameLayout.FillDirection = Enum.FillDirection.Horizontal
+    nameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    nameLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    nameLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    nameLayout.Parent = nameFrame
+
+    local infoFrame = Instance.new("Frame")
+    infoFrame.BackgroundTransparency = 1
+    infoFrame.BorderColor3 = Color3.new(0,0,0)
+    infoFrame.Size = UDim2.new(1,0,0.1,0)
+    infoFrame.BorderSizePixel = 0
+    infoFrame.BackgroundColor3 = Color3.new(1,1,1)
+    infoFrame.Parent = billboard
+
+    local infoLayout = Instance.new("UIListLayout")
+    infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    infoLayout.FillDirection = Enum.FillDirection.Horizontal
+    infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    infoLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    infoLayout.Parent = infoFrame
+
+    local rogueLabel = Instance.new("TextLabel")
+    rogueLabel.FontSize = Enum.FontSize.Size14
+    rogueLabel.TextColor3 = Color3.new(1,1,1)
+    rogueLabel.BorderColor3 = Color3.new(0,0,0)
+    rogueLabel.Text = "[Lord Abadon Terrified]"
+    rogueLabel.TextStrokeTransparency = 0.5
+    rogueLabel.AutomaticSize = Enum.AutomaticSize.X
+    rogueLabel.Font = Enum.Font.SourceSansSemibold
+    rogueLabel.BackgroundTransparency = 1
+    rogueLabel.TextSize = 14
+    rogueLabel.Size = UDim2.new(0,0,0.1,0)
+    rogueLabel.BorderSizePixel = 0
+    rogueLabel.BackgroundColor3 = Color3.new(1,1,1)
+    rogueLabel.Parent = infoFrame
+
+    local edictLabel = Instance.new("TextLabel")
+    edictLabel.FontSize = Enum.FontSize.Size14
+    edictLabel.TextColor3 = Color3.new(1,1,1)
+    edictLabel.BorderColor3 = Color3.new(0,0,0)
+    edictLabel.Text = "[Healer]"
+    edictLabel.TextStrokeTransparency = 0.5
+    edictLabel.Font = Enum.Font.SourceSansSemibold
+    edictLabel.BackgroundTransparency = 1
+    edictLabel.AutomaticSize = Enum.AutomaticSize.X
+    edictLabel.TextSize = 14
+    edictLabel.Size = UDim2.new(0,0,0.1,0)
+    edictLabel.BorderSizePixel = 0
+    edictLabel.BackgroundColor3 = Color3.new(1,1,1)
+    edictLabel.Parent = infoFrame
+
+    local hpFrame = Instance.new("Frame")
+    hpFrame.BackgroundTransparency = 1
+    hpFrame.BorderColor3 = Color3.new(0,0,0)
+    hpFrame.Size = UDim2.new(1,0,0.1,0)
+    hpFrame.BorderSizePixel = 0
+    hpFrame.BackgroundColor3 = Color3.new(1,1,1)
+    hpFrame.Parent = billboard
+
+    local hpLayout = Instance.new("UIListLayout")
+    hpLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    hpLayout.FillDirection = Enum.FillDirection.Horizontal
+    hpLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    hpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    hpLayout.Parent = hpFrame
+
+    local hpLabel = Instance.new("TextLabel")
+    hpLabel.FontSize = Enum.FontSize.Size14
+    hpLabel.TextColor3 = Color3.new(1,1,1)
+    hpLabel.BorderColor3 = Color3.new(0,0,0)
+    hpLabel.Text = "[100/100]"
+    hpLabel.TextStrokeTransparency = 0.5
+    hpLabel.Font = Enum.Font.SourceSansSemibold
+    hpLabel.BackgroundTransparency = 1
+    hpLabel.AutomaticSize = Enum.AutomaticSize.X
+    hpLabel.TextSize = 14
+    hpLabel.Size = UDim2.new(0,0,0.1,0)
+    hpLabel.BorderSizePixel = 0
+    hpLabel.BackgroundColor3 = Color3.new(1,1,1)
+    hpLabel.Parent = hpFrame
+
+    local hpPercLabel = Instance.new("TextLabel")
+    hpPercLabel.FontSize = Enum.FontSize.Size14
+    hpPercLabel.TextColor3 = Color3.new(1,1,1)
+    hpPercLabel.BorderColor3 = Color3.new(0,0,0)
+    hpPercLabel.Text = "[100%]"
+    hpPercLabel.TextStrokeTransparency = 0.5
+    hpPercLabel.Font = Enum.Font.SourceSansSemibold
+    hpPercLabel.BackgroundTransparency = 1
+    hpPercLabel.AutomaticSize = Enum.AutomaticSize.X
+    hpPercLabel.TextSize = 14
+    hpPercLabel.Size = UDim2.new(0,0,0.1,0)
+    hpPercLabel.BorderSizePixel = 0
+    hpPercLabel.BackgroundColor3 = Color3.new(1,1,1)
+    hpPercLabel.Parent = hpFrame
+
+    self.espBillboards[player] = {
         billboard = billboard,
         nameLabel = nameLabel,
         distanceLabel = distanceLabel,
         rogueLabel = rogueLabel,
         edictLabel = edictLabel,
         hpLabel = hpLabel,
-        hpPercLabel = hpPercLabel
+        hpPercLabel = hpPercLabel,
+        infoFrame = infoFrame,
+        hpFrame = hpFrame,
+        nameFrame = nameFrame
     }
     
-    self.espBillboards[player] = components
-    return components
+    -- OTIMIZAÇÃO: Inicializar cache de dados para o player
+    self.dataCache[player] = {
+        lastUpdate = 0,
+        rogueName = "",
+        edict = "",
+        healthDisplay = "",
+        healthPercentDisplay = ""
+    }
+    
+    -- Apply display config to this billboard
+    self:setDisplayConfig(self.displayConfig)
+    
+    -- OTIMIZAÇÃO: Atualizar dados iniciais imediatamente
+    self:updatePlayerData(player)
 end
 
-function PlayerESP:updateBillboard(player)
-    local components = self.espBillboards[player]
-    if not components then return end
-
-    -- Get cached data or fetch new data
-    local data = self.dataCache[player] or utils:getPlayerFullData(player)
-    if not data then return end
-
-    -- Update name and distance
-    if self.displayConfig.showPlayerName then
-        billboardManager:updateLabel(components.nameLabel, "[" .. player.Name .. "]")
-    else
-        billboardManager:updateLabel(components.nameLabel, "")
+function PlayerESP:removeBillboard(player)
+    local data = self.espBillboards[player]
+    if data and data.billboard then
+        data.billboard:Destroy()
+        self.espBillboards[player] = nil
     end
-
-    if self.displayConfig.showDistance then
-        local distance = math.floor((player.Character and player.Character:FindFirstChild("HumanoidRootPart") and 
-            game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and 
-            (player.Character.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude) or 0)
-        billboardManager:updateLabel(components.distanceLabel, "[" .. distance .. "m]")
-    else
-        billboardManager:updateLabel(components.distanceLabel, "")
+    -- CORREÇÃO CRÍTICA: Limpar cache de dados
+    if self.dataCache[player] then
+        self.dataCache[player] = nil
     end
-
-    -- Update rogue name
-    if self.displayConfig.showRogueName then
-        local rogueName = utils:getPlayerRogueDisplay(player)
-        billboardManager:updateLabel(components.rogueLabel, "[" .. rogueName .. "]")
-    else
-        billboardManager:updateLabel(components.rogueLabel, "")
-    end
-
-    -- Update edict
-    if self.displayConfig.showEdict then
-        local edict = utils:getPlayerEdictDisplay(player)
-        billboardManager:updateLabel(components.edictLabel, "[" .. edict .. "]")
-    else
-        billboardManager:updateLabel(components.edictLabel, "")
-    end
-
-    -- Update health
-    if self.displayConfig.showHealth then
-        local healthDisplay, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-        billboardManager:updateLabel(components.hpLabel, "[" .. healthDisplay .. "]")
-        
-        if self.displayConfig.showHealthPercent then
-            billboardManager:updateLabel(components.hpPercLabel, "[" .. healthPercentDisplay .. "]")
-        else
-            billboardManager:updateLabel(components.hpPercLabel, "")
-        end
-    else
-        billboardManager:updateLabel(components.hpLabel, "")
-        billboardManager:updateLabel(components.hpPercLabel, "")
-    end
-end
-
-function PlayerESP:setTextSize(size)
-    self.defaultTextSize = size
-    -- Update all existing billboards
-    for player, components in pairs(self.espBillboards) do
-        if components then
-            billboardManager:updateLabelSize(components.nameLabel, size)
-            billboardManager:updateLabelSize(components.distanceLabel, size)
-            billboardManager:updateLabelSize(components.rogueLabel, size)
-            billboardManager:updateLabelSize(components.edictLabel, size)
-            billboardManager:updateLabelSize(components.hpLabel, size)
-            billboardManager:updateLabelSize(components.hpPercLabel, size)
-        end
-    end
-end
-
-function PlayerESP:setTextColor(color)
-    self.defaultTextColor = color
-    -- Update all existing billboards
-    for player, components in pairs(self.espBillboards) do
-        if components then
-            billboardManager:updateLabelColor(components.nameLabel, color)
-            billboardManager:updateLabelColor(components.distanceLabel, color)
-            billboardManager:updateLabelColor(components.rogueLabel, color)
-            billboardManager:updateLabelColor(components.edictLabel, color)
-            billboardManager:updateLabelColor(components.hpLabel, color)
-            billboardManager:updateLabelColor(components.hpPercLabel, color)
-        end
-    end
-end
-
-function PlayerESP:setDisplayConfig(config)
-    self.displayConfig = config or self.displayConfig
-    -- Update all existing billboards with new config
-    for player, _ in pairs(self.espBillboards) do
-        self:updateBillboard(player)
-    end
+    -- NÃO limpe as conexões aqui!
+    -- self.playerConnections[player] = nil
 end
 
 -- OTIMIZAÇÃO CRÍTICA: Função para atualizar dados de um player específico
-function PlayerESP:_updatePlayerData(player)
-    if not player or not player.Character then return end
+function PlayerESP:updatePlayerData(player)
+    if not player or not player.Parent then return end
     
-    -- Cache com timeout de 1 segundo (ao invés de calcular a cada frame)
+    local cache = self.dataCache[player]
+    if not cache then return end
+    
     local currentTime = tick()
-    local cachedData = self.dataCache[player]
     
-    if not cachedData or (currentTime - cachedData.timestamp) > 1 then
-        self.dataCache[player] = {
-            data = utils:getPlayerFullData(player),
-            timestamp = currentTime
-        }
+    -- OTIMIZAÇÃO: Cache com timeout de 1 segundo (ao invés de calcular a cada frame)
+    if currentTime - cache.lastUpdate < 1 then
+        return -- Usar dados em cache
+    end
+    
+    -- Atualizar cache
+    cache.rogueName = utils:getPlayerRogueDisplay(player)
+    cache.edict = utils:getPlayerEdictDisplay(player)
+    cache.healthDisplay, cache.healthPercentDisplay = utils:getPlayerHealthDisplay(player)
+    cache.lastUpdate = currentTime
+    
+    -- Atualizar UI apenas se os dados mudaram
+    local data = self.espBillboards[player]
+    if data then
+        data.nameLabel.Text = "[" .. player.Name .. "]"
+        data.rogueLabel.Text = "[" .. cache.rogueName .. "]"
+        data.edictLabel.Text = "[" .. cache.edict .. "]"
+        data.hpLabel.Text = "[" .. cache.healthDisplay .. "]"
+        data.hpPercLabel.Text = "[" .. cache.healthPercentDisplay .. "]"
+        -- Atualizar distância
+        local localChar = Players.LocalPlayer and Players.LocalPlayer.Character
+        local targetChar = player.Character
+        if data.distanceLabel and localChar and targetChar then
+            local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+            local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+            if localRoot and targetRoot then
+                local dist = (localRoot.Position - targetRoot.Position).Magnitude
+                data.distanceLabel.Text = string.format("[%dm]", math.floor(dist))
+            else
+                data.distanceLabel.Text = "[0m]"
+            end
+        end
+    end
+end
+
+-- OTIMIZAÇÃO CRÍTICA: Refatoração completa da função de atualização
+function PlayerESP:updateBillboards()
+    -- OTIMIZAÇÃO: Throttling mais agressivo - atualizar apenas a cada 0.5s (2 FPS)
+    self._lastUpdate = self._lastUpdate or 0
+    if tick() - self._lastUpdate < 0.5 then return end
+    self._lastUpdate = tick()
+    
+    -- OTIMIZAÇÃO: Iterar apenas sobre players que já têm billboards
+    for player, data in pairs(self.espBillboards) do
+        if player and player.Parent and player.Character then
+            self:updatePlayerData(player)
+        else
+            -- CORREÇÃO: Remover billboard se player não é mais válido
+            self:removeBillboard(player)
+        end
     end
 end
 
 -- CORREÇÃO CRÍTICA: Função de conexão de player com limpeza adequada
-function PlayerESP:_connectPlayer(player)
+function PlayerESP:connectPlayer(player)
+    if player == Players.LocalPlayer then return end
     if self._playerConnMgrs[player] then
         self._playerConnMgrs[player]:disconnectAll()
     end
-    
     self._playerConnMgrs[player] = ConnectionManager.new()
     local mgr = self._playerConnMgrs[player]
-    
-    -- Create billboard when character spawns
     mgr:add(player.CharacterAdded:Connect(function(character)
-        task.wait(1) -- Wait for character to fully load
-        self:createBillboard(player)
-        self:_updatePlayerData(player)
-        self:updateBillboard(player)
-    end))
-    
-    -- Remove billboard when character dies
-    mgr:add(player.CharacterRemoving:Connect(function(character)
-        if self.espBillboards[player] then
-            billboardManager:destroyBillboard(self.espBillboards[player].billboard)
-            self.espBillboards[player] = nil
+        if self.enabled then
+            task.wait(0.1)
+            self:createBillboard(player)
         end
     end))
-    
-    -- Create billboard if character already exists
+    mgr:add(player.CharacterRemoving:Connect(function(character)
+        self:removeBillboard(player)
+    end))
     if player.Character then
         self:createBillboard(player)
-        self:_updatePlayerData(player)
-        self:updateBillboard(player)
     end
 end
 
 function PlayerESP:enable()
-    if self.enabled then return end
     self.enabled = true
-    
-    -- Connect to existing players
+    self:cleanup()
     for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= game.Players.LocalPlayer then
-            self:_connectPlayer(player)
-        end
+        self:connectPlayer(player)
     end
-    
-    -- Connect to new players
     self._connMgr:add(Players.PlayerAdded:Connect(function(player)
-        if player ~= game.Players.LocalPlayer then
-            self:_connectPlayer(player)
-        end
+        self:connectPlayer(player)
     end))
-    
-    -- Disconnect from leaving players
     self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
+        self:removeBillboard(player)
         if self._playerConnMgrs[player] then
             self._playerConnMgrs[player]:disconnectAll()
             self._playerConnMgrs[player] = nil
         end
-        if self.espBillboards[player] then
-            billboardManager:destroyBillboard(self.espBillboards[player].billboard)
-            self.espBillboards[player] = nil
-        end
-        self.dataCache[player] = nil
     end))
-    
-    -- OTIMIZAÇÃO CRÍTICA: Refatoração completa da função de atualização
     self._connMgr:add(RunService.Heartbeat:Connect(function()
-        if not self.enabled then return end
-        
-        -- OTIMIZAÇÃO: Throttling mais agressivo - atualizar apenas a cada 0.5s (2 FPS)
-        local currentTime = tick()
-        if not self._lastUpdateTime or (currentTime - self._lastUpdateTime) >= 0.5 then
-            self._lastUpdateTime = currentTime
-            
-            -- OTIMIZAÇÃO: Iterar apenas sobre players que já têm billboards
-            for player, components in pairs(self.espBillboards) do
-                if player and player.Character and components then
-                    self:_updatePlayerData(player)
-                    self:updateBillboard(player)
-                else
-                    -- CORREÇÃO: Remover billboard se player não é mais válido
-                    if components then
-                        billboardManager:destroyBillboard(components.billboard)
-                        self.espBillboards[player] = nil
-                    end
-                end
-            end
-        end
+        self:updateBillboards()
     end))
 end
 
 function PlayerESP:disable()
-    if not self.enabled then return end
     self.enabled = false
-    
-    -- CORREÇÃO CRÍTICA: Limpeza completa melhorada
+    self:cleanup()
+end
+
+-- CORREÇÃO CRÍTICA: Limpeza completa melhorada
+function PlayerESP:cleanup()
     self._connMgr:disconnectAll()
     for _, mgr in pairs(self._playerConnMgrs) do
         mgr:disconnectAll()
     end
     self._playerConnMgrs = {}
-    
-    -- Destroy all billboards
-    for player, components in pairs(self.espBillboards) do
-        if components then
-            billboardManager:destroyBillboard(components.billboard)
+    for player, _ in pairs(self.espBillboards) do
+        self:removeBillboard(player)
+    end
+    self.dataCache = {}
+end
+
+function PlayerESP:setTextSize(size)
+    self.defaultTextSize = size
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.TextSize = size end
+        if data.rogueLabel then data.rogueLabel.TextSize = size end
+        if data.edictLabel then data.edictLabel.TextSize = size end
+        if data.hpLabel then data.hpLabel.TextSize = size end
+        if data.hpPercLabel then data.hpPercLabel.TextSize = size end
+    end
+end
+
+function PlayerESP:setTextColor(color)
+    self.defaultTextColor = color
+    for _, data in pairs(self.espBillboards) do
+        if data.nameLabel then data.nameLabel.TextColor3 = color end
+        if data.rogueLabel then data.rogueLabel.TextColor3 = color end
+        if data.edictLabel then data.edictLabel.TextColor3 = color end
+        if data.hpLabel then data.hpLabel.TextColor3 = color end
+        if data.hpPercLabel then data.hpPercLabel.TextColor3 = color end
+    end
+end
+
+function PlayerESP:setDisplayConfig(config)
+    self.displayConfig = config or self.displayConfig
+    print(self.displayConfig)
+    for _, data in pairs(self.espBillboards) do
+        -- Clear frames
+        for _, frameName in ipairs({"nameFrame", "infoFrame", "hpFrame"}) do
+            local frame = data[frameName]
+            if frame and frame:IsA("Frame") then
+                for _, child in ipairs(frame:GetChildren()) do
+                    if not child:IsA("UIListLayout") then
+                        child.Parent = nil
+                    end
+                end
+            end
+        end
+
+        -- Reassign labels to nameFrame based on config
+        local nameFrameHasContent = false
+        if data.nameFrame then
+            if self.displayConfig.showPlayerName ~= false and data.nameLabel then
+                data.nameLabel.Parent = data.nameFrame
+                nameFrameHasContent = true
+            end
+            if self.displayConfig.showDistance ~= false and data.distanceLabel then
+                data.distanceLabel.Parent = data.nameFrame
+                nameFrameHasContent = true
+            end
+        end
+
+        -- Reassign labels to infoFrame based on config
+        local infoFrameHasContent = false
+        if data.infoFrame then
+            if self.displayConfig.showRogueName ~= false and data.rogueLabel then
+                data.rogueLabel.Parent = data.infoFrame
+                infoFrameHasContent = true
+            end
+            if self.displayConfig.showEdict ~= false and data.edictLabel then
+                data.edictLabel.Parent = data.infoFrame
+                infoFrameHasContent = true
+            end
+        end
+
+        -- Reassign labels to hpFrame based on config
+        local hpFrameHasContent = false
+        if data.hpFrame then
+            if self.displayConfig.showHealth ~= false and data.hpLabel then
+                data.hpLabel.Parent = data.hpFrame
+                hpFrameHasContent = true
+            end
+            if self.displayConfig.showHealthPercent ~= false and data.hpPercLabel then
+                data.hpPercLabel.Parent = data.hpFrame
+                hpFrameHasContent = true
+            end
+        end
+
+        -- Set LayoutOrder for frames
+        if data.nameFrame then
+            data.nameFrame.LayoutOrder = 1
+        end
+        if data.infoFrame then
+            data.infoFrame.LayoutOrder = 2
+        end
+        if data.hpFrame then
+            data.hpFrame.LayoutOrder = 3
+        end
+
+        -- Only parent frames to billboard if they have content
+        if data.nameFrame then
+            data.nameFrame.Parent = nameFrameHasContent and data.billboard or nil
+        end
+        if data.infoFrame then
+            data.infoFrame.Parent = infoFrameHasContent and data.billboard or nil
+        end
+        if data.hpFrame then
+            data.hpFrame.Parent = hpFrameHasContent and data.billboard or nil
         end
     end
-    self.espBillboards = {}
-    
-    -- Clear cache
-    self.dataCache = {}
 end
 
 return PlayerESP
