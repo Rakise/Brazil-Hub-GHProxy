@@ -1,0 +1,137 @@
+-- FOV Circle Manager Module
+-- Manages the visual FOV circle for Auto-Aim functionality
+
+local FOVCircleManager = {}
+FOVCircleManager.__index = FOVCircleManager
+
+-- Configuration constants
+local CONFIG = {
+    FOV_CIRCLE = {
+        DEFAULT_COLOR = Color3.fromRGB(0, 255, 128),
+        STROKE_THICKNESS = 2,
+        TRANSPARENCY = 0.3
+    }
+}
+
+-- Throttle interval for updateCircle (in seconds)
+local FOV_UPDATE_INTERVAL = 0.1
+
+function FOVCircleManager.new()
+    local self = setmetatable({}, FOVCircleManager)
+    self.player = game.Players.LocalPlayer
+    self.isVisible = false
+    self.color = CONFIG.FOV_CIRCLE.DEFAULT_COLOR
+    self._lastUpdate = 0
+    self._camera = workspace.CurrentCamera
+    self._playerGui = self.player:FindFirstChildOfClass("PlayerGui") or self.player:WaitForChild("PlayerGui")
+    self:createFOVGui()
+    self:setupUpdateLoop()
+    return self
+end
+
+function FOVCircleManager:createFOVGui()
+    -- Cache playerGui
+    local playerGui = self._playerGui
+    
+    -- Create GUI container
+    self.fovGui = Instance.new("ScreenGui")
+    self.fovGui.Name = "AutoAimFOVGui"
+    self.fovGui.ResetOnSpawn = false
+    self.fovGui.Parent = playerGui
+    
+    -- Create circle frame
+    self.fovCircle = Instance.new("Frame")
+    self.fovCircle.Name = "FOVCircle"
+    self.fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+    self.fovCircle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    self.fovCircle.BackgroundTransparency = 1
+    self.fovCircle.BorderSizePixel = 0
+    self.fovCircle.Position = UDim2.new(0, 0, 0, 0)
+    self.fovCircle.Size = UDim2.new(0, 100, 0, 100)
+    self.fovCircle.Visible = false
+    self.fovCircle.Parent = self.fovGui
+    
+    -- Add circular styling
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(1, 0)
+    corner.Parent = self.fovCircle
+    
+    -- Add stroke outline
+    self.stroke = Instance.new("UIStroke")
+    self.stroke.Thickness = CONFIG.FOV_CIRCLE.STROKE_THICKNESS
+    self.stroke.Color = self.color
+    self.stroke.Transparency = CONFIG.FOV_CIRCLE.TRANSPARENCY
+    self.stroke.Parent = self.fovCircle
+end
+
+function FOVCircleManager:setColor(color)
+    self.color = color
+    if self.stroke then
+        self.stroke.Color = color
+    end
+end
+
+function FOVCircleManager:setVisible(visible)
+    self.isVisible = visible
+end
+
+function FOVCircleManager:updateCircle(autoAimInstance, connectionManager)
+    local now = tick()
+    if now - self._lastUpdate < FOV_UPDATE_INTERVAL then return end
+    self._lastUpdate = now
+    
+    local camera = self._camera
+    local viewport = camera.ViewportSize
+    local fieldOfView = camera.FieldOfView
+    local fov = autoAimInstance and autoAimInstance.fovMax or 20 -- Default FOV if no instance provided
+    
+    -- Pre-calculate trigonometric values
+    local fovRad = math.rad(fov/2)
+    local fieldRad = math.rad(fieldOfView/2)
+    local tanFov = math.tan(fovRad)
+    local tanField = math.tan(fieldRad)
+    local radius = tanFov / tanField * (viewport.X/2)
+    radius = math.clamp(radius, 10, math.min(viewport.X, viewport.Y)/2 - 10)
+    
+    -- Cache mouse
+    local mouse = self.player:GetMouse()
+    self.fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+    self.fovCircle.Size = UDim2.new(0, radius*2, 0, radius*2)
+    
+    -- Show circle only if enabled and player has active tool
+    local character = self.player.Character
+    local equippedTool = character and character:FindFirstChildOfClass("Tool")
+    local holdingActiveTool = equippedTool and autoAimInstance and autoAimInstance.toolNames and autoAimInstance.toolNames[equippedTool.Name]
+    self.fovCircle.Visible = self.isVisible and holdingActiveTool or false
+end
+
+function FOVCircleManager:setupUpdateLoop()
+    local RunService = game:GetService("RunService")
+    -- Use RenderStepped, but throttling inside updateCircle
+    self._updateConnection = RunService.RenderStepped:Connect(function()
+        -- This will be called from CoreManager with the autoAim instance
+        if self._updateCallback then
+            self._updateCallback()
+        end
+    end)
+end
+
+function FOVCircleManager:setUpdateCallback(callback)
+    self._updateCallback = callback
+end
+
+function FOVCircleManager:destroy()
+    if self._updateConnection then
+        self._updateConnection:Disconnect()
+        self._updateConnection = nil
+    end
+    
+    if self.fovGui then
+        self.fovGui:Destroy()
+        self.fovGui = nil
+    end
+    
+    self._updateCallback = nil
+end
+
+return FOVCircleManager 
