@@ -127,7 +127,11 @@ local function getTrinketName(part)
         meshId = mesh and mesh.MeshId
     end
     
-    return meshId and (MESH_IDS[cleanMeshId(meshId)] or meshId) or "Unknown"
+    if meshId and meshId ~= "" then
+        return MESH_IDS[cleanMeshId(meshId)] or meshId
+    else
+        return "Unknown"
+    end
 end
 
 local TrinketESP = {}
