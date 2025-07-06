@@ -1,16 +1,50 @@
 -- IndicatorController.lua
+-- Damage and Healing Visual Indicator System
+-- Displays floating damage/healing numbers above characters when their health changes
+
+--[[
+    Brazil Hub - Indicator Controller Module:
+    
+    FEATURES:
+    - Real-time damage and healing indicators
+    - Floating text with shadow effects
+    - Different colors for damage (red) and healing (green)
+    - Different movement patterns for damage vs healing
+    - Automatic cleanup and memory management
+    
+    USAGE:
+    local indicator = IndicatorController.new()
+    indicator:enable()  -- Start monitoring all players
+    indicator:disable() -- Stop monitoring and cleanup
+]]
+
+-- ========================================
+-- DEPENDENCIES AND CONSTANTS
+-- ========================================
 
 local TweenService = game:GetService("TweenService")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 
+-- Animation configuration
 local TWEEN_INFO = TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
+-- ========================================
+-- INDICATOR CONTROLLER CLASS
+-- ========================================
 
 local IndicatorController = {}
 IndicatorController.__index = IndicatorController
 
--- Cria o DamageLabel programaticamente (igual ao root enviado)
+-- ========================================
+-- GUI CREATION UTILITIES
+-- ========================================
+
+--// Function: IndicatorController._createDamageLabel
+--// Description: Creates a damage/healing label with billboard GUI and shadow effects
+--// Returns: Instance (Part with BillboardGui)
 function IndicatorController._createDamageLabel()
+	-- Create the base part
 	local part = Instance.new("Part")
 	part.Size = Vector3.new(1, 1, 1)
 	part.Transparency = 1
@@ -20,6 +54,7 @@ function IndicatorController._createDamageLabel()
 	part.BottomSurface = Enum.SurfaceType.Smooth
 	part.TopSurface = Enum.SurfaceType.Smooth
 
+	-- Create billboard GUI container
 	local billboard = Instance.new("BillboardGui")
 	billboard.LightInfluence = 1
 	billboard.MaxDistance = math.huge
@@ -30,6 +65,7 @@ function IndicatorController._createDamageLabel()
 	billboard.Size = UDim2.new(5, 0, 1.5, 0)
 	billboard.Parent = part
 
+	-- Create shadow text (black outline)
 	local shadow = Instance.new("TextLabel")
 	shadow.FontSize = Enum.FontSize.Size32
 	shadow.BackgroundTransparency = 1
@@ -48,6 +84,7 @@ function IndicatorController._createDamageLabel()
 	shadow.TextWrap = true
 	shadow.Parent = billboard
 
+	-- Create main text (colored)
 	local theShadow = Instance.new("TextLabel")
 	theShadow.FontSize = Enum.FontSize.Size32
 	theShadow.TextColor3 = Color3.new(1, 0, 0)
@@ -68,45 +105,55 @@ function IndicatorController._createDamageLabel()
 	return part
 end
 
--- Constructor
+-- ========================================
+-- CONSTRUCTOR AND INSTANCE MANAGEMENT
+-- ========================================
+
+--// Function: IndicatorController.new
+--// Description: Creates a new IndicatorController instance
+--// Returns: IndicatorController instance
 function IndicatorController.new()
 	local self = setmetatable({}, IndicatorController)
-	self._connections = {}
-	self._instances = {}
-	self._enabled = false
+	self._connections = {}    -- Store all RBXScriptConnections
+	self._instances = {}      -- Store character tracking instances
+	self._enabled = false     -- System enabled state
 	return self
 end
 
--- Enable the system (start monitoring players)
+-- ========================================
+-- SYSTEM CONTROL METHODS
+-- ========================================
+
+--// Function: IndicatorController:enable
+--// Description: Enables the indicator system and starts monitoring all players
 function IndicatorController:enable()
 	if self._enabled then return end
 	self._enabled = true
 
-	-- Connect all current players
+	-- Connect to all current players
 	for _, player in ipairs(Players:GetPlayers()) do
 		self:_trackPlayer(player)
 	end
 
-	-- Connect new players
+	-- Connect to new players joining
 	table.insert(self._connections, Players.PlayerAdded:Connect(function(player)
 		self:_trackPlayer(player)
 	end))
-
-	-- Optional: Handle player leaving (optional, since we use Debris)
 end
 
--- Disable the system (disconnect everything)
+--// Function: IndicatorController:disable
+--// Description: Disables the indicator system and cleans up all connections
 function IndicatorController:disable()
 	if not self._enabled then return end
 	self._enabled = false
 
-	-- Disconnect all connections
+	-- Disconnect all system connections
 	for _, conn in ipairs(self._connections) do
 		conn:Disconnect()
 	end
 	self._connections = {}
 
-	-- Disconnect all per-character instances
+	-- Disconnect all character-specific connections
 	for _, instance in pairs(self._instances) do
 		if instance._conn then
 			instance._conn:Disconnect()
@@ -115,26 +162,35 @@ function IndicatorController:disable()
 	self._instances = {}
 end
 
--- Private: Track a player's characters
+-- ========================================
+-- PLAYER AND CHARACTER TRACKING
+-- ========================================
+
+--// Function: IndicatorController:_trackPlayer
+--// Description: Sets up tracking for a specific player's characters
+--// Parameters: player (Player) - The player to track
 function IndicatorController:_trackPlayer(player)
-	-- Connect current character
+	-- Connect to current character if it exists
 	if player.Character then
 		self:_trackCharacter(player.Character)
 	end
 
-	-- Connect future characters
+	-- Connect to future characters
 	local charConn = player.CharacterAdded:Connect(function(character)
 		self:_trackCharacter(character)
 	end)
 	table.insert(self._connections, charConn)
 end
 
--- Private: Track a character's health changes
+--// Function: IndicatorController:_trackCharacter
+--// Description: Sets up health monitoring for a specific character
+--// Parameters: character (Model) - The character to track
 function IndicatorController:_trackCharacter(character)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 	if not humanoid or not hrp then return end
 
+	-- Create tracking instance
 	local instance = {
 		character = character,
 		humanoid = humanoid,
@@ -142,14 +198,17 @@ function IndicatorController:_trackCharacter(character)
 		lastHealth = humanoid.Health
 	}
 
-	-- HealthChanged (para dano e cura)
+	-- Monitor health changes for damage and healing
 	instance._conn = humanoid.HealthChanged:Connect(function(newHealth)
 		local delta = newHealth - instance.lastHealth
 
 		if delta < 0 then
+			-- Health decreased = damage
 			self:_showIndicator(instance, math.abs(delta), "Damage")
 		elseif delta > 0 then
-			self:_showIndicator(instance, math.abs(delta), "Heal")
+			-- Health increased = healing
+			local value = math.abs(delta)
+			self:_showIndicator(instance, value, "Heal")
 		end
 
 		instance.lastHealth = newHealth
@@ -157,7 +216,7 @@ function IndicatorController:_trackCharacter(character)
 
 	self._instances[character] = instance
 
-	-- Cleanup on character removal
+	-- Cleanup when character is removed
 	character.AncestryChanged:Connect(function(_, parent)
 		if not parent then
 			if instance._conn then
@@ -168,44 +227,60 @@ function IndicatorController:_trackCharacter(character)
 	end)
 end
 
+-- ========================================
+-- INDICATOR DISPLAY METHODS
+-- ========================================
 
--- Private: Show the indicator
+--// Function: IndicatorController:_showIndicator
+--// Description: Creates and displays a damage/healing indicator
+--// Parameters: instance (table) - Character tracking instance
+--//             amount (number/string) - Amount to display
+--//             indicatorType (string) - "Damage" or "Heal"
 function IndicatorController:_showIndicator(instance, amount, indicatorType)
+	-- Create the indicator label
 	local label = IndicatorController._createDamageLabel()
 	label.Position = instance.hrp.Position
 	
-	-- Diferentes velocidades para diferentes tipos
+	-- Set different movement patterns based on indicator type
 	if indicatorType == "Heal" then
-		-- Cura sobe mais devagar e com menos movimento horizontal
+		-- Healing: slower upward movement with less horizontal spread
 		label.Velocity = Vector3.new(math.random(-10, 10), math.random(15, 20), math.random(-10, 10))
 	else
-		-- Dano mantém a velocidade original
+		-- Damage: faster upward movement with more horizontal spread
 		label.Velocity = Vector3.new(math.random(-20, 20), math.random(20, 25), math.random(-20, 20))
 	end
 	
 	label.Parent = workspace
 
-	local text = math.floor(amount + 0.5)
-	
-	-- Adiciona prefixo para cura
+	-- Format the display text
+	local text
 	if indicatorType == "Heal" then
-		text = "+" .. text
+		text = "+" .. amount
+	else
+		text = math.floor(amount + 0.5)
 	end
 	
+	-- Update both shadow and main text
 	label.BillboardGui.Shadow.Text = text
 	label.BillboardGui.TheShadow.Text = text
 
+	-- Set appropriate color based on indicator type
 	local color
 	if indicatorType == "Damage" then
-		color = Color3.fromRGB(255, 60, 60) -- Vermelho para dano
+		color = Color3.fromRGB(255, 60, 60)  -- Red for damage
 	elseif indicatorType == "Heal" then
-		color = Color3.fromRGB(85, 255, 85) -- Verde para cura
+		color = Color3.fromRGB(85, 255, 85)  -- Green for healing
 	else
-		color = Color3.fromRGB(85, 255, 255) -- Azul claro (padrão)
+		color = Color3.fromRGB(85, 255, 255) -- Light blue (default)
 	end
 
+	-- Animate the color change and cleanup
 	TweenService:Create(label.BillboardGui.TheShadow, TWEEN_INFO, {TextColor3 = color}):Play()
 	Debris:AddItem(label, 0.5)
 end
+
+-- ========================================
+-- MODULE EXPORT
+-- ========================================
 
 return IndicatorController
