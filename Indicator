@@ -55,6 +55,9 @@ local DAMAGE_VEL_V = {20, 25}
 -- Pre-allocated table for reuse (reduces GC pressure)
 local tempVelocity = Vector3.new(0, 0, 0)
 
+-- Declaração antecipada para evitar erro de variável global
+local healStacks = {}
+
 -- ========================================
 -- INDICATOR CONTROLLER CLASS
 -- ========================================
@@ -167,6 +170,12 @@ function IndicatorController:enable()
 	self._connections[#self._connections + 1] = Players.PlayerAdded:Connect(function(player)
 		self:_trackPlayer(player)
 	end)
+
+	-- Cleanup de heal stacks a cada 0.1s
+	if self._healConnMgr then self._healConnMgr:disconnectAll() end
+	self._healConnMgr:add(game:GetService("RunService").Heartbeat:Connect(function()
+		self:_cleanupHealStacks()
+	end))
 end
 
 --// Function: IndicatorController:disable
@@ -194,6 +203,14 @@ function IndicatorController:disable()
 		end
 		self._instances[character] = nil
 	end
+
+	-- Cleanup heal stacks
+	if self._healConnMgr then
+		self._healConnMgr:disconnectAll()
+	end
+
+	-- Cleanup heal stacks
+	table.clear(healStacks)
 end
 
 -- ========================================
@@ -271,61 +288,63 @@ end
 --// Function: IndicatorController:_showIndicator
 --// Description: Creates and displays a damage/healing indicator
 --// Parameters: instance (table) - Character tracking instance
---//             amount (number) - Amount to display
---//             isHeal (boolean) - true for healing, false for damage
---// OPTIMIZATION: Reduced string operations, cached values, optimized math
-function IndicatorController:_showIndicator(instance, amount, isHeal)
-	-- Create the indicator label
-	local label = IndicatorController._createDamageLabel()
-	label.Position = instance.hrp.Position
-	
-	-- Set different movement patterns based on indicator type
-	-- OPTIMIZATION: Reuse tempVelocity vector to reduce allocations
-	if isHeal then
-		-- Healing: slower upward movement with less horizontal spread
-		tempVelocity = Vector3.new(
-			math.random(HEAL_VEL_H[1], HEAL_VEL_H[2]),
-			math.random(HEAL_VEL_V[1], HEAL_VEL_V[2]),
-			math.random(HEAL_VEL_H[1], HEAL_VEL_H[2])
-		)
-	else
-		-- Damage: faster upward movement with more horizontal spread
-		tempVelocity = Vector3.new(
-			math.random(DAMAGE_VEL_H[1], DAMAGE_VEL_H[2]),
-			math.random(DAMAGE_VEL_V[1], DAMAGE_VEL_V[2]),
-			math.random(DAMAGE_VEL_H[1], DAMAGE_VEL_H[2])
-		)
+--//             amount (number/string) - Amount to display
+--//             indicatorType (string) - "Damage" or "Heal"
+function IndicatorController:_showIndicator(instance, amount, indicatorType)
+	if indicatorType == "Heal" then
+		local char = instance.character
+		local now = tick()
+		local stack = healStacks[char]
+		if stack and stack.billboard and stack.billboard.Parent then
+			stack.value = stack.value + amount
+			stack.expire = now + 0.5
+			local text = "+" .. tostring(math.floor(stack.value * 1000 + 0.5) / 1000)
+			stack.billboard.BillboardGui.Shadow.Text = text
+			stack.billboard.BillboardGui.TheShadow.Text = text
+			return
+		else
+			local label = IndicatorController._createDamageLabel()
+			label.Position = instance.hrp.Position
+			label.Velocity = Vector3.new(math.random(-10, 10), math.random(15, 20), math.random(-10, 10))
+			label.Parent = workspace
+			local text = "+" .. tostring(math.floor(amount * 1000 + 0.5) / 1000)
+			label.BillboardGui.Shadow.Text = text
+			label.BillboardGui.TheShadow.Text = text
+			local color = Color3.fromRGB(85, 255, 85)
+			TweenService:Create(label.BillboardGui.TheShadow, TWEEN_INFO, {TextColor3 = color}):Play()
+			healStacks[char] = {
+				billboard = label,
+				value = amount,
+				expire = now + 0.5
+			}
+			return
+		end
+	elseif indicatorType == "Damage" then
+		-- Damage: exibe indicador individual, sem stack
+		local label = IndicatorController._createDamageLabel()
+		label.Position = instance.hrp.Position
+		label.Velocity = Vector3.new(math.random(-20, 20), math.random(20, 25), math.random(-20, 20))
+		label.Parent = workspace
+		local text = tostring(math.floor(amount + 0.5))
+		label.BillboardGui.Shadow.Text = text
+		label.BillboardGui.TheShadow.Text = text
+		local color = Color3.fromRGB(255, 60, 60)
+		TweenService:Create(label.BillboardGui.TheShadow, TWEEN_INFO, {TextColor3 = color}):Play()
+		Debris:AddItem(label, 0.5)
 	end
-	
-	label.Velocity = tempVelocity
-	label.Parent = workspace
+end
 
-	-- Format the display text
-	-- OPTIMIZATION: Avoid string.format for simple cases, use direct conversion
-	local text
-	if isHeal then
-		-- For healing, use simple concatenation instead of string.format
-		text = "+" .. tostring(math.floor(amount * 10000 + 0.5) / 10000) -- 4 decimal places
-	else
-		-- For damage, use simple floor conversion
-		text = tostring(math.floor(amount + 0.5))
+-- Cleanup de stacks de heal expirados (chamado periodicamente)
+function IndicatorController:_cleanupHealStacks()
+	local now = tick()
+	for char, stack in pairs(healStacks) do
+		if stack.expire < now then
+			if stack.billboard and stack.billboard.Parent then
+				stack.billboard:Destroy()
+			end
+			healStacks[char] = nil
+		end
 	end
-	
-	-- Update both shadow and main text (cached references)
-	local billboard = label.BillboardGui
-	local shadow = billboard.Shadow
-	local theShadow = billboard.TheShadow
-	
-	shadow.Text = text
-	theShadow.Text = text
-
-	-- Set appropriate color based on indicator type
-	-- OPTIMIZATION: Direct boolean check instead of string comparison
-	local color = isHeal and HEAL_COLOR or DAMAGE_COLOR
-
-	-- Animate the color change and cleanup
-	TweenService:Create(theShadow, TWEEN_INFO, {TextColor3 = color}):Play()
-	Debris:AddItem(label, 0.5)
 end
 
 -- ========================================
