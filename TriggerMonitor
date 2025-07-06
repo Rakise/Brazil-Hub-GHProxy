@@ -58,7 +58,7 @@ function TriggerMonitor.new(connectionManager)
     -- Performance optimization: Cache for label text and timestamps
     self._cachedLabelText = ""
     self._lastLabelUpdateTime = 0
-    self._labelUpdateInterval = 0.5 -- Update every 0.5 seconds instead of every frame
+    self._labelUpdateInterval = 2.0 -- Update every 2 seconds for better performance
     
     -- Pre-allocated reusable table for sorting
     self._triggerListBuffer = {}
@@ -272,9 +272,29 @@ function TriggerMonitor:startPeriodicUpdate()
     
     -- Use Heartbeat instead of RenderStepped for better performance
     -- RenderStepped runs at framerate, Heartbeat runs at 60Hz max
-    self.connMgr:add(RunService.Heartbeat:Connect(function()
+    self._periodicConnection = RunService.Heartbeat:Connect(function()
         self:updateTriggersLabel()
-    end))
+    end)
+    self.connMgr:add(self._periodicConnection)
+end
+
+-- Stop periodic updates to save performance
+function TriggerMonitor:stopPeriodicUpdate()
+    if self._periodicConnection then
+        self._periodicConnection:Disconnect()
+        self._periodicConnection = nil
+    end
+end
+
+-- Enable/disable the monitor completely
+function TriggerMonitor:setEnabled(enabled)
+    if enabled then
+        if not self._periodicConnection then
+            self:startPeriodicUpdate()
+        end
+    else
+        self:stopPeriodicUpdate()
+    end
 end
 
 -- Simple getters (no optimization needed)
