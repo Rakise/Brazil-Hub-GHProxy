@@ -1,10 +1,18 @@
--- Trigger Monitor Module
+-- Trigger Monitor Module (Otimizado para Performance)
 -- Monitors spawn triggers for different game areas
 
 local TriggerMonitor = {}
 TriggerMonitor.__index = TriggerMonitor
 
--- Configuration constants
+-- Cached services and functions for performance
+local osTime = os.time
+local mathFloor = math.floor
+local stringFormat = string.format
+local tableInsert = table.insert
+local tableSort = table.sort
+local tableConcat = table.concat
+
+-- Configuration constants (cached references)
 local CONFIG = {
     TRIGGERS = {
         FOLDER_PATH = {"Workspace", "MonsterSpawns", "Triggers"},
@@ -25,6 +33,15 @@ local CONFIG = {
     }
 }
 
+-- Pre-computed display names cache
+local DISPLAY_NAMES = {}
+for labelName in pairs(CONFIG.TRIGGERS.NAMES) do
+    DISPLAY_NAMES[labelName] = labelName:gsub('([A-Z])', ' %1'):gsub('^ ', '')
+end
+
+-- Pre-computed priorities cache
+local PRIORITIES = CONFIG.TRIGGERS.PRIORITY
+
 function TriggerMonitor.new(connectionManager)
     local self = setmetatable({}, TriggerMonitor)
     self.connMgr = connectionManager
@@ -37,124 +54,200 @@ function TriggerMonitor.new(connectionManager)
     }
     self.triggersLabel = nil
     self.isConnected = false
+    
+    -- Performance optimization: Cache for label text and timestamps
+    self._cachedLabelText = ""
+    self._lastLabelUpdateTime = 0
+    self._labelUpdateInterval = 0.5 -- Update every 0.5 seconds instead of every frame
+    
+    -- Pre-allocated reusable table for sorting
+    self._triggerListBuffer = {}
+    for i = 1, 5 do
+        self._triggerListBuffer[i] = {
+            name = "",
+            ts = 0,
+            displayName = "",
+            depth = 0,
+            score = 0
+        }
+    end
+    
     return self
 end
 
--- Helper to format the timestamp as a human-readable string (prioritized, pretty, no decimals)
+-- Optimized timestamp formatting with caching
+local timestampCache = {}
+local lastCacheCleanup = 0
+
 function TriggerMonitor:formatPrettyTimestamp(ts)
     if ts == 0 then return 'Never' end
-    local delta = os.time() - ts
-    if delta < 2 then
-        return 'Now'
-    elseif delta < 60 then
-        return string.format('%ds ago', delta)
-    elseif delta < 3600 then
-        local m = math.floor(delta/60)
-        local s = delta % 60
-        return string.format('%dm %ds ago', m, s)
-    else
-        local h = math.floor(delta/3600)
-        local m = math.floor((delta%3600)/60)
-        return string.format('%dh %dm ago', h, m)
+    
+    local currentTime = osTime()
+    local delta = currentTime - ts
+    
+    -- Cache cleanup every 30 seconds to prevent memory bloat
+    if currentTime - lastCacheCleanup > 30 then
+        timestampCache = {}
+        lastCacheCleanup = currentTime
     end
+    
+    -- Check cache first
+    local cacheKey = ts
+    if timestampCache[cacheKey] and (currentTime - timestampCache[cacheKey].time) < 1 then
+        return timestampCache[cacheKey].result
+    end
+    
+    local result
+    if delta < 2 then
+        result = 'Now'
+    elseif delta < 60 then
+        result = stringFormat('%ds ago', delta)
+    elseif delta < 3600 then
+        local m = mathFloor(delta/60)
+        local s = delta % 60
+        result = stringFormat('%dm %ds ago', m, s)
+    else
+        local h = mathFloor(delta/3600)
+        local m = mathFloor((delta%3600)/60)
+        result = stringFormat('%dh %dm ago', h, m)
+    end
+    
+    -- Cache the result
+    timestampCache[cacheKey] = {result = result, time = currentTime}
+    return result
 end
 
--- Returns a visually improved, prioritized label text for all triggers
+-- Heavily optimized label text generation
 function TriggerMonitor:getTriggersLabelText()
-    -- Build a sortable array of {name, ts, displayName, depth, score}
-    local triggerList = {}
-    local now = os.time()
+    local now = osTime()
+    
+    -- Use pre-allocated buffer to avoid table creation overhead
+    local triggerList = self._triggerListBuffer
+    local idx = 1
+    
+    -- Fill buffer with current data
     for labelName, partName in pairs(CONFIG.TRIGGERS.NAMES) do
         local ts = self.triggerTimestamps[labelName] or 0
-        local depth = CONFIG.TRIGGERS.PRIORITY[labelName] or 0
+        local depth = PRIORITIES[labelName] or 0
         local timeSince = (ts > 0) and (now - ts) or 999999
-        -- Score: deeper and longer since last spawn = better
         local score = (depth * 50) + timeSince
-        table.insert(triggerList, {
-            name = labelName,
-            ts = ts,
-            displayName = labelName:gsub('([A-Z])', ' %1'):gsub('^ ', ''),
-            depth = depth,
-            score = score
-        })
+        
+        local entry = triggerList[idx]
+        entry.name = labelName
+        entry.ts = ts
+        entry.displayName = DISPLAY_NAMES[labelName]
+        entry.depth = depth
+        entry.score = score
+        
+        idx = idx + 1
     end
+    
     -- Sort for display: most recent first, then deeper
-    table.sort(triggerList, function(a, b)
-        if (a.ts or 0) == (b.ts or 0) then
-            return (a.depth or 0) > (b.depth or 0)
+    tableSort(triggerList, function(a, b)
+        if a.ts == b.ts then
+            return a.depth > b.depth
         else
-            return (a.ts or 0) > (b.ts or 0)
+            return a.ts > b.ts
         end
     end)
-    -- Find the trigger with the highest score (deepest & longest since last spawn)
+    
+    -- Find best trigger with single pass
     local bestScore = -math.huge
     local bestIdx = 1
-    for i, trig in ipairs(triggerList) do
+    for i = 1, 5 do
+        local trig = triggerList[i]
         if trig.score > bestScore then
             bestScore = trig.score
             bestIdx = i
         end
     end
-    -- Build the label string
+    
+    -- Build the label string with pre-allocated lines table
     local lines = {
         'Triggers (Best = Deepest & Longest Unspawned):',
         ''
     }
-    for i, trig in ipairs(triggerList) do
+    
+    for i = 1, 5 do
+        local trig = triggerList[i]
         local pretty = self:formatPrettyTimestamp(trig.ts)
-        local paddedName = string.format('%-20s', trig.displayName)
+        local paddedName = stringFormat('%-20s', trig.displayName)
         local indicator = (i == bestIdx) and ' ⭐' or ''
-        table.insert(lines, string.format('• %s %s%s', paddedName, pretty, indicator))
+        lines[i + 2] = stringFormat('• %s %s%s', paddedName, pretty, indicator)
     end
-    return table.concat(lines, '\n')
+    
+    return tableConcat(lines, '\n')
 end
 
--- Updates the triggers label in the UI (with improved formatting)
+-- Throttled label update to reduce UI calls
 function TriggerMonitor:updateTriggersLabel()
-    if self.triggersLabel then
-        self.triggersLabel:SetText(self:getTriggersLabelText())
+    if not self.triggersLabel then return end
+    
+    local now = osTime()
+    if now - self._lastLabelUpdateTime >= self._labelUpdateInterval then
+        local newText = self:getTriggersLabelText()
+        if newText ~= self._cachedLabelText then
+            self.triggersLabel:SetText(newText)
+            self._cachedLabelText = newText
+        end
+        self._lastLabelUpdateTime = now
     end
 end
 
--- Call this to manually update a trigger timestamp (for custom events)
+-- Manual trigger update with immediate UI refresh
 function TriggerMonitor:updateTriggerTimestamp(triggerName)
     if self.triggerTimestamps[triggerName] then
-        self.triggerTimestamps[triggerName] = os.time()
+        self.triggerTimestamps[triggerName] = osTime()
+        -- Force immediate update for manual triggers
+        self._lastLabelUpdateTime = 0
         self:updateTriggersLabel()
     end
 end
 
--- Utility to get a folder by path (array of names)
+-- Cached folder lookup
+local folderCache = {}
+
 function TriggerMonitor:getFolderByPath(pathArray)
+    local pathKey = tableConcat(pathArray, ".")
+    if folderCache[pathKey] then
+        return folderCache[pathKey]
+    end
+    
     local obj = game
     for _, name in ipairs(pathArray) do
         obj = obj:FindFirstChild(name)
         if not obj then return nil end
     end
+    
+    folderCache[pathKey] = obj
     return obj
 end
 
--- Connects listeners to all triggers in the configured folder
+-- Optimized connection setup
 function TriggerMonitor:connectTriggerListeners()
     if self.isConnected then return end
     
-    -- Get the triggers folder using the path from CONFIG
     local triggersFolder = self:getFolderByPath(CONFIG.TRIGGERS.FOLDER_PATH)
     if not triggersFolder then
-        warn("[TriggerMonitor] Folder not found: " .. table.concat(CONFIG.TRIGGERS.FOLDER_PATH, "."))
+        warn("[TriggerMonitor] Folder not found: " .. tableConcat(CONFIG.TRIGGERS.FOLDER_PATH, "."))
         return
     end
 
-    -- For each configured trigger, connect to its LastSpawned value
+    -- Batch connection setup to reduce overhead
     for labelName, partName in pairs(CONFIG.TRIGGERS.NAMES) do
         local part = triggersFolder:FindFirstChild(partName)
         if part and part:FindFirstChild("LastSpawned") then
             local lastSpawned = part.LastSpawned
-            self.connMgr:add(lastSpawned:GetPropertyChangedSignal("Value"):Connect(function()
+            
+            -- Use closure to avoid creating new functions in the loop
+            local function onValueChanged()
                 self.triggerTimestamps[labelName] = lastSpawned.Value
                 self:updateTriggersLabel()
-            end))
-            -- Initialize the timestamp if a value already exists
+            end
+            
+            self.connMgr:add(lastSpawned:GetPropertyChangedSignal("Value"):Connect(onValueChanged))
+            
+            -- Initialize existing values
             if lastSpawned.Value > 0 then
                 self.triggerTimestamps[labelName] = lastSpawned.Value
             end
@@ -165,7 +258,7 @@ function TriggerMonitor:connectTriggerListeners()
     self:updateTriggersLabel()
 end
 
--- Sets the UI label reference for updating
+-- Set UI label reference
 function TriggerMonitor:setLabel(label)
     self.triggersLabel = label
     if label then
@@ -173,35 +266,34 @@ function TriggerMonitor:setLabel(label)
     end
 end
 
--- Starts the periodic update loop
+-- Optimized periodic update with reduced frequency
 function TriggerMonitor:startPeriodicUpdate()
     local RunService = game:GetService('RunService')
-    local lastLabelUpdate = 0
     
-    self.connMgr:add(RunService.RenderStepped:Connect(function()
-        local now = tick()
-        if now - lastLabelUpdate > 0.5 then
-            self:updateTriggersLabel()
-            lastLabelUpdate = now
-        end
+    -- Use Heartbeat instead of RenderStepped for better performance
+    -- RenderStepped runs at framerate, Heartbeat runs at 60Hz max
+    self.connMgr:add(RunService.Heartbeat:Connect(function()
+        self:updateTriggersLabel()
     end))
 end
 
--- Gets the current trigger timestamps
+-- Simple getters (no optimization needed)
 function TriggerMonitor:getTriggerTimestamps()
     return self.triggerTimestamps
 end
 
--- Gets the trigger configuration
 function TriggerMonitor:getConfig()
     return CONFIG.TRIGGERS
 end
 
--- Destroys the monitor and cleans up connections
+-- Cleanup with cache clearing
 function TriggerMonitor:destroy()
     self.triggersLabel = nil
     self.isConnected = false
-    -- Note: connMgr handles connection cleanup
+    self._cachedLabelText = ""
+    self._triggerListBuffer = nil
+    -- Clear timestamp cache
+    timestampCache = {}
 end
 
-return TriggerMonitor 
+return TriggerMonitor
