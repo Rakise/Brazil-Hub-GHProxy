@@ -1,25 +1,7 @@
--- TrinketESP: Enhanced ESP system for trinket detection and visualization
--- Provides real-time ESP overlay for trinkets in the game world
-
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-
--- External dependencies
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
--- Configuration constants
-local CONFIG = {
-    DEFAULT_TEXT_SIZE = 14,
-    DEFAULT_TEXT_COLOR = Color3.fromRGB(255, 255, 0),
-    BILLBOARD_SIZE = UDim2.new(0, 100, 0, 100),
-    TEXT_STROKE_TRANSPARENCY = 0.5,
-    COLOR_TOLERANCE = 0.02,
-    TRANSPARENCY_THRESHOLD = 1,
-    TEXTURE_PHOENIX_DOWN = "rbxassetid://1536547385"
-}
-
--- Known mesh IDs for trinket identification
-local MESH_ID_MAP = {
+local MESH_IDS = {
     ["rbxassetid://5196551436"] = "Amulet",
     ["rbxassetid://5196577540"] = "Old Amulet",
     ["rbxassetid://5204003946"] = "Goblet",
@@ -32,353 +14,163 @@ local MESH_ID_MAP = {
     ["rbxassetid://2520762076"] = "Howler Friend"
 }
 
--- Trinket detection system
-local TrinketDetector = {}
+local PHOENIX_TEXTURE = "rbxassetid://1536547385"
+local BILLBOARD_SIZE = UDim2.new(0, 100, 0, 100)
 
--- Helper function to clean mesh ID strings
-local function cleanMeshId(meshId)
-    return tostring(meshId):gsub("%%20", ""):gsub("%s+", "")
+local function cleanMeshId(id)
+    return tostring(id):gsub("%%20", ""):gsub("%s+", "")
 end
 
--- Helper function to validate basic trinket structure
-local function hasValidTrinketStructure(part)
-    if not part:IsA("BasePart") then return false end
-    local clickPart = part:FindFirstChildOfClass("Part")
-    return clickPart and clickPart.Transparency == CONFIG.TRANSPARENCY_THRESHOLD
-end
-
--- Trinket detection matchers for special trinkets
-local TrinketMatchers = {
-    -- Detects Idol of the Forgotten trinket
-    -- Characteristics: Slate material BasePart with transparent click part and particle emitter
-    IdolOfForgotten = function(part)
-        if not part:IsA("BasePart") or part.Material ~= Enum.Material.Slate then 
-            return nil 
-        end
+local function getTrinketName(part)
+    if part.Material == Enum.Material.Slate and part:FindFirstChildOfClass("ParticleEmitter") then
+        return "Idol of the Forgotten"
+    end
+    
+    if part.Material == Enum.Material.Neon then
+        return part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
+    end
+    
+    if part.Transparency == 1 then
+        local hasOrb, hasLight, hasSphere = false, false, false
+        local children = part:GetChildren()
         
-        if not hasValidTrinketStructure(part) then 
-            return nil 
-        end
-        
-        if part:FindFirstChildOfClass("ParticleEmitter") then
-            return "Idol of the Forgotten"
-        end
-        
-        return nil
-    end,
-
-    -- Detects Amulet of the White King trinket
-    -- Characteristics: Neon material BasePart with transparent click part and point light
-    AmuletOfWhiteKing = function(part)
-        if not part:IsA("BasePart") or part.Material ~= Enum.Material.Neon then 
-            return nil 
-        end
-        
-        if not hasValidTrinketStructure(part) then 
-            return nil 
-        end
-        
-        if part:FindFirstChildOfClass("PointLight") then
-            return "Amulet of the White King"
-        end
-        
-        return nil
-    end,
-
-    -- Detects Nightstone trinket
-    -- Characteristics: Neon material BasePart with transparent click part
-    Nightstone = function(part)
-        if not part:IsA("BasePart") or part.Material ~= Enum.Material.Neon then 
-            return nil 
-        end
-        
-        if not hasValidTrinketStructure(part) then 
-            return nil 
-        end
-        
-        return "Nightstone"
-    end,
-
-    -- Detects mysterious orb trinket (purple orb)
-    -- Characteristics: Transparent BasePart with orb particle, point light, and sphere mesh
-    MysteriousOrb = function(part)
-        if not part:IsA("BasePart") or part.Transparency ~= CONFIG.TRANSPARENCY_THRESHOLD then 
-            return nil 
-        end
-        
-        if not hasValidTrinketStructure(part) then 
-            return nil 
-        end
-        
-        local components = { hasOrbParticle = false, hasPointLight = false, hasSphereMesh = false }
-        
-        for _, child in ipairs(part:GetChildren()) do
-            if child:IsA("ParticleEmitter") and child.Name == "OrbParticle" then
-                components.hasOrbParticle = true
-            elseif child:IsA("PointLight") then
-                components.hasPointLight = true
-            elseif child:IsA("SpecialMesh") and child.MeshType == Enum.MeshType.Sphere then
-                components.hasSphereMesh = true
-            end
-        end
-        
-        if components.hasOrbParticle and components.hasPointLight and components.hasSphereMesh then
-            return "???"
-        end
-        
-        return nil
-    end,
-
-    -- Detects Phoenix Down trinket
-    -- Characteristics: Transparent BasePart with specific particle texture
-    PhoenixDown = function(part)
-        if not part:IsA("BasePart") or part.Transparency ~= CONFIG.TRANSPARENCY_THRESHOLD then 
-            return nil 
-        end
-        
-        if not hasValidTrinketStructure(part) then 
-            return nil 
-        end
-        
-        -- Search for Phoenix Down specific particle texture
-        for _, child in ipairs(part:GetChildren()) do
-            if child:IsA("Attachment") then
-                for _, subChild in ipairs(child:GetChildren()) do
-                    if subChild:IsA("ParticleEmitter") and 
-                       tostring(subChild.Texture) == CONFIG.TEXTURE_PHOENIX_DOWN then
+        for i = 1, #children do
+            local child = children[i]
+            local childType = child.ClassName
+            
+            if childType == "ParticleEmitter" and child.Name == "OrbParticle" then
+                hasOrb = true
+            elseif childType == "PointLight" then
+                hasLight = true
+            elseif childType == "SpecialMesh" and child.MeshType == Enum.MeshType.Sphere then
+                hasSphere = true
+            elseif childType == "Attachment" then
+                local attachChildren = child:GetChildren()
+                for j = 1, #attachChildren do
+                    local subChild = attachChildren[j]
+                    if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == PHOENIX_TEXTURE then
                         return "Phoenix Down"
                     end
                 end
             end
         end
         
-        return nil
-    end
-}
-
--- Extract mesh ID from various mesh types
-local function extractMeshId(part)
-    -- Check MeshPart directly
-    if part:IsA("MeshPart") and part.MeshId then
-        return cleanMeshId(part.MeshId)
-    end
-    
-    -- Check SpecialMesh child
-    local specialMesh = part:FindFirstChildWhichIsA("SpecialMesh")
-    if specialMesh and specialMesh.MeshId then
-        return cleanMeshId(specialMesh.MeshId)
-    end
-    
-    -- Check Mesh child
-    local mesh = part:FindFirstChildWhichIsA("Mesh")
-    if mesh and mesh.MeshId then
-        return cleanMeshId(mesh.MeshId)
-    end
-    
-    return nil
-end
-
--- Main trinket identification function
--- @param part: The part to analyze for trinket identification
--- @return string: The identified trinket name or "Unknown"
-function TrinketDetector.getTrinketName(part)
-    -- Phase 1: Try special trinket matchers
-    for _, matcher in pairs(TrinketMatchers) do
-        local trinketName = matcher(part)
-        if trinketName then 
-            return trinketName 
+        if hasOrb and hasLight and hasSphere then
+            return "???"
         end
     end
     
-    -- Phase 2: Try mesh ID lookup
-    local meshId = extractMeshId(part)
-    if meshId then
-        return MESH_ID_MAP[meshId] or meshId
-    end
+    local meshId = part:IsA("MeshPart") and part.MeshId or 
+                  (part:FindFirstChildWhichIsA("SpecialMesh") or part:FindFirstChildWhichIsA("Mesh") or {}).MeshId
     
-    -- Phase 3: Fallback to unknown
-    return "Unknown"
+    return meshId and (MESH_IDS[cleanMeshId(meshId)] or meshId) or "Unknown"
 end
 
--- Main TrinketESP class
 local TrinketESP = {}
 TrinketESP.__index = TrinketESP
 
--- Class properties
-TrinketESP.defaultTextSize = CONFIG.DEFAULT_TEXT_SIZE
-TrinketESP.defaultTextColor = CONFIG.DEFAULT_TEXT_COLOR
-TrinketESP.enabled = false
-
--- Constructor for TrinketESP instance
--- @return TrinketESP: New instance of TrinketESP
 function TrinketESP.new()
-    local self = setmetatable({}, TrinketESP)
-    self.espBillboards = {}
-    self._connectionManager = ConnectionManager.new()
-    self._trinketConnectionManagers = {}
-    return self
+    return setmetatable({
+        espBillboards = {},
+        _connectionManager = ConnectionManager.new(),
+        enabled = false
+    }, TrinketESP)
 end
 
--- Find all trinkets in the workspace
--- @return table: Array of trinket parts found in workspace
-function TrinketESP:findTrinkets()
-    local trinkets = {}
-    
-    for _, obj in ipairs(Workspace:GetChildren()) do
-        if obj:IsA("BasePart") then
-            local idValue = obj:FindFirstChild("ID")
-            if idValue and idValue:IsA("StringValue") then
-                table.insert(trinkets, obj)
-            end
-        end
-    end
-    
-    return trinkets
+function TrinketESP:isTrinket(obj)
+    return (obj.ClassName == "Part" or obj.ClassName == "MeshPart") and obj:FindFirstChild("ID")
 end
 
--- Create ESP billboard for a trinket
--- @param trinket: The trinket part to create billboard for
-function TrinketESP:createBillboard(trinket)
+function TrinketESP:onChildAdded(obj)
+    if not self.enabled or not self:isTrinket(obj) then return end
+    
+    local trinketName = getTrinketName(obj)
+    self:createBillboard(obj, trinketName)
+end
+
+function TrinketESP:onChildRemoved(obj)
+    if not self.enabled or not self.espBillboards[obj] then return end
+    
+    self:removeBillboard(obj)
+end
+
+function TrinketESP:createBillboard(trinket, trinketName)
     if self.espBillboards[trinket] then return end
 
-    -- Create billboard GUI
     local billboard = Instance.new("BillboardGui")
     billboard.Name = "TrinketESP"
     billboard.Adornee = trinket
     billboard.LightInfluence = 1
-    billboard.Active = true
     billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    billboard.ClipsDescendants = true
     billboard.AlwaysOnTop = true
-    billboard.Size = CONFIG.BILLBOARD_SIZE
+    billboard.Size = BILLBOARD_SIZE
     billboard.Parent = trinket
 
-    -- Create text label
     local label = Instance.new("TextLabel")
-    self:configureBillboardLabel(label, trinket)
+    label.Text = trinketName
+    label.TextColor3 = Color3.new(0.615, 0.615, 0.615)
+    label.TextStrokeTransparency = 0.5
+    label.Font = Enum.Font.SourceSans
+    label.TextSize = 14
+    label.BackgroundTransparency = 1
+    label.BorderSizePixel = 0
+    label.Size = UDim2.new(1, 0, 1, 0)
+    label.Position = UDim2.new(0.5, 0, 0.5, 0)
+    label.AnchorPoint = Vector2.new(0.5, 0.5)
     label.Parent = billboard
 
-    -- Create UI scale for responsive sizing
-    local scale = Instance.new("UIScale")
-    scale.Parent = billboard
-
-    -- Store billboard reference
     self.espBillboards[trinket] = billboard
-    
-    -- Setup connection management for this trinket
-    self:setupTrinketConnectionManager(trinket)
 end
 
--- Configure billboard label properties
--- @param label: TextLabel instance to configure
--- @param trinket: Associated trinket part
-function TrinketESP:configureBillboardLabel(label, trinket)
-    local trinketName = TrinketDetector.getTrinketName(trinket)
-    
-    label.FontSize = Enum.FontSize.Size14
-    label.TextColor3 = Color3.new(157/255, 157/255, 157/255)
-    label.BorderColor3 = Color3.new(0, 0, 0)
-    label.Text = trinketName
-    label.TextStrokeTransparency = CONFIG.TEXT_STROKE_TRANSPARENCY
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
-    label.Font = Enum.Font.SourceSans
-    label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0.5, 0, 0.5, 0)
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.TextSize = CONFIG.DEFAULT_TEXT_SIZE
-    label.BorderSizePixel = 0
-    label.BackgroundColor3 = Color3.new(1, 1, 1)
-end
-
--- Setup connection manager for individual trinket
--- @param trinket: The trinket part to setup connections for
-function TrinketESP:setupTrinketConnectionManager(trinket)
-    -- Clean up existing connections
-    if self._trinketConnectionManagers[trinket] then
-        self._trinketConnectionManagers[trinket]:disconnectAll()
-    end
-    
-    -- Create new connection manager
-    self._trinketConnectionManagers[trinket] = ConnectionManager.new()
-    
-    -- Add trinket-specific connections here if needed
-    -- local manager = self._trinketConnectionManagers[trinket]
-    -- manager:add(trinket.AncestryChanged:Connect(function() ... end))
-end
-
--- Remove ESP billboard for a trinket
--- @param trinket: The trinket part to remove billboard from
 function TrinketESP:removeBillboard(trinket)
-    -- Destroy billboard
-    if self.espBillboards[trinket] then
-        self.espBillboards[trinket]:Destroy()
+    local billboard = self.espBillboards[trinket]
+    if billboard then
+        billboard:Destroy()
         self.espBillboards[trinket] = nil
     end
-    
-    -- Clean up connections
-    if self._trinketConnectionManagers[trinket] then
-        self._trinketConnectionManagers[trinket]:disconnectAll()
-        self._trinketConnectionManagers[trinket] = nil
-    end
 end
 
--- Update ESP system - scan for trinkets and manage billboards
-function TrinketESP:updateESP()
-    local currentTrinkets = self:findTrinkets()
-    local trinketSet = {}
+function TrinketESP:scanExistingTrinkets()
+    local workspaceChildren = Workspace:GetChildren()
     
-    -- Create billboards for current trinkets
-    for _, trinket in ipairs(currentTrinkets) do
-        trinketSet[trinket] = true
-        self:createBillboard(trinket)
-    end
-    
-    -- Remove billboards for trinkets that no longer exist
-    for trinket in pairs(self.espBillboards) do
-        if not trinketSet[trinket] then
-            self:removeBillboard(trinket)
+    for i = 1, #workspaceChildren do
+        local obj = workspaceChildren[i]
+        if self:isTrinket(obj) then
+            local trinketName = getTrinketName(obj)
+            self:createBillboard(obj, trinketName)
         end
     end
 end
 
--- Enable the ESP system
 function TrinketESP:enable()
     if self.enabled then return end
     
     self.enabled = true
-    self:updateESP()
     
-    -- Setup continuous update loop
-    self._connectionManager:add(RunService.Heartbeat:Connect(function()
-        self:updateESP()
+    self:scanExistingTrinkets()
+    
+    self._connectionManager:add(Workspace.ChildAdded:Connect(function(obj)
+        self:onChildAdded(obj)
+    end))
+    
+    self._connectionManager:add(Workspace.ChildRemoved:Connect(function(obj)
+        self:onChildRemoved(obj)
     end))
 end
 
--- Disable the ESP system
 function TrinketESP:disable()
     self.enabled = false
-    
-    -- Disconnect all connections
     self._connectionManager:disconnectAll()
     
-    -- Remove all billboards
     for trinket in pairs(self.espBillboards) do
         self:removeBillboard(trinket)
     end
-    
-    -- Clean up all trinket connection managers
-    for _, manager in pairs(self._trinketConnectionManagers) do
-        manager:disconnectAll()
-    end
-    self._trinketConnectionManagers = {}
 end
 
--- Cleanup method for proper disposal
 function TrinketESP:destroy()
     self:disable()
     self._connectionManager = nil
     self.espBillboards = nil
-    self._trinketConnectionManagers = nil
 end
 
 return TrinketESP
