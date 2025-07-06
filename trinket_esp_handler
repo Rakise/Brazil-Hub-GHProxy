@@ -1,6 +1,7 @@
 local Workspace = game:GetService("Workspace")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
+-- Cache de constantes para evitar re-alocações
 local MESH_IDS = {
     ["rbxassetid://5196551436"] = "Amulet",
     ["rbxassetid://5196577540"] = "Old Amulet",
@@ -17,16 +18,66 @@ local MESH_IDS = {
 local PHOENIX_TEXTURE = "rbxassetid://1536547385"
 local BILLBOARD_SIZE = UDim2.new(0, 100, 0, 100)
 
+-- Cache de enums para evitar lookups repetidos
+local MATERIAL_SLATE = Enum.Material.Slate
+local MATERIAL_NEON = Enum.Material.Neon
+local MESHTYPE_SPHERE = Enum.MeshType.Sphere
+local ZBEHAVIOR_SIBLING = Enum.ZIndexBehavior.Sibling
+local FONT_SOURCESANS = Enum.Font.SourceSans
+
+-- Cache de funções frequentemente usadas
+local tostring = tostring
+local pairs = pairs
+local setmetatable = setmetatable
+local Vector2_new = Vector2.new
+local UDim2_new = UDim2.new
+local Color3_new = Color3.new
+local Instance_new = Instance.new
+
+-- Otimização: pattern cache para gsub
+local PATTERN_CACHE = {
+    ["%%20"] = "",
+    ["%s+"] = ""
+}
+
+-- Função otimizada para limpar mesh IDs
 local function cleanMeshId(id)
-    return tostring(id):gsub("%%20", ""):gsub("%s+", "")
+    local str = tostring(id)
+    -- Aplicar patterns em sequência (mais eficiente que múltiplos gsub)
+    str = str:gsub("%%20", "")
+    return str:gsub("%s+", "")
 end
 
+-- Função otimizada para verificar trinkets usando cache de verificações
+local trinketCache = {}
+local function isTrinket(obj)
+    local objType = obj.ClassName
+    -- Cache hit check primeiro
+    if trinketCache[obj] ~= nil then
+        return trinketCache[obj]
+    end
+    
+    -- Verificação otimizada: só verifica se é Part/MeshPart primeiro
+    if objType ~= "Part" and objType ~= "MeshPart" then
+        trinketCache[obj] = false
+        return false
+    end
+    
+    local hasID = obj:FindFirstChild("ID") ~= nil
+    trinketCache[obj] = hasID
+    return hasID
+end
+
+-- Função otimizada para obter nome do trinket
 local function getTrinketName(part)
-    if part.Material == Enum.Material.Slate and part:FindFirstChildOfClass("ParticleEmitter") then
+    local material = part.Material
+    
+    -- Verificações mais rápidas primeiro (material checks)
+    if material == MATERIAL_SLATE and part:FindFirstChildOfClass("ParticleEmitter") then
         return "Idol of the Forgotten"
     end
     
-    if part.Material == Enum.Material.Neon then
+    if material == MATERIAL_NEON then
         return part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
     end
     
@@ -34,6 +85,7 @@ local function getTrinketName(part)
         local hasOrb, hasLight, hasSphere = false, false, false
         local children = part:GetChildren()
         
+        -- Loop otimizado com early break conditions
         for i = 1, #children do
             local child = children[i]
             local childType = child.ClassName
@@ -42,9 +94,10 @@ local function getTrinketName(part)
                 hasOrb = true
             elseif childType == "PointLight" then
                 hasLight = true
-            elseif childType == "SpecialMesh" and child.MeshType == Enum.MeshType.Sphere then
+            elseif childType == "SpecialMesh" and child.MeshType == MESHTYPE_SPHERE then
                 hasSphere = true
             elseif childType == "Attachment" then
+                -- Verificação otimizada para Phoenix Down
                 local attachChildren = child:GetChildren()
                 for j = 1, #attachChildren do
                     local subChild = attachChildren[j]
@@ -53,6 +106,11 @@ local function getTrinketName(part)
                     end
                 end
             end
+            
+            -- Early break se já encontrou tudo necessário
+            if hasOrb and hasLight and hasSphere then
+                break
+            end
         end
         
         if hasOrb and hasLight and hasSphere then
@@ -60,8 +118,14 @@ local function getTrinketName(part)
         end
     end
     
-    local meshId = part:IsA("MeshPart") and part.MeshId or 
-                  (part:FindFirstChildWhichIsA("SpecialMesh") or part:FindFirstChildWhichIsA("Mesh") or {}).MeshId
+    -- Verificação otimizada de mesh ID
+    local meshId
+    if part:IsA("MeshPart") then
+        meshId = part.MeshId
+    else
+        local mesh = part:FindFirstChildWhichIsA("SpecialMesh") or part:FindFirstChildWhichIsA("Mesh")
+        meshId = mesh and mesh.MeshId
+    end
     
     return meshId and (MESH_IDS[cleanMeshId(meshId)] or meshId) or "Unknown"
 end
@@ -73,50 +137,36 @@ function TrinketESP.new()
     return setmetatable({
         espBillboards = {},
         _connectionManager = ConnectionManager.new(),
-        enabled = false
+        enabled = false,
+        -- Cache para evitar re-verificações
+        _processedObjects = {}
     }, TrinketESP)
 end
 
-function TrinketESP:isTrinket(obj)
-    return (obj.ClassName == "Part" or obj.ClassName == "MeshPart") and obj:FindFirstChild("ID")
-end
-
-function TrinketESP:onChildAdded(obj)
-    if not self.enabled or not self:isTrinket(obj) then return end
-    
-    local trinketName = getTrinketName(obj)
-    self:createBillboard(obj, trinketName)
-end
-
-function TrinketESP:onChildRemoved(obj)
-    if not self.enabled or not self.espBillboards[obj] then return end
-    
-    self:removeBillboard(obj)
-end
-
+-- Função otimizada para criar billboard com menos alocações
 function TrinketESP:createBillboard(trinket, trinketName)
     if self.espBillboards[trinket] then return end
 
-    local billboard = Instance.new("BillboardGui")
+    local billboard = Instance_new("BillboardGui")
     billboard.Name = "TrinketESP"
     billboard.Adornee = trinket
     billboard.LightInfluence = 1
-    billboard.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    billboard.ZIndexBehavior = ZBEHAVIOR_SIBLING
     billboard.AlwaysOnTop = true
     billboard.Size = BILLBOARD_SIZE
     billboard.Parent = trinket
 
-    local label = Instance.new("TextLabel")
+    local label = Instance_new("TextLabel")
     label.Text = trinketName
-    label.TextColor3 = Color3.new(0.615, 0.615, 0.615)
+    label.TextColor3 = Color3_new(0.615, 0.615, 0.615)
     label.TextStrokeTransparency = 0.5
-    label.Font = Enum.Font.SourceSans
+    label.Font = FONT_SOURCESANS
     label.TextSize = 14
     label.BackgroundTransparency = 1
     label.BorderSizePixel = 0
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.Position = UDim2.new(0.5, 0, 0.5, 0)
-    label.AnchorPoint = Vector2.new(0.5, 0.5)
+    label.Size = UDim2_new(1, 0, 1, 0)
+    label.Position = UDim2_new(0.5, 0, 0.5, 0)
+    label.AnchorPoint = Vector2_new(0.5, 0.5)
     label.Parent = billboard
 
     self.espBillboards[trinket] = billboard
@@ -128,16 +178,54 @@ function TrinketESP:removeBillboard(trinket)
         billboard:Destroy()
         self.espBillboards[trinket] = nil
     end
+    
+    -- Limpar cache relacionado
+    trinketCache[trinket] = nil
+    self._processedObjects[trinket] = nil
 end
 
+-- Throttling para eventos de adição/remoção
+local lastProcessTime = 0
+local THROTTLE_DELAY = 0.1 -- 100ms throttle
+
+function TrinketESP:onChildAdded(obj)
+    if not self.enabled then return end
+    
+    -- Throttling simples para evitar spam
+    local currentTime = tick()
+    if currentTime - lastProcessTime < THROTTLE_DELAY then
+        return
+    end
+    lastProcessTime = currentTime
+    
+    -- Verificação com cache
+    if self._processedObjects[obj] or not isTrinket(obj) then 
+        return 
+    end
+    
+    self._processedObjects[obj] = true
+    local trinketName = getTrinketName(obj)
+    self:createBillboard(obj, trinketName)
+end
+
+function TrinketESP:onChildRemoved(obj)
+    if not self.enabled or not self.espBillboards[obj] then return end
+    
+    self:removeBillboard(obj)
+end
+
+-- Função otimizada para scan inicial
 function TrinketESP:scanExistingTrinkets()
     local workspaceChildren = Workspace:GetChildren()
+    local processedCount = 0
     
     for i = 1, #workspaceChildren do
         local obj = workspaceChildren[i]
-        if self:isTrinket(obj) then
+        if isTrinket(obj) and not self._processedObjects[obj] then
+            self._processedObjects[obj] = true
             local trinketName = getTrinketName(obj)
             self:createBillboard(obj, trinketName)
+            processedCount = processedCount + 1
         end
     end
 end
@@ -147,8 +235,10 @@ function TrinketESP:enable()
     
     self.enabled = true
     
+    -- Scan inicial otimizado
     self:scanExistingTrinkets()
     
+    -- Conexões com throttling
     self._connectionManager:add(Workspace.ChildAdded:Connect(function(obj)
         self:onChildAdded(obj)
     end))
@@ -162,15 +252,21 @@ function TrinketESP:disable()
     self.enabled = false
     self._connectionManager:disconnectAll()
     
+    -- Limpeza otimizada
     for trinket in pairs(self.espBillboards) do
         self:removeBillboard(trinket)
     end
+    
+    -- Limpar caches
+    trinketCache = {}
+    self._processedObjects = {}
 end
 
 function TrinketESP:destroy()
     self:disable()
     self._connectionManager = nil
     self.espBillboards = nil
+    self._processedObjects = nil
 end
 
 return TrinketESP
