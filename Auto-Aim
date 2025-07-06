@@ -155,9 +155,6 @@ function AutoAim:calculateMovementPrediction(target, predictionTime, toolName)
         if toolName == "Percutiens" then
             -- Percutiens might need more aggressive prediction due to longer activation
             predictedPos = predictedPos + averageVelocity * (predictionTime * 0.1) -- Extra prediction
-        elseif toolName == "Grapple" then
-            -- Grapple might need less prediction due to instant travel
-            predictedPos = predictedPos + averageVelocity * (predictionTime * 0.05)
         end
         
         return predictedPos
