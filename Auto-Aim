@@ -34,9 +34,7 @@ function AutoAim.new()
         studsBehindMax = 30,
         fovMax = 20,
         targetHistory = {}, -- Store target movement history
-        historyMaxSize = 10, -- Maximum number of positions to track
-        skillActivationTime = 1.5, -- Time it takes for skill to activate
-        skillTravelTime = 0.15 -- Time for skill to travel to target
+        historyMaxSize = 10 -- Maximum number of positions to track
     }, AutoAim)
 end
 
@@ -44,29 +42,6 @@ function AutoAim:setRange(range) self.maxRange = range end
 function AutoAim:setTimeToHit(time) self.timeToHit = time end
 function AutoAim:setFOV(fov) self.fovMax = fov end
 function AutoAim:setStudsBehindRange(min, max) self.studsBehindMin, self.studsBehindMax = min, max end
-
---// Function: AutoAim:setSkillTiming
---// Description: Sets the timing parameters for skill activation and travel
---// Parameters: activationTime (number) - Time for skill to activate
---//             travelTime (number) - Time for skill to travel to target
-function AutoAim:setSkillTiming(activationTime, travelTime)
-    self.skillActivationTime = activationTime or 0.5
-    self.skillTravelTime = travelTime or 0.15
-end
-
---// Function: AutoAim:getTotalPredictionTime
---// Description: Calculates total time needed for prediction (activation + travel)
---// Parameters: toolName (string) - Name of the tool being used
---// Returns: number - Total prediction time
-function AutoAim:getTotalPredictionTime(toolName)
-    if toolName == "Percutiens" then
-        -- Percutiens has longer activation time
-        return self.skillActivationTime + self.skillTravelTime
-    else
-        -- Other tools use standard timing
-        return self.skillActivationTime + self.skillTravelTime
-    end
-end
 
 --// Function: AutoAim:updateTargetHistory
 --// Description: Updates the movement history for a specific target
@@ -105,9 +80,8 @@ end
 --// Description: Calculates where the target will be based on movement patterns
 --// Parameters: target (Model) - The target to predict
 --//             predictionTime (number) - Time to predict ahead
---//             toolName (string) - Name of the tool for specific adjustments
 --// Returns: Vector3 - Predicted position
-function AutoAim:calculateMovementPrediction(target, predictionTime, toolName)
+function AutoAim:calculateMovementPrediction(target, predictionTime)
     if not target or not self.targetHistory[target] then
         -- Fallback to simple velocity prediction
         local hrp = target:FindFirstChild("HumanoidRootPart")
@@ -144,18 +118,12 @@ function AutoAim:calculateMovementPrediction(target, predictionTime, toolName)
         local averageVelocity = totalVelocity / velocityCount
         local currentPos = history[#history].position
         
-        -- Apply prediction with acceleration/deceleration simulation
+        -- Apply prediction with some acceleration/deceleration simulation
         local predictedPos = currentPos + averageVelocity * predictionTime
         
-        -- Add gravity effect (more pronounced for longer prediction times)
-        local gravityEffect = predictionTime * 9.8 -- Gravity acceleration
-        predictedPos = predictedPos + Vector3.new(0, -gravityEffect, 0)
+        -- Add slight downward correction for gravity effect
+        predictedPos = predictedPos + Vector3.new(0, -2, 0)
         
-        -- Add tool-specific adjustments
-        if toolName == "Percutiens" then
-            -- Percutiens might need more aggressive prediction due to longer activation
-            predictedPos = predictedPos + averageVelocity * (predictionTime * 0.1) -- Extra prediction
-        end
         return predictedPos
     else
         -- Fallback to current velocity
@@ -263,21 +231,18 @@ function AutoAim:enable()
                     -- Update target movement history
                     self:updateTargetHistory(targetNPC)
                     
-                    -- Calculate total prediction time including skill activation
-                    local totalPredictionTime = self:getTotalPredictionTime(equippedTool.Name)
-                    
                     local hitPosition
                     if equippedTool.Name == "Percutiens" then
-                        -- Use movement-based prediction for Percutiens with full timing
-                        local predictedPosition = self:calculateMovementPrediction(targetNPC, totalPredictionTime, equippedTool.Name)
+                        -- Use movement-based prediction for Percutiens
+                        local predictedPosition = self:calculateMovementPrediction(targetNPC, self.timeToHit)
                         local direction = (npcHRP.Position - character.HumanoidRootPart.Position).Unit
                         hitPosition = predictedPosition + direction * random(self.studsBehindMin, self.studsBehindMax)
                     else
-                        -- Use movement-based prediction for other tools with full timing
-                        hitPosition = self:calculateMovementPrediction(targetNPC, totalPredictionTime, equippedTool.Name)
+                        -- Use movement-based prediction for other tools
+                        hitPosition = self:calculateMovementPrediction(targetNPC, self.timeToHit)
                     end
 
-                    -- Create prediction marker (green) - Final target position
+                    -- Create prediction marker (green)
                     local marker = Instance.new("Part")
                     marker.Anchored = true
                     marker.CanCollide = false
@@ -298,18 +263,6 @@ function AutoAim:enable()
                     currentMarker.Position = npcHead.Position
                     currentMarker.Parent = Workspace
                     Debris:AddItem(currentMarker, 2)
-                    
-                    -- Create activation time marker (yellow) - Where target will be when skill activates
-                    local activationPosition = self:calculateMovementPrediction(targetNPC, self.skillActivationTime, equippedTool.Name)
-                    local activationMarker = Instance.new("Part")
-                    activationMarker.Anchored = true
-                    activationMarker.CanCollide = false
-                    activationMarker.Size = Vector3new(0.4, 0.4, 0.4)
-                    activationMarker.Color = Color3.new(1, 1, 0) -- Yellow
-                    activationMarker.Material = Enum.Material.Neon
-                    activationMarker.Position = activationPosition
-                    activationMarker.Parent = Workspace
-                    Debris:AddItem(activationMarker, 2)
 
                     return {Hit=CFrame.new(hitPosition), Target=targetNPC, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
                 end
