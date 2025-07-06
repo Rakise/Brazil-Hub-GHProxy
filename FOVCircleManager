@@ -107,10 +107,10 @@ end
 
 function FOVCircleManager:setupUpdateLoop()
     local RunService = game:GetService("RunService")
-    -- Use RenderStepped, but throttling inside updateCircle
-    self._updateConnection = RunService.RenderStepped:Connect(function()
-        -- This will be called from CoreManager with the autoAim instance
-        if self._updateCallback then
+    -- Use Heartbeat instead of RenderStepped for better performance
+    -- Only update when circle is visible and player has active tool
+    self._updateConnection = RunService.Heartbeat:Connect(function()
+        if self._updateCallback and self.isVisible then
             self._updateCallback()
         end
     end)
