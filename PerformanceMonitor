@@ -1,0 +1,99 @@
+-- Performance Monitor Module
+-- Helps identify performance bottlenecks in the script
+
+local PerformanceMonitor = {}
+PerformanceMonitor.__index = PerformanceMonitor
+
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+function PerformanceMonitor.new()
+    local self = setmetatable({}, PerformanceMonitor)
+    self.isEnabled = false
+    self.monitors = {}
+    self.lastFrameTime = 0
+    self.frameCount = 0
+    self.avgFrameTime = 0
+    self.maxFrameTime = 0
+    self.minFrameTime = math.huge
+    self.performanceLabel = nil
+    return self
+end
+
+function PerformanceMonitor:start()
+    if self.isEnabled then return end
+    self.isEnabled = true
+    
+    self.connection = RunService.Heartbeat:Connect(function()
+        self:update()
+    end)
+end
+
+function PerformanceMonitor:stop()
+    if not self.isEnabled then return end
+    self.isEnabled = false
+    
+    if self.connection then
+        self.connection:Disconnect()
+        self.connection = nil
+    end
+end
+
+function PerformanceMonitor:update()
+    local currentTime = tick()
+    local frameTime = currentTime - self.lastFrameTime
+    self.lastFrameTime = currentTime
+    
+    self.frameCount = self.frameCount + 1
+    self.avgFrameTime = (self.avgFrameTime * (self.frameCount - 1) + frameTime) / self.frameCount
+    self.maxFrameTime = math.max(self.maxFrameTime, frameTime)
+    self.minFrameTime = math.min(self.minFrameTime, frameTime)
+    
+    -- Reset stats every 1000 frames
+    if self.frameCount >= 1000 then
+        self.frameCount = 0
+        self.avgFrameTime = 0
+        self.maxFrameTime = 0
+        self.minFrameTime = math.huge
+    end
+    
+    if self.performanceLabel then
+        local fps = 1 / frameTime
+        local avgFps = 1 / self.avgFrameTime
+        local maxFps = 1 / self.minFrameTime
+        local minFps = 1 / self.maxFrameTime
+        
+        self.performanceLabel:SetText(string.format(
+            "FPS: %.1f (Avg: %.1f, Max: %.1f, Min: %.1f)",
+            fps, avgFps, maxFps, minFps
+        ))
+    end
+end
+
+function PerformanceMonitor:setLabel(label)
+    self.performanceLabel = label
+end
+
+function PerformanceMonitor:addMonitor(name, callback)
+    self.monitors[name] = {
+        callback = callback,
+        lastCall = 0,
+        callCount = 0,
+        totalTime = 0
+    }
+end
+
+function PerformanceMonitor:removeMonitor(name)
+    self.monitors[name] = nil
+end
+
+function PerformanceMonitor:getStats()
+    return {
+        avgFrameTime = self.avgFrameTime,
+        maxFrameTime = self.maxFrameTime,
+        minFrameTime = self.minFrameTime,
+        frameCount = self.frameCount
+    }
+end
+
+return PerformanceMonitor 
