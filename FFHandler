@@ -20,7 +20,7 @@ local utils = Utils.new()
 local FF_DURATION = 120
 local BILLBOARD_SIZE = UDim2.new(0, 80, 0, 24)
 local BILLBOARD_OFFSET = Vector3.new(0, 2.2, 0)
-local UPDATE_INTERVAL = 0.2 -- Reduzido de 0.15 para diminuir frequência
+local UPDATE_INTERVAL = 0.4 -- Aumentado para reduzir frequência e lag
 
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
@@ -90,49 +90,46 @@ end
 
 function FFDetector:createBillboard(character, ff, startTime)
     if not character or not ff then return end
-    
-    -- Remove billboard antigo se existir
-    local old = character:FindFirstChild('FFBillboard')
-    if old then
-        old:Destroy()
+    -- Reutiliza billboard se já existir
+    local data = self.billboards[character]
+    local billboard, label
+    if data and data.billboard and data.label then
+        billboard = data.billboard
+        label = data.label
+    else
+        billboard = Instance.new('BillboardGui')
+        label = Instance.new('TextLabel')
+        billboard.Name = 'FFBillboard'
+        billboard.Size = BILLBOARD_SIZE
+        billboard.StudsOffset = BILLBOARD_OFFSET
+        billboard.AlwaysOnTop = true
+        billboard.MaxDistance = self.billboardMaxDistance
+        billboard.Adornee = getBestAdornee(character)
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.BackgroundTransparency = 1
+        label.TextStrokeTransparency = 0.5
+        label.TextScaled = false
+        label.TextSize = self.billboardTextSize
+        label.Font = Enum.Font.SourceSansBold
+        label.Parent = billboard
+        billboard.Parent = character
     end
-    
-    local player = Players:GetPlayerFromCharacter(character)
-    if not player then return end
-    
-    local timeLeft = self:getFFTimeLeft(player)
-    local adornee = getBestAdornee(character)
-    if not adornee then return end
-    
-    -- Criação otimizada do billboard
-    local billboard = Instance.new('BillboardGui')
-    local label = Instance.new('TextLabel')
-    
-    -- Configuração em batch para reduzir overhead
-    billboard.Name = 'FFBillboard'
-    billboard.Size = BILLBOARD_SIZE
-    billboard.StudsOffset = BILLBOARD_OFFSET
-    billboard.AlwaysOnTop = true
+    -- Atualiza label apenas se necessário
+    local timeLeft = self:getFFTimeLeft(Players:GetPlayerFromCharacter(character))
+    local color = self:getFFColor(timeLeft)
+    if label.Text ~= stringFormat('%.1f s until FF is out', timeLeft) then
+        label.Text = stringFormat('%.1f s until FF is out', timeLeft)
+    end
+    if label.TextColor3 ~= color then
+        label.TextColor3 = color
+    end
     billboard.MaxDistance = self.billboardMaxDistance
-    billboard.Adornee = adornee
-    
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = self:getFFColor(timeLeft)
-    label.TextStrokeTransparency = 0.5
-    label.TextScaled = false
-    label.TextSize = self.billboardTextSize
-    label.Font = Enum.Font.SourceSansBold
-    label.Text = stringFormat('%.1f s until FF is out', timeLeft)
-    
-    -- Parenting em uma única operação
-    label.Parent = billboard
-    billboard.Parent = character
-    
     self.billboards[character] = {
         billboard = billboard,
         label = label,
-        lastTimeLeft = timeLeft
+        lastTimeLeft = timeLeft,
+        lastFF = ff,
+        lastAdornee = billboard.Adornee
     }
 end
 
@@ -322,73 +319,38 @@ function FFDetector:updateBillboards()
         return 
     end
     self._lastUpdate = currentTime
-    
-    -- Cache de players para evitar múltiplas chamadas
+    -- Cache de players atualizado só em PlayerAdded/Removed
     local players = Players:GetPlayers()
-    
     for i = 1, #players do
         local player = players[i]
         local character = player.Character
         if character then
             local ffData = self.ffData[character]
             local ff = nil
-            
-            -- Busca otimizada por ForceField
-            local children = character:GetChildren()
-            for j = 1, #children do
-                local child = children[j]
-                if child:IsA('ForceField') then
-                    ff = child
-                    break
-                end
-            end
-            
-            if ff then
-                -- Registra novo FF se necessário
-                if not ffData or ffData.ff ~= ff then
-                    local startTime = ff:GetAttribute("StartTime")
-                    if not startTime then
-                        startTime = currentTime
-                        ff:SetAttribute("StartTime", startTime)
+            -- Busca FF só se não estiver cacheado ou mudou
+            if not ffData or not ffData.ff or not ffData.ff.Parent then
+                local children = character:GetChildren()
+                for j = 1, #children do
+                    local child = children[j]
+                    if child:IsA('ForceField') then
+                        ff = child
+                        break
                     end
-                    
+                end
+                if ff then
+                    local startTime = ff:GetAttribute("StartTime") or currentTime
                     self.ffData[character] = {ff = ff, startTime = startTime}
                     self:createBillboard(character, ff, startTime)
-                    
-                    local conn = ff.AncestryChanged:Connect(function(_, parent)
-                        if not parent then
-                            self:removeForceFieldData(character, ff)
-                        end
-                    end)
-                    
-                    local charConnMgr = self._charConnMgrs[character]
-                    if charConnMgr then
-                        charConnMgr:add(conn)
-                    end
-                    self._ffConnections[ff] = conn
-                end
-                
-                -- Atualização otimizada do billboard
-                local timeLeft = self:getFFTimeLeft(player)
-                local billboardData = self.billboards[character]
-                if billboardData and billboardData.label then
-                    -- Só atualiza se houver mudança significativa
-                    local timeDiff = mathFloor(timeLeft * 10) / 10 -- Arredonda para 0.1s
-                    if timeDiff ~= billboardData.lastTimeLeft then
-                        billboardData.label.Text = stringFormat('%.1f s until FF is out', timeDiff)
-                        billboardData.label.TextColor3 = self:getFFColor(timeDiff)
-                        billboardData.lastTimeLeft = timeDiff
-                    end
-                    
-                    -- Atualiza distância apenas se necessário
-                    if billboardData.billboard.MaxDistance ~= self.billboardMaxDistance then
-                        billboardData.billboard.MaxDistance = self.billboardMaxDistance
+                else
+                    if ffData then
+                        self:removeForceFieldData(character, ffData.ff)
                     end
                 end
             else
-                -- Remove dados se não houver FF
-                if ffData then
-                    self:removeForceFieldData(character, ffData.ff)
+                ff = ffData.ff
+                -- Só atualiza se FF ainda existe
+                if ff and ff.Parent == character then
+                    self:createBillboard(character, ff, ffData.startTime)
                 end
             end
         end
@@ -398,7 +360,6 @@ end
 function FFDetector:enable()
     self.enabled = true
     self:cleanup()
-    
     -- Registra players existentes
     local players = Players:GetPlayers()
     for i = 1, #players do
@@ -407,20 +368,17 @@ function FFDetector:enable()
             self:registerCharacterFF(player.Character)
         end
     end
-    
     -- Conexões de eventos
     self._connMgr:add(Players.PlayerAdded:Connect(function(player)
         self:registerPlayer(player)
     end))
-    
     self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
         if player.Character then
             self:clearCharacterData(player.Character)
         end
     end))
-    
-    -- Usa RenderStepped com throttling interno
-    self._connMgr:add(RunService.RenderStepped:Connect(function()
+    -- Usa Heartbeat ao invés de RenderStepped para aliviar FPS
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
         self:updateBillboards()
     end))
 end
