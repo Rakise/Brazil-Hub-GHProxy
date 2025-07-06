@@ -255,7 +255,7 @@ function IndicatorController:_showIndicator(instance, amount, indicatorType)
 	-- Format the display text
 	local text
 	if indicatorType == "Heal" then
-		text = "+" .. amount
+		text = "+" .. string.format("%.4f", amount)
 	else
 		text = math.floor(amount + 0.5)
 	end
