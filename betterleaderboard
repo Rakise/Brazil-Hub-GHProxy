@@ -110,6 +110,7 @@ function BetterLeaderboard:_createScrollingFrame(parent)
     listLayout.Parent = scrollingFrame
     
     scrollingFrame.Parent = parent
+    self._scrollingFrameRef = scrollingFrame -- para acesso em _updateCanvasSize
     return scrollingFrame
 end
 
@@ -451,6 +452,8 @@ function BetterLeaderboard:addPlayerFrame(player)
     if not rogueName then
         self:_startRogueNameLoading(playerLabel, player)
     end
+
+    self:_updateCanvasSize()
 end
 
 --- Enables the better leaderboard
@@ -506,6 +509,20 @@ function BetterLeaderboard:disable()
     self.leaderboard = nil
     self.scrollingFrame = nil
     self:_showOriginalLeaderboard()
+end
+
+--- Atualiza o CanvasSize do ScrollingFrame baseado no número de jogadores
+function BetterLeaderboard:_updateCanvasSize()
+    if not self.scrollingFrame then return end
+    local playerCount = #Players:GetPlayers()
+    local frameHeight = 0
+    -- Calcula altura real do frame (usando offset de PLAYER_FRAME_SIZE)
+    if typeof(CONFIG.PLAYER_FRAME_SIZE) == "UDim2" then
+        frameHeight = CONFIG.PLAYER_FRAME_SIZE.Y.Offset
+    end
+    local padding = 5
+    local totalHeight = playerCount * frameHeight + padding
+    self.scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
 end
 
 return BetterLeaderboard
