@@ -51,7 +51,7 @@ local FRAME_CONFIG = {
             {
                 name = "distanceLabel",
                 key = "distance",
-                format = "[%dm]",
+                format = "[%s]",
                 dataKey = "distance",
                 showByDefault = true,
                 getData = function(player, cache, localChar, targetChar)
@@ -61,10 +61,10 @@ local FRAME_CONFIG = {
                         
                         if localRoot and targetRoot then
                             local dist = (localRoot.Position - targetRoot.Position).Magnitude
-                            return floor(dist)
+                            return floor(dist) .. "m"
                         end
                     end
-                    return 0
+                    return "0m"
                 end
             }
         }
@@ -247,7 +247,7 @@ function PlayerESP:createBillboard(player)
 
         -- Criação dos labels para este frame
         for j, labelConfig in ipairs(frameConfig.labels) do
-            local label = createLabel(labelConfig.format:format(""), frame)
+            local label = createLabel("", frame)
             label.LayoutOrder = j
             billboardData.labels[labelConfig.key] = label
         end
