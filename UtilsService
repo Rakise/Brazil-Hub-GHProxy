@@ -20,6 +20,7 @@ function UtilsService.new()
     self.playerData = PlayerData.new()
     self.forceField = ForceField.new()
     self.toolManager = ToolManager.new()
+    self.billboardUtils = BillboardUtils.new()
     
     return self
 end
@@ -134,19 +135,19 @@ end
 
 --// Billboard/Frame/Label Utility Methods
 function UtilsService:createBillboard(parent, adornee, size, name)
-    return BillboardUtils.createBillboard(parent, adornee, size, name)
+    return self.billboardUtils:createBillboard(parent, adornee, size, name)
 end
 
 function UtilsService:createFrameWithLayout(parent, frameName, layoutConfig)
-    return BillboardUtils.createFrameWithLayout(parent, frameName, layoutConfig)
+    return self.billboardUtils:createFrameWithLayout(parent, frameName, layoutConfig)
 end
 
 function UtilsService:createLabel(parent, text)
-    return BillboardUtils.createLabel(parent, text)
+    return self.billboardUtils:createLabel(parent, text)
 end
 
 function UtilsService:createUIListLayout(parent, layoutConfig)
-    return BillboardUtils.createUIListLayout(parent, layoutConfig)
+    return self.billboardUtils:createUIListLayout(parent, layoutConfig)
 end
 
 --// Main Export
