@@ -522,7 +522,7 @@ function BetterLeaderboard:_updateCanvasSize()
     if typeof(CONFIG.PLAYER_FRAME_SIZE) == "UDim2" then
         frameHeight = CONFIG.PLAYER_FRAME_SIZE.Y.Offset
     end
-    local padding = 15
+    local padding = 60
     local totalHeight = playerCount * frameHeight + padding
     local minHeight = 230
     self.scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(totalHeight, minHeight))
