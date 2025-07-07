@@ -104,7 +104,7 @@ local function getTrinketInfo(part)
     end
     
     if material == MATERIAL_NEON then
-        if part.BrickColor == part.BrickColor.Gold then
+        if part.BrickColor == BrickColor.new("Gold") then
             return "Lost Sunshine", TRINKET_TYPES.EVENT_TRINKET
         end
         local name = part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
