@@ -1,6 +1,8 @@
 -- KeyHandler: Sistema de key OOP para BrazilHub
 -- Usa writefile/readfile para persistência local
 -- Integração com LinoriaLib para input de key
+-- ATENÇÃO: A Library (LinoriaLib) deve ser passada como argumento em KeyHandler.new(library)
+-- NÃO carregue a Library dentro deste módulo!
 
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -12,11 +14,11 @@ local KeyHandler = {}
 KeyHandler.__index = KeyHandler
 
 -- LinoriaLib deve ser passado na criação
-function KeyHandler.new(linoriaLib)
+function KeyHandler.new(library)
     local self = setmetatable({}, KeyHandler)
     self.key = nil
     self.isValid = false
-    self.linoriaLib = linoriaLib -- Referência à LinoriaLib
+    self.linoriaLib = library -- Referência à LinoriaLib
     return self
 end
 
