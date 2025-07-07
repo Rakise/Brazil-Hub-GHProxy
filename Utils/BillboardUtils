@@ -1,6 +1,12 @@
 local BillboardUtils = {}
+BillboardUtils.__index = BillboardUtils
 
-function BillboardUtils.createBillboard(parent, adornee, size, name)
+function BillboardUtils.new()
+    local self = setmetatable({}, BillboardUtils)
+    return self
+end
+
+function BillboardUtils:createBillboard(parent, adornee, size, name)
     local billboard = Instance.new("BillboardGui")
     billboard.Name = name or "Billboard"
     billboard.Adornee = adornee
@@ -13,7 +19,7 @@ function BillboardUtils.createBillboard(parent, adornee, size, name)
     return billboard
 end
 
-function BillboardUtils.createUIListLayout(parent, layoutConfig)
+function BillboardUtils:createUIListLayout(parent, layoutConfig)
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = layoutConfig.fillDirection or Enum.FillDirection.Horizontal
     layout.HorizontalAlignment = layoutConfig.horizontalAlignment or Enum.HorizontalAlignment.Center
@@ -23,18 +29,18 @@ function BillboardUtils.createUIListLayout(parent, layoutConfig)
     return layout
 end
 
-function BillboardUtils.createFrameWithLayout(parent, frameName, layoutConfig)
+function BillboardUtils:createFrameWithLayout(parent, frameName, layoutConfig)
     local frame = Instance.new("Frame")
     frame.Name = frameName or "Frame"
     frame.BackgroundTransparency = 1
     frame.Size = UDim2.new(1, 0, 0.1, 0)
     frame.Parent = parent
 
-    local layout = BillboardUtils.createUIListLayout(frame, layoutConfig)
+    local layout = self:createUIListLayout(frame, layoutConfig)
     return frame, layout
 end
 
-function BillboardUtils.createLabel(parent, text)
+function BillboardUtils:createLabel(parent, text)
     local label = Instance.new("TextLabel")
     label.FontSize = Enum.FontSize.Size14
     label.TextColor3 = Color3.new(1, 1, 1)
