@@ -22,15 +22,26 @@ function PlayerData:_safeGetAttribute(player, attributeName, fallback)
 end
 
 --// Function: PlayerData:_formatRogueName
---// Description: Formats a rogue name based on rank and gender.
-function PlayerData:_formatRogueName(firstName, lastName, houseRank, gender)
+--// Description: Formats a rogue name based on rank, gender and uber title.
+function PlayerData:_formatRogueName(firstName, lastName, houseRank, gender, uberTitle)
     local hasLastName = lastName ~= ""
     local isOwner     = houseRank == "Owner"
+    local hasUberTitle = uberTitle and uberTitle ~= ""
+    
+    local baseName = ""
     if isOwner and hasLastName then
         local title = gender == "Female" and "Lady" or "Lord"
-        return string.format("%s %s %s", title, firstName, lastName)
+        baseName = string.format("%s %s %s", title, firstName, lastName)
+    else
+        baseName = hasLastName and string.format("%s %s", firstName, lastName) or firstName
     end
-    return hasLastName and string.format("%s %s", firstName, lastName) or firstName
+    
+    -- Add uber title if available
+    if hasUberTitle then
+        return string.format("%s, %s", baseName, uberTitle)
+    end
+    
+    return baseName
 end
 
 --// Function: PlayerData:getBasicData
@@ -46,57 +57,58 @@ function PlayerData:getBasicData(player)
     }
 end
 
---// Function: PlayerData:_getRogueNameFromModels
---// Description: Gets rogue name from character models with FakeHumanoid.
-function PlayerData:_getRogueNameFromModels(player)
-    if not player or not player.Character then return "" end
+--// Function: PlayerData:_safeGetLeaderstat
+--// Description: Safely gets a leaderstat value with fallback.
+function PlayerData:_safeGetLeaderstat(player, statName, fallback)
+    if not player or not player:FindFirstChild("leaderstats") then return fallback end
+    local leaderstats = player.leaderstats
+    local stat = leaderstats:FindFirstChild(statName)
+    return stat and stat.Value or fallback
+end
+
+--// Function: PlayerData:_getPlayerDataWithFallback
+--// Description: Gets player data with attribute fallback to leaderstats.
+function PlayerData:_getPlayerDataWithFallback(player, dataName, fallback)
+    if not player then return fallback end
     
-    for _, model in pairs(player.Character:GetChildren()) do
-        if model:IsA("Model") then
-            local fakeHumanoid = model:FindFirstChild("FakeHumanoid")
-            if fakeHumanoid then
-                return model.Name
-            end
-        end
+    -- Try attribute first
+    local attributeValue = self:_safeGetAttribute(player, dataName, nil)
+    if attributeValue ~= nil then
+        return attributeValue
     end
     
-    return ""
+    -- Fallback to leaderstats
+    return self:_safeGetLeaderstat(player, dataName, fallback)
 end
 
 --// Function: PlayerData:getRogueData
---// Description: Retrieves player rogue information.
+--// Description: Retrieves player rogue information with attribute fallback to leaderstats.
 function PlayerData:getRogueData(player)
     if not player then return {} end
     
-    local firstName = tostring(self:_safeGetAttribute(player, "FirstName", ""))
-    local lastName  = tostring(self:_safeGetAttribute(player, "LastName", ""))
-    local houseRank = self:_safeGetAttribute(player, "HouseRank", nil)
-    local gender    = self:_safeGetAttribute(player, "Gender", nil)
+    local firstName = tostring(self:_getPlayerDataWithFallback(player, "FirstName", ""))
+    local lastName  = tostring(self:_getPlayerDataWithFallback(player, "LastName", ""))
+    local houseRank = self:_getPlayerDataWithFallback(player, "HouseRank", nil)
+    local gender    = self:_getPlayerDataWithFallback(player, "Gender", nil)
+    local uberTitle = tostring(self:_getPlayerDataWithFallback(player, "UberTitle", ""))
     
-    -- Fallback: if attributes don't exist, try to get name from models with FakeHumanoid
-    if firstName == "" and lastName == "" then
-        local modelName = self:_getRogueNameFromModels(player)
-        if modelName ~= "" then
-            firstName = modelName
-        end
-    end
-    
-    local rogueName = self:_formatRogueName(firstName, lastName, houseRank, gender)
+    local rogueName = self:_formatRogueName(firstName, lastName, houseRank, gender, uberTitle)
     return {
         firstName    = firstName,
         lastName     = lastName,
         houseRank    = houseRank,
         gender       = gender,
+        uberTitle    = uberTitle,
         rogueName    = rogueName,
         fullRogueName= rogueName -- Kept for backward compatibility
     }
 end
 
 --// Function: PlayerData:getEdictData
---// Description: Retrieves player edict information.
+--// Description: Retrieves player edict information with attribute fallback to leaderstats.
 function PlayerData:getEdictData(player)
     if not player then return {} end
-    local edict = self:_safeGetAttribute(player, "Edict", "None")
+    local edict = self:_getPlayerDataWithFallback(player, "Edict", "None")
     return {
         edict        = edict,
         edictDisplay = edict
@@ -104,10 +116,10 @@ function PlayerData:getEdictData(player)
 end
 
 --// Function: PlayerData:getPrestigeData
---// Description: Retrieves player prestige information.
+--// Description: Retrieves player prestige information with attribute fallback to leaderstats.
 function PlayerData:getPrestigeData(player)
     if not player then return { level = 0 } end
-    local prestigeLevel = self:_safeGetAttribute(player, "Prestige", 0)
+    local prestigeLevel = self:_getPlayerDataWithFallback(player, "Prestige", 0)
     return {
         level       = prestigeLevel,
         hasPrestige = prestigeLevel > 0
