@@ -1,72 +1,152 @@
--- betterleaderboard.lua
--- Handler OOP para criar um leaderboard customizado
--- Uso: local BetterLeaderboard = require(path); local leaderboard = BetterLeaderboard.new(); leaderboard:enable()/leaderboard:disable()
+-- BetterLeaderboard.lua
+-- Enhanced OOP handler for creating custom leaderboard hierarchy
+-- Provides a better alternative to the default Roblox leaderboard with prestige and rogue name support
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 
--- Carrega o módulo Utils com tratamento de erro
-local Utils, utils
-local success, err = pcall(function()
-    Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/UtilsService"))()
-    utils = Utils.new()
-end)
-
-if not success then
-    warn("Falha ao carregar Utils: " .. tostring(err))
-    -- Criar um utils mock para evitar erros
-    utils = {
-        getPlayerPrestigeData = function(self, player)
-            return {level = 0}
-        end,
-        getPlayerRogueDisplay = function(self, player)
-            return player.Name
-        end
+-- Configuration constants
+local CONFIG = {
+    LEADERBOARD_SIZE = UDim2.new(0.05, 150, 0, 240),
+    SCROLLING_FRAME_SIZE = UDim2.new(1.05, -10, 1, -20),
+    PLAYER_FRAME_SIZE = UDim2.new(1, 0, 0.1, 0),
+    PRESTIGE_BUTTON_SIZE = UDim2.new(0, 35, 0, 20),
+    PLAYER_LABEL_SIZE = UDim2.new(1.5, 0, 0, 20),
+    RETRY_INTERVAL = 1,
+    PLAYERGUI_TIMEOUT = 5,
+    
+    -- Visual settings
+    COLORS = {
+        WHITE = Color3.new(1, 1, 1),
+        GRAY = Color3.fromRGB(180, 180, 180),
+        GREEN = Color3.new(49/51, 197/255, 26/51),
+        BLACK = Color3.new(0, 0, 0)
+    },
+    
+    -- Asset IDs
+    ASSETS = {
+        LEADERBOARD_IMAGE = "rbxassetid://1327087642",
+        SCROLL_MID = "rbxassetid://3515608813",
+        SCROLL_TOP = "rbxassetid://3515609176",
+        SCROLL_BOTTOM = "rbxassetid://3515608177"
     }
-end
-
--- Cache de cores para evitar criar novos objetos
-local COLORS = {
-    WHITE = Color3.new(1, 1, 1),
-    GRAY = Color3.new(0.592156, 0.560784, 0.560784),
-    BLACK = Color3.new(0, 0, 0),
-    YELLOW = Color3.new(0.847058, 0.690196, 0.250980),
-    BLUE = Color3.fromRGB(80, 180, 255)
 }
 
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+-- Initialize external utilities service
+local UtilsService = nil
+local utils = nil
 
+local function initializeUtilsService()
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/UtilsService"))()
+    end)
+    
+    if success then
+        UtilsService = result
+        utils = UtilsService.new()
+    end
+end
+
+-- Initialize utilities
+initializeUtilsService()
+
+-- BetterLeaderboard class definition
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
+--- Creates a new BetterLeaderboard instance
+-- @return BetterLeaderboard: New instance of the leaderboard
 function BetterLeaderboard.new()
     local self = setmetatable({}, BetterLeaderboard)
+    
+    -- Instance properties
     self.enabled = false
-    self._connMgr = ConnectionManager.new()
-    self._frameConnMgrs = {} -- [key] = ConnectionManager para cada frame
-    self.originalLeaderboardGui = nil
-    self.customLeaderboardGui = nil
-    self.updateScheduled = false
-    self.currentCameraTarget = nil
-    self.originalCameraSubject = nil
-    self.playerFrames = {}
-    self.lastColorUpdate = 0
-    self.colorUpdateInterval = 1
+    self.screenGui = nil
+    self.leaderboard = nil
     self.scrollingFrame = nil
+    self._playerAddedConn = nil
+    self._lbConn = nil
+    
     return self
 end
 
-function BetterLeaderboard:getPlayerGui()
-    local player = Players.LocalPlayer
-    if not player then 
-        return nil 
+--- Creates the main ScreenGui container
+-- @return ScreenGui: The main GUI container
+function BetterLeaderboard:_createScreenGui()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "BetterLeaderboardGui"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    return screenGui
+end
+
+--- Creates the scrolling frame for player entries
+-- @param parent Instance: Parent container for the scrolling frame
+-- @return ScrollingFrame: The scrolling frame instance
+function BetterLeaderboard:_createScrollingFrame(parent)
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.Name = "ScrollingFrame"
+    scrollingFrame.ScrollBarImageColor3 = CONFIG.COLORS.GREEN
+    scrollingFrame.MidImage = CONFIG.ASSETS.SCROLL_MID
+    scrollingFrame.TopImage = CONFIG.ASSETS.SCROLL_TOP
+    scrollingFrame.BottomImage = CONFIG.ASSETS.SCROLL_BOTTOM
+    scrollingFrame.Active = true
+    scrollingFrame.ScrollBarThickness = 10
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.BackgroundColor3 = CONFIG.COLORS.WHITE
+    scrollingFrame.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+    scrollingFrame.Position = UDim2.new(-0.07, 0, 0.04, 0)
+    scrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+    scrollingFrame.Size = CONFIG.SCROLLING_FRAME_SIZE
+    scrollingFrame.BorderSizePixel = 0
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 330)
+    
+    -- Add list layout for automatic ordering
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = scrollingFrame
+    
+    scrollingFrame.Parent = parent
+    return scrollingFrame
+end
+
+--- Creates the main leaderboard GUI structure
+-- @param parent Instance: Parent container for the leaderboard
+-- @return ImageButton, ScrollingFrame: The leaderboard container and scrolling frame
+function BetterLeaderboard:_createLeaderboardGui(parent)
+    -- Main leaderboard container
+    local leaderboard = Instance.new("ImageButton")
+    leaderboard.Name = "Leaderboard"
+    leaderboard.ScaleType = Enum.ScaleType.Slice
+    leaderboard.ImageTransparency = 0.8
+    leaderboard.Size = CONFIG.LEADERBOARD_SIZE
+    leaderboard.AnchorPoint = Vector2.new(1, 0)
+    leaderboard.Image = CONFIG.ASSETS.LEADERBOARD_IMAGE
+    leaderboard.BackgroundTransparency = 1
+    leaderboard.Position = UDim2.new(1, 0, 0, 0)
+    leaderboard.BackgroundColor3 = CONFIG.COLORS.WHITE
+    leaderboard.BorderSizePixel = 0
+    leaderboard.SliceCenter = Rect.new(Vector2.new(20, 20), Vector2.new(190, 190))
+    
+    -- Create scrolling frame
+    local scrollingFrame = self:_createScrollingFrame(leaderboard)
+    
+    if parent then
+        leaderboard.Parent = parent
     end
+    
+    return leaderboard, scrollingFrame
+end
+
+--- Gets the PlayerGui with timeout handling
+-- @return PlayerGui|nil: The player's GUI or nil if not found
+function BetterLeaderboard:_getPlayerGui()
+    local player = Players.LocalPlayer
+    if not player then return nil end
     
     local playerGui = player:FindFirstChildOfClass("PlayerGui")
     if not playerGui then
         local success, result = pcall(function()
-            return player:WaitForChild("PlayerGui", 5)
+            return player:WaitForChild("PlayerGui", CONFIG.PLAYERGUI_TIMEOUT)
         end)
         if success then
             playerGui = result
@@ -76,420 +156,247 @@ function BetterLeaderboard:getPlayerGui()
     return playerGui
 end
 
-function BetterLeaderboard:findOriginalLeaderboardGui()
-    local playerGui = self:getPlayerGui()
-    if not playerGui then return nil end
+--- Retrieves player prestige data
+-- @param player Player: The player to get prestige data for
+-- @return number: The player's prestige level
+function BetterLeaderboard:_getPlayerPrestige(player)
+    local prestige = 0
     
-    return playerGui:FindFirstChild("LeaderboardGui")
-end
-
-function BetterLeaderboard:isCustomLeaderboardValid()
-    return self.customLeaderboardGui and 
-           self.customLeaderboardGui.Parent and 
-           self.customLeaderboardGui:FindFirstChild("Leaderboard") and 
-           self.customLeaderboardGui.Leaderboard:FindFirstChild("ScrollingFrame")
-end
-
-function BetterLeaderboard:scheduleUpdate()
-    if self.updateScheduled then return end
-    self.updateScheduled = true
-    task.spawn(function()
-        task.wait(0.1)
-        if self.enabled then
-            self:updatePlayerList()
+    if utils and utils.getPlayerPrestigeData then
+        local data = utils:getPlayerPrestigeData(player)
+        if data and data.level then
+            prestige = data.level
         end
-        self.updateScheduled = false
+    end
+    
+    return prestige
+end
+
+--- Retrieves player rogue display name
+-- @param player Player: The player to get rogue name for
+-- @return string|nil: The player's rogue display name or nil if not found
+function BetterLeaderboard:_getPlayerRogueName(player)
+    if utils and utils.getPlayerRogueDisplay then
+        local display = utils:getPlayerRogueDisplay(player)
+        if display and #display > 0 then
+            return display
+        end
+    end
+    return nil
+end
+
+--- Creates a prestige button for a player
+-- @param prestige number: The player's prestige level
+-- @param parent Instance: Parent container for the button
+-- @return TextButton: The prestige button instance
+function BetterLeaderboard:_createPrestigeButton(prestige, parent)
+    local prestigeButton = Instance.new("TextButton")
+    prestigeButton.Name = "Prestige"
+    prestigeButton.FontSize = Enum.FontSize.Size18
+    prestigeButton.TextColor3 = CONFIG.COLORS.WHITE
+    prestigeButton.TextTransparency = 0.2
+    prestigeButton.Text = "#" .. tostring(prestige > 0 and prestige or "???")
+    prestigeButton.TextStrokeTransparency = 0.5
+    prestigeButton.Size = CONFIG.PRESTIGE_BUTTON_SIZE
+    prestigeButton.Font = Enum.Font.SourceSansSemibold
+    prestigeButton.BackgroundTransparency = 1
+    prestigeButton.TextXAlignment = Enum.TextXAlignment.Left
+    prestigeButton.TextSize = 16
+    prestigeButton.BorderSizePixel = 0
+    prestigeButton.BackgroundColor3 = CONFIG.COLORS.WHITE
+    prestigeButton.Visible = prestige > 0
+    prestigeButton.Parent = parent
+    
+    return prestigeButton
+end
+
+--- Creates a player label with hover functionality
+-- @param player Player: The player this label represents
+-- @param rogueName string: The player's rogue display name
+-- @param parent Instance: Parent container for the label
+-- @return TextButton: The player label instance
+function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
+    local playerLabel = Instance.new("TextButton")
+    playerLabel.Name = "PlayerLabel"
+    playerLabel.FontSize = Enum.FontSize.Size18
+    playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+    playerLabel.BorderColor3 = CONFIG.COLORS.BLACK
+    playerLabel.Text = rogueName or "Loading"
+    playerLabel.TextXAlignment = Enum.TextXAlignment.Left
+    playerLabel.TextStrokeTransparency = 0.5
+    playerLabel.Size = CONFIG.PLAYER_LABEL_SIZE
+    playerLabel.Font = Enum.Font.SourceSansSemibold
+    playerLabel.BackgroundTransparency = 1
+    playerLabel.Position = UDim2.new(0, 30, 0, 0)
+    playerLabel.TextSize = 18
+    playerLabel.BorderSizePixel = 0
+    playerLabel.BackgroundColor3 = CONFIG.COLORS.WHITE
+    playerLabel.Parent = parent
+    
+    -- Add hover functionality
+    self:_setupLabelHover(playerLabel, player, rogueName)
+    
+    return playerLabel
+end
+
+--- Sets up hover functionality for player labels
+-- @param playerLabel TextButton: The label to add hover to
+-- @param player Player: The player this label represents
+-- @param rogueName string: The player's rogue display name
+function BetterLeaderboard:_setupLabelHover(playerLabel, player, rogueName)
+    playerLabel.MouseEnter:Connect(function()
+        playerLabel.TextColor3 = CONFIG.COLORS.GRAY
+        playerLabel.Text = player.Name
+    end)
+    
+    playerLabel.MouseLeave:Connect(function()
+        playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+        playerLabel.Text = rogueName or "Loading"
     end)
 end
 
-function BetterLeaderboard:switchCameraToPlayer(player)
-    local camera = workspace.CurrentCamera
-    if not camera or not player or not player.Parent then 
-        return 
-    end
-    
-    if self.currentCameraTarget == player then
-        self:resetCameraToLocalPlayer()
+--- Starts async loading of rogue name if not initially available
+-- @param playerLabel TextButton: The label to update
+-- @param player Player: The player to get rogue name for
+function BetterLeaderboard:_startRogueNameLoading(playerLabel, player)
+    if not (utils and utils.getPlayerRogueDisplay) then
         return
     end
     
-    if not self.originalCameraSubject then
-        self.originalCameraSubject = camera.CameraSubject
-    end
-    
-    if not player.Character then 
-        return 
-    end
-    
-    local humanoid = player.Character:FindFirstChild("Humanoid")
-    if not humanoid then 
-        return 
-    end
-    
-    self.currentCameraTarget = player
-    camera.CameraSubject = humanoid
-end
-
-function BetterLeaderboard:resetCameraToLocalPlayer()
-    local camera = workspace.CurrentCamera
-    if not camera then return end
-    
-    if self.originalCameraSubject and self.originalCameraSubject.Parent then
-        camera.CameraSubject = self.originalCameraSubject
-    else
-        local localPlayer = Players.LocalPlayer
-        if localPlayer and localPlayer.Character then
-            local humanoid = localPlayer.Character:FindFirstChild("Humanoid")
-            if humanoid then
-                camera.CameraSubject = humanoid
+    task.spawn(function()
+        while playerLabel and playerLabel.Parent do
+            local display = utils:getPlayerRogueDisplay(player)
+            if display and #display > 0 then
+                playerLabel.Text = display
+                break
             end
+            task.wait(CONFIG.RETRY_INTERVAL)
         end
-    end
-    
-    self.currentCameraTarget = nil
-end
-
-function BetterLeaderboard:createCustomLeaderboard()
-    local playerGui = self:getPlayerGui()
-    if not playerGui then
-        return nil, nil
-    end
-    
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "BetterLeaderboardGui"
-    screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-    local leaderboardButton = Instance.new("ImageButton")
-    leaderboardButton.Name = "Leaderboard"
-    leaderboardButton.ScaleType = Enum.ScaleType.Slice
-    leaderboardButton.ImageTransparency = 0.8
-    leaderboardButton.Size = UDim2.new(0.05, 150, 0, 240)
-    leaderboardButton.AnchorPoint = Vector2.new(1, 0)
-    leaderboardButton.Image = "rbxassetid://1327087642"
-    leaderboardButton.BackgroundTransparency = 1
-    leaderboardButton.Position = UDim2.new(1, 0, 0, 0)
-    leaderboardButton.BackgroundColor3 = COLORS.WHITE
-    leaderboardButton.BorderSizePixel = 0
-    leaderboardButton.SliceCenter = Rect.new(Vector2.new(20, 20), Vector2.new(190, 190))
-
-    local scrollingFrame = Instance.new("ScrollingFrame")
-    scrollingFrame.ScrollBarImageColor3 = COLORS.GREEN
-    scrollingFrame.MidImage = "rbxassetid://3515608813"
-    scrollingFrame.Active = true
-    scrollingFrame.ScrollBarThickness = 10
-    scrollingFrame.BackgroundTransparency = 1
-    scrollingFrame.BackgroundColor3 = COLORS.WHITE
-    scrollingFrame.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
-    scrollingFrame.Position = UDim2.new(-0.07, 0, 0.04, 0)
-    scrollingFrame.TopImage = "rbxassetid://3515609176"
-    scrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
-    scrollingFrame.Size = UDim2.new(1.05, -10, 1, -20)
-    scrollingFrame.BottomImage = "rbxassetid://3515608177"
-    scrollingFrame.BorderSizePixel = 0
-    scrollingFrame.CanvasSize = UDim2.new(0, 0,0, 330)
-    scrollingFrame.Name = "ScrollingFrame"
-
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Padding = UDim.new(0, 2)
-    
-    -- Parent elements in correct order
-    listLayout.Parent = scrollingFrame
-    scrollingFrame.Parent = leaderboardButton
-    leaderboardButton.Parent = screenGui
-    screenGui.Parent = playerGui
-
-    -- Update canvas size when content changes
-    local function updateCanvasSize()
-        if scrollingFrame and scrollingFrame.Parent then
-            local contentHeight = listLayout.AbsoluteContentSize.Y
-            scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, contentHeight + 4) -- 4px extra para garantir o scroll
-        end
-    end
-    local canvasConnection = listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
-    self._connMgr:add(canvasConnection)
-    -- Chama uma vez ao criar
-    updateCanvasSize()
-    
-    self.scrollingFrame = scrollingFrame
-    self.customLeaderboardGui = screenGui
-    
-    return screenGui, scrollingFrame
-end
-
-function BetterLeaderboard:createPlayerFrame(player)
-    if not player or not player.Parent then 
-        return nil
-    end
-    
-    local frame = Instance.new("Frame")
-    frame.BackgroundTransparency = 1
-    frame.BorderColor3 = COLORS.BLACK
-    frame.SizeConstraint = Enum.SizeConstraint.RelativeXX
-    frame.Size = UDim2.new(1, 0, 0, 25)
-    frame.BorderSizePixel = 0
-    frame.BackgroundColor3 = COLORS.WHITE
-
-    local hasCharacter = player.Character ~= nil
-    local textColor = hasCharacter and COLORS.WHITE or COLORS.GRAY
-
-    local prestigeData = utils:getPlayerPrestigeData(player)
-    local prestigeLevel = prestigeData.level or 0
-
-    local prestigeButton = Instance.new("TextButton")
-    prestigeButton.Font = Enum.Font.SourceSansSemibold
-    prestigeButton.TextColor3 = textColor
-    prestigeButton.TextTransparency = 0.2
-    prestigeButton.Text = "#" .. prestigeLevel
-    prestigeButton.TextStrokeTransparency = 0.5
-    prestigeButton.Size = UDim2.new(0, 35, 1, 0)
-    prestigeButton.BackgroundTransparency = 1
-    prestigeButton.TextXAlignment = Enum.TextXAlignment.Left
-    prestigeButton.Name = "Prestige"
-    prestigeButton.TextSize = 16
-    prestigeButton.BorderSizePixel = 0
-    prestigeButton.Visible = prestigeLevel > 0
-
-    local playerLabel = Instance.new("TextButton")
-    playerLabel.Font = Enum.Font.SourceSansSemibold
-    playerLabel.TextColor3 = textColor
-    playerLabel.BorderColor3 = COLORS.BLACK
-    playerLabel.Text = utils:getPlayerRogueDisplay(player) or player.Name
-    playerLabel.TextXAlignment = Enum.TextXAlignment.Left
-    playerLabel.TextStrokeTransparency = 0.5
-    playerLabel.Size = UDim2.new(1, -35, 1, 0)
-    playerLabel.BackgroundTransparency = 1
-    playerLabel.Position = UDim2.new(0, 35, 0, 0)
-    playerLabel.TextSize = 18
-    playerLabel.Name = "PlayerLabel"
-    playerLabel.BorderSizePixel = 0
-    playerLabel.TextTruncate = Enum.TextTruncate.AtEnd
-
-    -- Parent elements
-    prestigeButton.Parent = frame
-    playerLabel.Parent = frame
-
-    -- Connect click events - store connections simply
-    local connectionKey = "player_" .. player.UserId
-    self._frameConnMgrs[connectionKey] = ConnectionManager.new()
-    
-    self._frameConnMgrs[connectionKey]:add(playerLabel.MouseButton1Click:Connect(function()
-        if self.enabled and hasCharacter and player.Parent then
-            self:switchCameraToPlayer(player)
-        end
-    end))
-    
-    return frame
-end
-
-function BetterLeaderboard:cleanupFrameConnections()
-    for key, mgr in pairs(self._frameConnMgrs) do
-        if mgr then
-            mgr:disconnectAll()
-            self._frameConnMgrs[key] = nil
-        end
-    end
-    self._frameConnMgrs = {}
-end
-
-function BetterLeaderboard:updatePlayerList()
-    if not self:isCustomLeaderboardValid() then 
-        return 
-    end
-    
-    local scrollingFrame = self.scrollingFrame
-    if not scrollingFrame or not scrollingFrame.Parent then 
-        return 
-    end
-    
-    -- Clean up existing frames and connections
-    self:cleanupFrameConnections()
-    
-    for player, frame in pairs(self.playerFrames) do
-        if frame and frame.Parent then
-            frame:Destroy()
-        end
-    end
-    self.playerFrames = {}
-    
-    -- Create frames for all players
-    local playerList = {}
-    for _, player in pairs(Players:GetPlayers()) do
-        if player and player.Parent then
-            table.insert(playerList, player)
-        end
-    end
-    
-    -- Sort players by prestige level (highest first)
-    table.sort(playerList, function(a, b)
-        local prestigeA = utils:getPlayerPrestigeData(a).level or 0
-        local prestigeB = utils:getPlayerPrestigeData(b).level or 0
-        if prestigeA == prestigeB then
-            return a.Name < b.Name
-        end
-        return prestigeA > prestigeB
     end)
-    
-    -- Create frames in order
-    for i, player in ipairs(playerList) do
-        local frame = self:createPlayerFrame(player)
-        if frame then
-            frame.LayoutOrder = i
-            frame.Parent = scrollingFrame
-            self.playerFrames[player] = frame
-        end
-    end
 end
 
-function BetterLeaderboard:updatePlayerColors()
-    local currentTime = tick()
-    if currentTime - self.lastColorUpdate < self.colorUpdateInterval then return end
-    self.lastColorUpdate = currentTime
+--- Hides the original Roblox leaderboard
+function BetterLeaderboard:_hideOriginalLeaderboard()
+    local playerGui = self:_getPlayerGui()
+    if not playerGui then return end
     
-    for player, frame in pairs(self.playerFrames) do
-        if frame and frame.Parent and player and player.Parent then
-            local hasCharacter = player.Character ~= nil
-            local isObserved = (self.currentCameraTarget == player)
-            local playerLabel = frame:FindFirstChild("PlayerLabel")
-            local prestigeButton = frame:FindFirstChild("Prestige")
-
-            -- Cor: azul se observado, branco se tem personagem, cinza se não tem
-            local textColor = isObserved and COLORS.BLUE or (hasCharacter and COLORS.WHITE or COLORS.GRAY)
-
-            if playerLabel then
-                playerLabel.TextColor3 = textColor
-                playerLabel.Active = hasCharacter -- Só clicável se tem personagem
-                playerLabel.AutoButtonColor = hasCharacter -- Efeito hover só se clicável
-                playerLabel.TextTransparency = hasCharacter and 0.2 or 0.5
-            end
-            if prestigeButton then
-                prestigeButton.TextColor3 = textColor
-            end
-        end
-    end
-end
-
-function BetterLeaderboard:connectPlayerEvents()
-    self._connMgr:disconnectAll()
-    
-    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
-        task.wait(0.1)
-        self:scheduleUpdate()
-    end))
-    
-    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
-        if self.currentCameraTarget == player then
-            self:resetCameraToLocalPlayer()
-        end
-        local connectionKey = "player_" .. player.UserId
-        if self._frameConnMgrs[connectionKey] then
-            self._frameConnMgrs[connectionKey]:disconnectAll()
-            self._frameConnMgrs[connectionKey] = nil
-        end
-        if self.playerFrames[player] then
-            self.playerFrames[player] = nil
-        end
-        self:scheduleUpdate()
-    end))
-    
-    for _, player in pairs(Players:GetPlayers()) do
-        if player and player.Parent then
-            local characterAddedKey = "charAdded_" .. player.UserId
-            local characterRemovingKey = "charRemoving_" .. player.UserId
-            self._connMgr:add(player.CharacterAdded:Connect(function()
-                task.wait(0.1)
-                self:scheduleUpdate()
-            end))
-            self._connMgr:add(player.CharacterRemoving:Connect(function()
-                if self.currentCameraTarget == player then
-                    self:resetCameraToLocalPlayer()
-                end
-                self:scheduleUpdate()
-            end))
+    local function disableLeaderboard()
+        local originalLeaderboard = playerGui:FindFirstChild("LeaderboardGui")
+        if originalLeaderboard then
+            originalLeaderboard.Enabled = false
         end
     end
     
-    self._connMgr:add(RunService.Heartbeat:Connect(function()
-        if self.enabled then
-            self:updatePlayerColors()
+    -- Disable immediately if it exists
+    disableLeaderboard()
+    
+    -- Set up listener to disable if recreated
+    if self._lbConn then 
+        self._lbConn:Disconnect() 
+    end
+    
+    self._lbConn = playerGui.ChildAdded:Connect(function(child)
+        if child.Name == "LeaderboardGui" then
+            disableLeaderboard()
         end
-    end))
+    end)
 end
 
-function BetterLeaderboard:hideOriginalLeaderboard()
-    self.originalLeaderboardGui = self:findOriginalLeaderboardGui()
-    if self.originalLeaderboardGui then
-        self.originalLeaderboardGui.Enabled = false
+--- Shows the original Roblox leaderboard
+function BetterLeaderboard:_showOriginalLeaderboard()
+    local playerGui = self:_getPlayerGui()
+    if not playerGui then return end
+    
+    local originalLeaderboard = playerGui:FindFirstChild("LeaderboardGui")
+    if originalLeaderboard then
+        originalLeaderboard.Enabled = true
     end
 end
 
-function BetterLeaderboard:showOriginalLeaderboard()
-    if self.originalLeaderboardGui and self.originalLeaderboardGui.Parent then
-        self.originalLeaderboardGui.Enabled = true
+--- Adds a player frame to the leaderboard
+-- @param player Player: The player to add to the leaderboard
+function BetterLeaderboard:addPlayerFrame(player)
+    if not self.scrollingFrame then return end
+    
+    -- Get player data
+    local prestige = self:_getPlayerPrestige(player)
+    local rogueName = self:_getPlayerRogueName(player)
+    
+    -- Create player frame container
+    local playerFrame = Instance.new("Frame")
+    playerFrame.BackgroundTransparency = 1
+    playerFrame.BorderColor3 = CONFIG.COLORS.BLACK
+    playerFrame.SizeConstraint = Enum.SizeConstraint.RelativeXX
+    playerFrame.Size = CONFIG.PLAYER_FRAME_SIZE
+    playerFrame.BorderSizePixel = 0
+    playerFrame.BackgroundColor3 = CONFIG.COLORS.WHITE
+    playerFrame.Parent = self.scrollingFrame
+    
+    -- Create UI elements
+    local prestigeButton = self:_createPrestigeButton(prestige, playerFrame)
+    local playerLabel = self:_createPlayerLabel(player, rogueName, playerFrame)
+    
+    -- Start async loading if rogue name is not available
+    if not rogueName then
+        self:_startRogueNameLoading(playerLabel, player)
     end
 end
 
+--- Enables the better leaderboard
 function BetterLeaderboard:enable()
     if self.enabled then return end
     
+    local playerGui = self:_getPlayerGui()
+    if not playerGui then return end
+    
     self.enabled = true
     
-    -- Hide original leaderboard
-    self:hideOriginalLeaderboard()
+    -- Hide original leaderboard and create new one
+    self:_hideOriginalLeaderboard()
+    self.screenGui = self:_createScreenGui()
+    self.leaderboard, self.scrollingFrame = self:_createLeaderboardGui(self.screenGui)
+    self.screenGui.Parent = playerGui
     
-    -- Create custom leaderboard
-    local success, err = pcall(function()
-        self.customLeaderboardGui, self.scrollingFrame = self:createCustomLeaderboard()
-    end)
-    
-    if not success or not self.customLeaderboardGui then
-        self.enabled = false
-        return
+    -- Add existing players
+    for _, playerObj in ipairs(Players:GetPlayers()) do
+        self:addPlayerFrame(playerObj)
     end
     
-    -- Connect events
-    self:connectPlayerEvents()
-    
-    -- Initial update
-    self:scheduleUpdate()
-    
-    print("BetterLeaderboard enabled")
+    -- Connect PlayerAdded event
+    self._playerAddedConn = Players.PlayerAdded:Connect(function(playerObj)
+        self:addPlayerFrame(playerObj)
+    end)
 end
 
+--- Disables the better leaderboard and restores original
 function BetterLeaderboard:disable()
     if not self.enabled then return end
     
     self.enabled = false
     
-    self._connMgr:disconnectAll()
-    self:cleanupFrameConnections()
-    self:resetCameraToLocalPlayer()
-    for player, frame in pairs(self.playerFrames) do
-        if frame and frame.Parent then
-            frame:Destroy()
-        end
+    -- Disconnect all connections
+    if self._playerAddedConn then
+        self._playerAddedConn:Disconnect()
+        self._playerAddedConn = nil
     end
-    self.playerFrames = {}
-    if self.customLeaderboardGui and self.customLeaderboardGui.Parent then
-        self.customLeaderboardGui:Destroy()
+    
+    if self._lbConn then
+        self._lbConn:Disconnect()
+        self._lbConn = nil
     end
-    self.customLeaderboardGui = nil
+    
+    -- Clean up GUI
+    if self.screenGui and self.screenGui.Parent then
+        self.screenGui:Destroy()
+    end
+    
+    -- Reset references
+    self.screenGui = nil
+    self.leaderboard = nil
     self.scrollingFrame = nil
-    self:showOriginalLeaderboard()
-    print("BetterLeaderboard disabled")
-end
-
-function BetterLeaderboard:toggle()
-    if self.enabled then
-        self:disable()
-    else
-        self:enable()
-    end
-end
-
-function BetterLeaderboard:destroy()
-    self:disable()
+    
+    -- Restore original leaderboard
+    self:_showOriginalLeaderboard()
 end
 
 return BetterLeaderboard
