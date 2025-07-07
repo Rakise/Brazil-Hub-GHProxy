@@ -1,0 +1,761 @@
+
+-- FF Detector Script with LinoriaLib UI Integration
+-- Refactored for better maintainability and organization
+
+--[[
+    Main script that integrates multiple game enhancement modules:
+    - FF (ForceField) Detection
+    - Player ESP
+    - Auto-Aim system
+    - Better Leaderboard
+    
+    Uses LinoriaLib for UI management with theme and save support.
+]]
+
+-- ========================================
+-- DEPENDENCIES AND LIBRARY SETUP
+-- ========================================
+
+local REPO_BASE_URL = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/"
+
+-- Load LinoriaLib components
+local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
+local ThemeManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/SaveManager.lua'))()
+
+-- Safe module loading with pcall to prevent script breakage if any module fails
+local function safeRequire(url)
+    local ok, result = pcall(function()
+        return loadstring(game:HttpGet(url))()
+    end)
+    if ok then
+        return result
+    else
+        warn("[BrazilHub] Module load error:", url)
+        warn(tostring(result))
+        return nil
+    end
+end
+
+-- Load game modules
+local FFDetector = safeRequire(BRAZIL_HUB_BASE_URL .. "FFHandler")
+local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
+local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
+local BetterLeaderboard = safeRequire(BRAZIL_HUB_BASE_URL .. "betterleaderboard")
+local TrinketESP = safeRequire(BRAZIL_HUB_BASE_URL .. "trinket_esp_handler")
+local NoFog = safeRequire(BRAZIL_HUB_BASE_URL .. "NoFog")
+local Intent = safeRequire(BRAZIL_HUB_BASE_URL .. "Intent")
+local ConnectionManager = safeRequire(BRAZIL_HUB_BASE_URL .. "ConnectionManager")
+local connMgr = ConnectionManager and ConnectionManager.new() or nil
+local AutoBlock = safeRequire(BRAZIL_HUB_BASE_URL .. "auto_block")
+local TriggerMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "TriggerMonitor")
+local PerformanceMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "PerformanceMonitor")
+local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
+
+print("[BrazilHub] All modules loaded successfully")
+
+-- ========================================
+-- MODULE INSTANCES AND CONFIGURATION
+-- ========================================
+
+local ModuleInstances = {
+    ffDetector = FFDetector.new(),
+    playerEsp = PlayerESP.new(),
+    autoAim = AutoAim.new(),
+    betterLeaderboard = BetterLeaderboard.new(),
+    trinketEsp = TrinketESP.new(),
+    autoBlock = AutoBlock.new()
+}
+
+-- Configuration constants
+local CONFIG = {
+    AUTO_AIM = {
+        AVAILABLE_TOOLS = {"Fimbulvetr", "Perflora", "Armis", "Grapple", "Percutiens", "Inferi"},
+        DEFAULT_FOV = 20,
+        DEFAULT_RANGE = 200,
+        DEFAULT_TIME_TO_HIT = 0.15,
+        DEFAULT_STUDS_BEHIND = {min = 20, max = 30}
+    },
+    FOV_CIRCLE = {
+        DEFAULT_COLOR = Color3.fromRGB(0, 255, 128),
+        STROKE_THICKNESS = 2,
+        TRANSPARENCY = 0.3
+    },
+    PLAYER_ESP = {
+        DEFAULT_TEXT_SIZE = 14,
+        DEFAULT_TEXT_COLOR = Color3.new(1, 1, 1)
+    },
+    FF_DETECTOR = {
+        DEFAULT_BILLBOARD_DISTANCE = 125,
+        DEFAULT_BILLBOARD_TEXT_SIZE = 18
+    }
+}
+
+-- Function to update PlayerESPHandler with current config
+local function applyPlayerESPConfig()
+    if ModuleInstances.playerEsp and ModuleInstances.playerEsp.setDisplayConfig then
+        ModuleInstances.playerEsp:setDisplayConfig()
+    end
+end
+
+-- ========================================
+-- UI WINDOW AND TABS SETUP
+-- ========================================
+
+local function createMainWindow()
+    return Library:CreateWindow({
+        Title = '[Brazil Hub]',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2
+})
+end
+
+local function setupTabs(window)
+    return {
+        Main = window:AddTab('Main'),
+        UISettings = window:AddTab('UI Settings'),
+    }
+end
+
+-- ========================================
+-- FOV CIRCLE MANAGEMENT
+-- ========================================
+
+-- Load FOV Circle Manager module
+local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
+
+-- ========================================
+-- TRIGGER MONITORING (SPAWN TRIGGERS)
+-- ========================================
+
+-- Initialize Trigger Monitor
+local triggerMonitor = TriggerMonitor and TriggerMonitor.new(connMgr) or nil
+
+-- ========================================
+-- UI CALLBACK HANDLERS
+-- ========================================
+
+local UICallbacks = {}
+
+-- FF Detector callbacks
+function UICallbacks.onToggleFFDetector(enabled)
+    if enabled then
+        ModuleInstances.ffDetector:enable()
+        print("[FF Detector] Enabled")
+    else
+        ModuleInstances.ffDetector:disable()
+        print("[FF Detector] Disabled")
+    end
+end
+
+function UICallbacks.onBillboardDistanceChanged(value)
+    ModuleInstances.ffDetector:setBillboardMaxDistance(value)
+end
+
+function UICallbacks.onBillboardTextSizeChanged(value)
+    ModuleInstances.ffDetector:setBillboardTextSize(value)
+end
+
+-- Player ESP callbacks
+function UICallbacks.onTogglePlayerESP(enabled)
+    if enabled then
+        ModuleInstances.playerEsp:enable()
+        print("[Player ESP] Enabled")
+    else
+        ModuleInstances.playerEsp:disable()
+        print("[Player ESP] Disabled")
+    end
+end
+
+function UICallbacks.onPlayerESPTextSizeChanged(value)
+    ModuleInstances.playerEsp:setTextSize(value)
+end
+
+function UICallbacks.onPlayerESPTextColorChanged(value)
+    ModuleInstances.playerEsp:setTextColor(value)
+end
+
+-- Auto-Aim callbacks
+function UICallbacks.onToggleAutoAim(enabled)
+    if enabled then
+        ModuleInstances.autoAim:enable()
+        print("[Auto-Aim] Enabled")
+    else
+        ModuleInstances.autoAim:disable()
+        print("[Auto-Aim] Disabled")
+    end
+end
+
+function UICallbacks.onAutoAimFOVChanged(value)
+    ModuleInstances.autoAim:setFOV(value)
+end
+
+function UICallbacks.onAutoAimToolsChanged(selectedTools)
+    ModuleInstances.autoAim:setTools(selectedTools)
+end
+
+function UICallbacks.onStudsBehindMinChanged(value)
+    CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min = value
+    ModuleInstances.autoAim:setStudsBehindRange(
+        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, 
+        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
+    )
+end
+
+function UICallbacks.onStudsBehindMaxChanged(value)
+    CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max = value
+    ModuleInstances.autoAim:setStudsBehindRange(
+        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, 
+        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
+    )
+end
+
+-- Better Leaderboard callbacks
+function UICallbacks.onToggleBetterLeaderboard(enabled)
+    if enabled then
+        ModuleInstances.betterLeaderboard:enable()
+        print("[Better Leaderboard] Enabled")
+    else
+        ModuleInstances.betterLeaderboard:disable()
+        print("[Better Leaderboard] Disabled")
+    end
+end
+
+-- Trinket ESP callbacks
+function UICallbacks.onToggleTrinketESP(enabled)
+    if enabled then
+        ModuleInstances.trinketEsp:enable()
+        print("[Trinket ESP] Enabled")
+    else
+        ModuleInstances.trinketEsp:disable()
+        print("[Trinket ESP] Disabled")
+    end
+end
+
+-- NoFog callbacks
+function UICallbacks.onToggleNoFog(enabled)
+    if enabled then
+        NoFog:enable()
+        print("[NoFog] Enabled")
+    else
+        NoFog:disable()
+        print("[NoFog] Disabled")
+    end
+end
+
+-- Intent Billboard toggle
+function UICallbacks.onToggleIntentBillboard(enabled)
+    if enabled then
+        Intent.enable()
+    else
+        Intent.disable()
+    end
+end
+
+-- AutoBlock callbacks
+function UICallbacks.onToggleAutoBlockGrapple(enabled)
+    if enabled then
+        ModuleInstances.autoBlock:enable()
+        print("[AutoBlock Grapple] Enabled")
+    else
+        ModuleInstances.autoBlock:disable()
+        print("[AutoBlock Grapple] Disabled")
+    end
+end
+
+-- ========================================
+-- UI COMPONENT CREATION
+-- ========================================
+
+local function createMainTabComponents(mainTab, fovManager)
+    
+    -- Utils group: FF Detector controls
+    local utilsGroup = mainTab:AddLeftGroupbox('Utils')
+    -- Player ESP group: Player ESP controls
+    local playerESPGroup = mainTab:AddLeftGroupbox('Player ESP')
+    -- Triggers group: Triggers label
+    local triggersGroup = mainTab:AddLeftGroupbox('Triggers')
+    -- AutoAim group: Auto-Aim controls
+    local autoAimGroup = mainTab:AddRightGroupbox('AutoAim')
+    -- Edicts group: Intent and related features
+    local edictsGroup = mainTab:AddRightGroupbox('Edicts')
+    -- Connections Info group
+    local connectionsGroup = mainTab:AddRightGroupbox('Connections Info')
+    local ffLabel = connectionsGroup:AddLabel('FFDetector: ...')
+    local espLabel = connectionsGroup:AddLabel('PlayerESP: ...')
+    local trinketLabel = connectionsGroup:AddLabel('TrinketESP: ...')
+    local leaderboardLabel = connectionsGroup:AddLabel('BetterLeaderboard: ...')
+    local nofogLabel = connectionsGroup:AddLabel('NoFog: ...')
+    local intentLabel = connectionsGroup:AddLabel('Intent: ...')
+    local scriptLabel = connectionsGroup:AddLabel('Script: ...')
+    
+    -- Performance Monitor
+    local performanceLabel = connectionsGroup:AddLabel('Performance: ...')
+    if PerformanceMonitor then
+        local perfMonitor = PerformanceMonitor.new()
+        perfMonitor:setLabel(performanceLabel)
+        perfMonitor:start()
+        
+        -- Add toggle for performance monitoring
+        connectionsGroup:AddToggle('EnablePerformanceMonitor', {
+            Text = 'Performance Monitor',
+            Default = false,
+            Tooltip = 'Monitor FPS and performance metrics',
+            Callback = function(enabled)
+                if enabled then
+                    perfMonitor:start()
+                else
+                    perfMonitor:stop()
+                end
+            end
+        })
+    end
+    
+    -- Função para atualizar os labels (otimizada para performance)
+    local lastConnectionUpdate = 0
+    local connectionUpdateInterval = 2 -- Atualizar a cada 2 segundos em vez de a cada frame
+    local function updateConnectionsLabel()
+        local now = tick()
+        if now - lastConnectionUpdate < connectionUpdateInterval then return end
+        lastConnectionUpdate = now
+        
+        ffLabel:SetText('FFDetector: ' .. (ModuleInstances.ffDetector._connMgr and ModuleInstances.ffDetector._connMgr:count() or 0))
+        espLabel:SetText('PlayerESP: ' .. (ModuleInstances.playerEsp._connMgr and ModuleInstances.playerEsp._connMgr:count() or 0))
+        trinketLabel:SetText('TrinketESP: ' .. (ModuleInstances.trinketEsp._connMgr and ModuleInstances.trinketEsp._connMgr:count() or 0))
+        leaderboardLabel:SetText('BetterLeaderboard: ' .. (ModuleInstances.betterLeaderboard._connMgr and ModuleInstances.betterLeaderboard._connMgr:count() or 0))
+        nofogLabel:SetText('NoFog: ' .. (NoFog._connMgr and NoFog._connMgr:count() or 0))
+        intentLabel:SetText('Intent: ' .. (Intent.connectionMgr and Intent.connectionMgr:count() or 0))
+        scriptLabel:SetText('Script: ' .. (connMgr and connMgr:count() or 0))
+    end
+    
+    -- Atualizar apenas quando a UI estiver visível e com intervalo maior
+    local UserInputService = game:GetService('UserInputService')
+    local isUIVisible = true
+    
+    -- Detectar quando a UI é fechada/aberta
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if input.KeyCode == Enum.KeyCode.Insert then
+            isUIVisible = not isUIVisible
+        end
+    end)
+    
+    -- Loop otimizado que só roda quando necessário
+    connMgr:add(game:GetService('RunService').Heartbeat:Connect(function()
+        if isUIVisible then
+            updateConnectionsLabel()
+        end
+    end))
+    
+    -- FF Detector controls (moved to Utils group)
+    local ffToggle = utilsGroup:AddToggle('FFDetectorToggle', {
+    Text = 'FF Detector',
+    Default = true,
+    Tooltip = 'Detect and show countdown for player ForceField',
+        Callback = UICallbacks.onToggleFFDetector
+})
+if ffToggle.Value then
+        UICallbacks.onToggleFFDetector(true)
+end
+    utilsGroup:AddSlider('Billboard Max Distance', {
+    Text = 'Billboard Max Distance',
+        Default = CONFIG.FF_DETECTOR.DEFAULT_BILLBOARD_DISTANCE,
+    Min = 10,
+    Max = 300,
+    Rounding = 0,
+        Callback = UICallbacks.onBillboardDistanceChanged
+})
+    utilsGroup:AddSlider('Billboard Text Size', {
+    Text = 'Billboard Text Size',
+        Default = CONFIG.FF_DETECTOR.DEFAULT_BILLBOARD_TEXT_SIZE,
+    Min = 7,
+    Max = 40,
+    Rounding = 0,
+        Callback = UICallbacks.onBillboardTextSizeChanged
+})
+
+    local Indicator = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. "Indicator"))()
+    local indicator = Indicator.new()
+    utilsGroup:AddToggle('EnableDamageRegenIndicators', {
+        Text = 'Enable Damage/Regen Indicators',
+        Default = false,
+        Tooltip = 'Ativa/desativa a exibição automática de indicadores de dano e cura em todos os personagens',
+        Callback = function(val)
+            if val then
+                indicator:enable()
+            else
+                indicator:disable()
+            end
+        end
+    })
+
+    -- NoFog toggle
+    --[[
+    utilsGroup:AddToggle('NoFog', {
+        Text = 'NoFog',
+        Default = false,
+        Tooltip = 'Remove fog and post-processing effects',
+        Callback = UICallbacks.onToggleNoFog
+    })
+    ]]
+    -- Trinket ESP toggle
+    utilsGroup:AddToggle('TrinketESP', {
+        Text = 'Trinket ESP',
+        Default = false,
+        Tooltip = 'Exibe ESP para trinkets (itens) no mapa',
+        Callback = UICallbacks.onToggleTrinketESP
+    })
+
+    -- Player ESP controls (moved to Player ESP group)
+    local playerESPToggle = playerESPGroup:AddToggle('PlayerESP', {
+    Text = 'Player ESP',
+    Default = true,
+        Tooltip = 'Display player information (name, rogue, edict, HP)',
+        Callback = UICallbacks.onTogglePlayerESP
+    })
+    if playerESPToggle.Value then
+        UICallbacks.onTogglePlayerESP(true)
+    end
+    -- Add toggles for each ESP element (generated automatically from PlayerESP config)
+    if ModuleInstances.playerEsp and ModuleInstances.playerEsp.displayConfig then
+        for configKey, defaultValue in pairs(ModuleInstances.playerEsp.displayConfig) do
+            local labelText = configKey:gsub("show", ""):gsub("^%l", string.upper)
+            local toggleName = configKey:gsub("show", "Show")
+            
+            playerESPGroup:AddToggle(toggleName, {
+                Text = labelText,
+                Default = defaultValue,
+                Callback = function(val)
+                    ModuleInstances.playerEsp.displayConfig[configKey] = val
+                    applyPlayerESPConfig()
+                end
+            })
+        end
+    end
+    playerESPGroup:AddSlider('PlayerESPTextSize', {
+    Text = 'Player ESP Text Size',
+        Default = CONFIG.PLAYER_ESP.DEFAULT_TEXT_SIZE,
+    Min = 7,
+    Max = 40,
+    Rounding = 0,
+        Callback = UICallbacks.onPlayerESPTextSizeChanged
+    })
+    playerESPGroup:AddLabel('Player ESP Text Color'):AddColorPicker('PlayerESPTextColor', {
+        Default = CONFIG.PLAYER_ESP.DEFAULT_TEXT_COLOR,
+        Title = 'Player ESP Text Color',
+        Callback = UICallbacks.onPlayerESPTextColorChanged
+    })
+    -- Apply default values for Player ESP
+    ModuleInstances.playerEsp:setTextSize(CONFIG.PLAYER_ESP.DEFAULT_TEXT_SIZE)
+    ModuleInstances.playerEsp:setTextColor(CONFIG.PLAYER_ESP.DEFAULT_TEXT_COLOR)
+    applyPlayerESPConfig()
+    
+    -- Triggers label (remains in Triggers group)
+    if triggerMonitor then
+        local triggersLabel = triggersGroup:AddLabel(triggerMonitor:getTriggersLabelText(), true)
+        triggerMonitor:setLabel(triggersLabel)
+        triggerMonitor:connectTriggerListeners()
+        
+        -- Add toggle to enable/disable trigger monitoring for performance
+        triggersGroup:AddToggle('EnableTriggerMonitor', {
+            Text = 'Enable Trigger Monitor',
+            Default = true,
+            Tooltip = 'Enable or disable trigger monitoring (affects performance)',
+            Callback = function(enabled)
+                triggerMonitor:setEnabled(enabled)
+            end
+        })
+        
+        -- Start enabled by default
+        triggerMonitor:setEnabled(true)
+    else
+        triggersGroup:AddLabel("Trigger Monitor not available", true)
+    end
+    
+    -- Auto-Aim controls (remains in AutoAim group)
+    autoAimGroup:AddToggle('AutoAimToggle', {
+        Text = 'Auto-Aim',
+        Default = false,
+        Tooltip = 'Enable or disable Auto-Aim functionality',
+        Callback = UICallbacks.onToggleAutoAim
+    })
+    autoAimGroup:AddSlider('AutoAimFOV', {
+        Text = 'Auto-Aim FOV (degrees)',
+        Default = CONFIG.AUTO_AIM.DEFAULT_FOV,
+        Min = 5,
+        Max = 90,
+        Rounding = 0,
+        Tooltip = 'Field of view for auto-aim (larger = wider range)',
+        Callback = UICallbacks.onAutoAimFOVChanged
+    })
+    autoAimGroup:AddLabel('FOV Circle Color'):AddColorPicker('FOVCircleColor', {
+        Default = CONFIG.FOV_CIRCLE.DEFAULT_COLOR,
+        Title = 'FOV Circle Color',
+        Callback = function(color)
+            if fovManager then
+                fovManager:setColor(color)
+            end
+    end
+})
+    autoAimGroup:AddToggle('ShowFOVCircle', {
+        Text = 'Show FOV Circle',
+        Default = false,
+        Tooltip = 'Display or hide the auto-aim FOV circle',
+        Callback = function(visible)
+            if fovManager then
+                fovManager:setVisible(visible)
+            end
+    end
+})
+    autoAimGroup:AddSlider('StudsBehindMin', {
+        Text = 'Studs Behind Minimum',
+        Default = CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min,
+        Min = 5,
+        Max = 50,
+        Rounding = 0,
+        Callback = UICallbacks.onStudsBehindMinChanged
+    })
+    autoAimGroup:AddSlider('StudsBehindMax', {
+        Text = 'Studs Behind Maximum',
+        Default = CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max,
+        Min = 5,
+        Max = 50,
+        Rounding = 0,
+        Callback = UICallbacks.onStudsBehindMaxChanged
+    })
+    -- Function to get available tools from player's backpack using UtilsService
+    local function getAvailableToolsFromBackpack()
+        if not UtilsService then
+            return CONFIG.AUTO_AIM.AVAILABLE_TOOLS -- Fallback if UtilsService not available
+        end
+        
+        local utils = UtilsService.new()
+        local player = game.Players.LocalPlayer
+        
+        return utils:getAvailableToolsForAutoAim(player, CONFIG.AUTO_AIM.AVAILABLE_TOOLS)
+    end
+    
+    -- Get available tools for dropdown
+    local availableTools = getAvailableToolsFromBackpack()
+    
+    -- Create dropdown with dynamic tool list
+    local autoAimToolsDropdown = autoAimGroup:AddDropdown('AutoAimTools', {
+        Values = availableTools,
+        Default = 1, -- Select first available tool by default
+        Multi = true,
+        Text = 'Auto-Aim Tools',
+        Tooltip = 'Select which tools activate auto-aim (based on your backpack)',
+        Callback = function(selected)
+            -- Extract tool names from display names using UtilsService
+            local cleanSelected = {}
+            if UtilsService then
+                local utils = UtilsService.new()
+                local displayNames = {}
+                for _, index in ipairs(selected) do
+                    table.insert(displayNames, availableTools[index])
+                end
+                cleanSelected = utils:extractToolNamesFromDisplay(displayNames)
+            else
+                -- Fallback if UtilsService not available
+                for _, index in ipairs(selected) do
+                    local displayName = availableTools[index]
+                    local toolName = displayName:gsub(" %[Equipped%]$", ""):gsub(" %[Backpack%]$", "")
+                    table.insert(cleanSelected, toolName)
+                end
+            end
+            UICallbacks.onAutoAimToolsChanged(cleanSelected)
+        end
+    })
+    
+    -- Better Leaderboard toggle (moved to Utils group)
+    --[[
+    utilsGroup:AddToggle('BetterLeaderboard', {
+        Text = 'Better Leaderboard',
+        Default = false,
+        Tooltip = 'Improve the leaderboard interface',
+        Callback = UICallbacks.onToggleBetterLeaderboard
+    })
+    ]]
+    -- Intent Billboard toggle (agora no grupo Edicts)
+    edictsGroup:AddToggle('IntentBillboard', {
+        Text = 'Intent Billboard',
+        Default = false,
+        Tooltip = 'Show a billboard above all players with the text of their equipped tool.',
+        Callback = UICallbacks.onToggleIntentBillboard
+    })
+    -- AutoBlock toggle (moved to Auto Block group)
+    local autoBlockGroup = mainTab:AddRightGroupbox('Auto Block')
+    autoBlockGroup:AddToggle('AutoBlockGrapple', {
+        Text = 'Auto Block Grapple',
+        Default = false,
+        Tooltip = 'Bloqueia automaticamente Grapple (AIRSLASH)',
+        Callback = UICallbacks.onToggleAutoBlockGrapple
+    })
+
+    -- Dropdown Multi para seleção de block_types (skills e attack_type)
+    local allThreats = ModuleInstances.autoBlock:getAllThreats()
+    local skillOptions, attackTypeOptions = {}, {}
+    local threatIdByName = {}
+    for threatId, config in pairs(allThreats) do
+        threatIdByName[config.name] = threatId
+        if config.category == "skills" then
+            table.insert(skillOptions, config.name)
+        elseif config.category == "attack_type" then
+            table.insert(attackTypeOptions, config.name)
+        end
+    end
+    -- Estado inicial: todos ativos
+    local selectedSkills = {}
+    for _, name in ipairs(skillOptions) do selectedSkills[name] = true end
+    local selectedAttackTypes = {}
+    for _, name in ipairs(attackTypeOptions) do selectedAttackTypes[name] = true end
+
+    autoBlockGroup:AddDropdown('SkillsDropdown', {
+        Values = skillOptions,
+        Default = skillOptions,
+        Multi = true,
+        Text = 'Skills',
+        Tooltip = 'Selecione skills para bloquear',
+        Callback = function(selected)
+            for _, name in ipairs(skillOptions) do
+                local threatId = threatIdByName[name]
+                if selected[name] then
+                    ModuleInstances.autoBlock:addThreat(threatId, allThreats[threatId])
+                else
+                    ModuleInstances.autoBlock:removeThreat(threatId)
+                end
+            end
+        end
+    })
+    autoBlockGroup:AddDropdown('AttackTypesDropdown', {
+        Values = attackTypeOptions,
+        Default = attackTypeOptions,
+        Multi = true,
+        Text = 'Attack Types',
+        Tooltip = 'Selecione tipos de ataque para bloquear',
+        Callback = function(selected)
+            for _, name in ipairs(attackTypeOptions) do
+                local threatId = threatIdByName[name]
+                if selected[name] then
+                    ModuleInstances.autoBlock:addThreat(threatId, allThreats[threatId])
+                else
+                    ModuleInstances.autoBlock:removeThreat(threatId)
+                end
+            end
+        end
+    })
+
+    -- Sliders dinâmicos para blockDistance de cada threat
+    for threatId, config in pairs(allThreats) do
+        local sliderLabel = string.format("%s Block Distance", config.name)
+        autoBlockGroup:AddSlider(sliderLabel, {
+            Text = sliderLabel,
+            Default = config.blockDistance or 50,
+            Min = 5,
+            Max = 300,
+            Rounding = 0,
+            Tooltip = string.format("Distância de bloqueio para %s", config.name),
+            Callback = function(val)
+                ModuleInstances.autoBlock:setThreatBlockDistance(threatId, val)
+            end
+        })
+    end
+
+    -- Initialize Auto-Aim default values
+    ModuleInstances.autoAim:setRange(CONFIG.AUTO_AIM.DEFAULT_RANGE)
+    ModuleInstances.autoAim:setTimeToHit(CONFIG.AUTO_AIM.DEFAULT_TIME_TO_HIT)
+    ModuleInstances.autoAim:setStudsBehindRange(
+        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min,
+        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
+    )
+end
+
+local function createUISettingsTab(uiSettingsTab)
+    local menuGroup = uiSettingsTab:AddLeftGroupbox('Menu')
+    
+    menuGroup:AddButton('Unload', function() 
+        Library:Unload() 
+    end)
+    
+    menuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { 
+        Default = 'Insert', 
+        NoUI = true, 
+        Text = 'Menu keybind' 
+    })
+    
+    -- Set the toggle keybind for the menu
+    Library.ToggleKeybind = Options.MenuKeybind
+end
+
+local function setupManagers(uiSettingsTab, fovManager)
+    -- Configure ThemeManager and SaveManager
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+
+    -- Configure save settings
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+
+    -- Set folders for themes and configs
+ThemeManager:SetFolder('BrazilHub')
+SaveManager:SetFolder('BrazilHub/Rogue-Lineage')
+
+    -- Build configuration and theme sections
+    SaveManager:BuildConfigSection(uiSettingsTab)
+    ThemeManager:ApplyToTab(uiSettingsTab)
+    
+    -- Load auto-load configuration
+SaveManager:LoadAutoloadConfig()
+    
+    -- Setup cleanup when script is unloaded
+    Library.OnUnload = function()
+        if connMgr then
+            connMgr:clear()
+        end
+        if triggerMonitor then
+            triggerMonitor:destroy()
+        end
+        if fovManager then
+            fovManager:destroy()
+        end
+    end
+end
+
+-- ========================================
+-- MAIN INITIALIZATION
+-- ========================================
+
+local function safeEnable(module, name)
+    if module and type(module.enable) == "function" then
+        local ok, err = pcall(function() module:enable() end)
+        if not ok then
+            warn("[BrazilHub] Module enable error:", name)
+            warn(tostring(err))
+        end
+    end
+end
+
+local function main()
+    -- Create main UI components
+    local window = createMainWindow()
+    local tabs = setupTabs(window)
+    
+    -- Initialize FOV circle manager
+    local fovManager = FOVCircleManager and FOVCircleManager.new()
+    if fovManager then
+        -- Set up the update callback to pass the autoAim instance
+        fovManager:setUpdateCallback(function()
+            fovManager:updateCircle(ModuleInstances.autoAim, connMgr)
+        end)
+    end
+    
+    -- Setup UI components
+    createMainTabComponents(tabs.Main, fovManager)
+    createUISettingsTab(tabs.UISettings)
+    setupManagers(tabs.UISettings, fovManager)
+end
+
+-- Start the script
+main()
