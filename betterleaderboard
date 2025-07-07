@@ -210,7 +210,33 @@ function BetterLeaderboard:_createPrestigeButton(prestige, parent)
     return prestigeButton
 end
 
---- Creates a player label with hover functionality
+--- Alterna a câmera para o personagem do jogador ou retorna para o LocalPlayer
+function BetterLeaderboard:_toggleCameraToPlayer(targetPlayer)
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    if self._currentCameraTarget == targetPlayer then
+        -- Volta para o LocalPlayer
+        local localPlayer = Players.LocalPlayer
+        if localPlayer and localPlayer.Character then
+            local humanoid = localPlayer.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                camera.CameraSubject = humanoid
+            end
+        end
+        self._currentCameraTarget = nil
+    else
+        -- Vai para o player alvo
+        if targetPlayer and targetPlayer.Character then
+            local humanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+            if humanoid then
+                camera.CameraSubject = humanoid
+                self._currentCameraTarget = targetPlayer
+            end
+        end
+    end
+end
+
+--- Creates a player label with hover and right-click camera functionality
 -- @param player Player: The player this label represents
 -- @param rogueName string: The player's rogue display name
 -- @param parent Instance: Parent container for the label
@@ -233,8 +259,13 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     playerLabel.BackgroundColor3 = CONFIG.COLORS.WHITE
     playerLabel.Parent = parent
     
-    -- Add hover functionality
+    -- Hover
     self:_setupLabelHover(playerLabel, player, rogueName)
+
+    -- Right-click: alterna câmera
+    playerLabel.MouseButton2Click:Connect(function()
+        self:_toggleCameraToPlayer(player)
+    end)
     
     return playerLabel
 end
