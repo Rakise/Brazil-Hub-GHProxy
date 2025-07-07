@@ -2,18 +2,43 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
+-- Sistema de tipos de trinkets
+local TRINKET_TYPES = {
+    USUAL_TRINKET = "Usual_Trinket",
+    SCROLL_TYPE = "Scroll_Type", 
+    GEMS = "Gems",
+    SEMI_ARTIFACTS = "Semi_Artifacts",
+    ARTIFACTS = "Artifacts"
+}
+
 -- Cache de constantes para evitar re-alocações
 local MESH_IDS = {
-    ["rbxassetid://5196551436"] = "Amulet",
-    ["rbxassetid://5196577540"] = "Old Amulet",
-    ["rbxassetid://5204003946"] = "Goblet",
-    ["rbxassetid://5196782997"] = "Old Ring",
-    ["rbxassetid://5196776695"] = "Ring",
-    ["rbxassetid://5204453430"] = "Scroll",
-    ["rbxassetid://2877143560"] = "Ruby",
-    ["rbxassetid://2877143592"] = "Sapphire",
-    ["rbxassetid://2877143624"] = "Emerald",
-    ["rbxassetid://2520762076"] = "Howler Friend"
+    -- Usual Trinkets
+    ["rbxassetid://5196551436"] = { name = "Amulet", type = TRINKET_TYPES.USUAL_TRINKET },
+    ["rbxassetid://5196577540"] = { name = "Old Amulet", type = TRINKET_TYPES.USUAL_TRINKET },
+    ["rbxassetid://5204003946"] = { name = "Goblet", type = TRINKET_TYPES.USUAL_TRINKET },
+    ["rbxassetid://5196782997"] = { name = "Old Ring", type = TRINKET_TYPES.USUAL_TRINKET },
+    ["rbxassetid://5196776695"] = { name = "Ring", type = TRINKET_TYPES.USUAL_TRINKET },
+    
+    -- Scroll Type
+    ["rbxassetid://5204453430"] = { name = "Scroll", type = TRINKET_TYPES.SCROLL_TYPE },
+    
+    -- Gems
+    ["rbxassetid://2877143560"] = { name = "Ruby", type = TRINKET_TYPES.GEMS },
+    ["rbxassetid://2877143592"] = { name = "Sapphire", type = TRINKET_TYPES.GEMS },
+    ["rbxassetid://2877143624"] = { name = "Emerald", type = TRINKET_TYPES.GEMS },
+    
+    -- Semi-Artifacts
+    ["rbxassetid://2520762076"] = { name = "Howler Friend", type = TRINKET_TYPES.SEMI_ARTIFACTS }
+}
+
+-- Sistema de cores por tipo
+local TYPE_COLORS = {
+    [TRINKET_TYPES.USUAL_TRINKET] = Color3.new(0.7, 0.7, 0.7),      -- Cinza claro
+    [TRINKET_TYPES.SCROLL_TYPE] = Color3.new(0.9, 0.8, 0.5),        -- Amarelo pergaminho
+    [TRINKET_TYPES.GEMS] = Color3.new(0.4, 0.8, 0.9),               -- Azul cristal
+    [TRINKET_TYPES.SEMI_ARTIFACTS] = Color3.new(0.9, 0.6, 0.2),     -- Laranja
+    [TRINKET_TYPES.ARTIFACTS] = Color3.new(1.0, 0.2, 0.2)           -- Vermelho brilhante
 }
 
 local PHOENIX_TEXTURE = "rbxassetid://1536547385"
@@ -62,17 +87,18 @@ local function isTrinket(obj)
     return hasID
 end
 
--- Função otimizada para obter nome do trinket
-local function getTrinketName(part)
+-- Função otimizada para obter informações do trinket
+local function getTrinketInfo(part)
     local material = part.Material
     
-    -- Verificações mais rápidas primeiro (material checks)
+    -- Verificações mais rápidas primeiro (material checks) - ARTIFACTS
     if material == MATERIAL_SLATE and part:FindFirstChildOfClass("ParticleEmitter") then
-        return "Idol of the Forgotten"
+        return "Idol of the Forgotten", TRINKET_TYPES.USUAL_TRINKET
     end
     
     if material == MATERIAL_NEON then
-        return part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
+        local name = part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
+        return name, TRINKET_TYPES.ARTIFACTS
     end
     
     if part.Transparency == 1 then
@@ -96,7 +122,7 @@ local function getTrinketName(part)
                 for j = 1, #attachChildren do
                     local subChild = attachChildren[j]
                     if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == PHOENIX_TEXTURE then
-                        return "Phoenix Down"
+                        return "Phoenix Down", TRINKET_TYPES.ARTIFACTS
                     end
                 end
             end
@@ -108,7 +134,7 @@ local function getTrinketName(part)
         end
         
         if hasOrb and hasLight and hasSphere then
-            return "???"
+            return "???", TRINKET_TYPES.SEMI_ARTIFACTS
         end
     end
     
@@ -122,9 +148,15 @@ local function getTrinketName(part)
     end
     
     if meshId and meshId ~= "" then
-        return MESH_IDS[cleanMeshId(meshId)] or meshId
+        local cleanId = cleanMeshId(meshId)
+        local trinketData = MESH_IDS[cleanId]
+        if trinketData then
+            return trinketData.name, trinketData.type
+        else
+            return meshId, TRINKET_TYPES.USUAL_TRINKET
+        end
     else
-        return "Unknown"
+        return "Unknown", TRINKET_TYPES.USUAL_TRINKET
     end
 end
 
@@ -140,12 +172,20 @@ function TrinketESP.new()
         _pendingTrinkets = {},
         _processingQueue = false,
         -- Cache para evitar re-verificações
-        _processedObjects = {}
+        _processedObjects = {},
+        -- Contador de tipos para estatísticas
+        _typeCount = {
+            [TRINKET_TYPES.USUAL_TRINKET] = 0,
+            [TRINKET_TYPES.SCROLL_TYPE] = 0,
+            [TRINKET_TYPES.GEMS] = 0,
+            [TRINKET_TYPES.SEMI_ARTIFACTS] = 0,
+            [TRINKET_TYPES.ARTIFACTS] = 0
+        }
     }, TrinketESP)
 end
 
--- Função otimizada para criar billboard com menos alocações
-function TrinketESP:createBillboard(trinket, trinketName)
+-- Função otimizada para criar billboard com cores por tipo
+function TrinketESP:createBillboard(trinket, trinketName, trinketType)
     if self.espBillboards[trinket] then return end
 
     local billboard = Instance_new("BillboardGui")
@@ -159,8 +199,15 @@ function TrinketESP:createBillboard(trinket, trinketName)
 
     local label = Instance_new("TextLabel")
     label.Text = trinketName
-    label.TextColor3 = Color3_new(0.615, 0.615, 0.615)
-    label.TextStrokeTransparency = 0.5
+    
+    -- Definir cor baseada no tipo
+    local typeColor = TYPE_COLORS[trinketType] or TYPE_COLORS[TRINKET_TYPES.USUAL_TRINKET]
+    label.TextColor3 = typeColor
+    
+    -- Ajustar stroke baseado no tipo para melhor visibilidade
+    label.TextStrokeTransparency = trinketType == TRINKET_TYPES.ARTIFACTS and 0.2 or 0.5
+    label.TextStrokeColor3 = trinketType == TRINKET_TYPES.ARTIFACTS and Color3_new(0, 0, 0) or Color3_new(0.2, 0.2, 0.2)
+    
     label.Font = FONT_SOURCESANS
     label.TextSize = 14
     label.BackgroundTransparency = 1
@@ -171,11 +218,20 @@ function TrinketESP:createBillboard(trinket, trinketName)
     label.Parent = billboard
 
     self.espBillboards[trinket] = billboard
+    
+    -- Incrementar contador do tipo
+    self._typeCount[trinketType] = self._typeCount[trinketType] + 1
 end
 
 function TrinketESP:removeBillboard(trinket)
     local billboard = self.espBillboards[trinket]
     if billboard then
+        -- Decrementar contador do tipo
+        if trinket and trinket.Parent then
+            local _, trinketType = getTrinketInfo(trinket)
+            self._typeCount[trinketType] = math.max(0, self._typeCount[trinketType] - 1)
+        end
+        
         billboard:Destroy()
         self.espBillboards[trinket] = nil
     end
@@ -201,8 +257,8 @@ function TrinketESP:processQueue()
         -- Verificar se o trinket ainda é válido
         if trinket and trinket.Parent and not self._processedObjects[trinket] then
             self._processedObjects[trinket] = true
-            local trinketName = getTrinketName(trinket)
-            self:createBillboard(trinket, trinketName)
+            local trinketName, trinketType = getTrinketInfo(trinket)
+            self:createBillboard(trinket, trinketName, trinketType)
         end
         
         processed = processed + 1
@@ -304,6 +360,41 @@ function TrinketESP:disable()
     self._processedObjects = {}
     self._pendingTrinkets = {}
     self._processingQueue = false
+    
+    -- Resetar contadores
+    for trinketType in pairs(self._typeCount) do
+        self._typeCount[trinketType] = 0
+    end
+end
+
+-- Função para obter estatísticas dos tipos
+function TrinketESP:getTypeStats()
+    local total = 0
+    for _, count in pairs(self._typeCount) do
+        total = total + count
+    end
+    
+    return {
+        total = total,
+        usual_trinkets = self._typeCount[TRINKET_TYPES.USUAL_TRINKET],
+        scrolls = self._typeCount[TRINKET_TYPES.SCROLL_TYPE],
+        gems = self._typeCount[TRINKET_TYPES.GEMS],
+        semi_artifacts = self._typeCount[TRINKET_TYPES.SEMI_ARTIFACTS],
+        artifacts = self._typeCount[TRINKET_TYPES.ARTIFACTS]
+    }
+end
+
+-- Função para imprimir estatísticas formatadas
+function TrinketESP:printStats()
+    local stats = self:getTypeStats()
+    print("=== TRINKET ESP STATISTICS ===")
+    print("Total Trinkets Found: " .. stats.total)
+    print("├─ Usual Trinkets: " .. stats.usual_trinkets)
+    print("├─ Scrolls: " .. stats.scrolls)
+    print("├─ Gems: " .. stats.gems)
+    print("├─ Semi-Artifacts: " .. stats.semi_artifacts)
+    print("└─ Artifacts: " .. stats.artifacts)
+    print("==============================")
 end
 
 function TrinketESP:destroy()
@@ -312,6 +403,7 @@ function TrinketESP:destroy()
     self.espBillboards = nil
     self._processedObjects = nil
     self._pendingTrinkets = nil
+    self._typeCount = nil
 end
 
 return TrinketESP
