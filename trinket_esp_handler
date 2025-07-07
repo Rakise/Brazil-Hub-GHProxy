@@ -230,7 +230,7 @@ function TrinketESP:createBillboard(trinket, trinketName, trinketType)
     self.espBillboards[trinket] = billboard
     
     -- Incrementar contador do tipo
-    self._typeCount[trinketType] = self._typeCount[trinketType] + 1
+    self._typeCount[trinketType] = (self._typeCount[trinketType] or 0) + 1
 end
 
 function TrinketESP:removeBillboard(trinket)
