@@ -10,7 +10,7 @@ local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent
 -- Constants and cached values
 local DEFAULT_BLOCK_RADIUS = 200
 local LOCAL_PLAYER = Players.LocalPlayer
-local DETECTION_INTERVAL = 0.05 -- 20 FPS detection rate instead of 60+
+local DETECTION_INTERVAL = 0.01 -- 100 FPS para máxima velocidade de reação
 local CACHE_DURATION = 0.1 -- Cache player states for 100ms
 
 -- Pre-computed values
@@ -691,37 +691,37 @@ end
 -- OPTIMIZED: Main threat detection with throttling
 function AutoBlock:detectThreats()
     local currentTime = tick()
-    
-    -- Throttle detection to maintain FPS
     if currentTime - self._lastDetectionRun < DETECTION_INTERVAL then
         return
     end
-    
     self._lastDetectionRun = currentTime
-    
+
     local localCharacter = self:_getValidatedLocalCharacter()
     if not localCharacter then return end
-    
-    self._lastDetectionTime = currentTime
-    
-    -- Update valid players cache
+
     self:_updateValidPlayers()
-    
     local myPosition = localCharacter.HumanoidRootPart.Position
     local allDetectedThreats = {}
     local threatCount = 0
-    
-    -- Scan cached valid players only
+
+    -- Cache humanoid/HRP fora do loop
     for i = 1, #self._validPlayers do
         local player = self._validPlayers[i]
-        local playerThreats = self:_scanPlayerForThreats(player, myPosition)
-        
-        for j = 1, #playerThreats do
-            threatCount = threatCount + 1
-            allDetectedThreats[threatCount] = playerThreats[j]
+        local character = player.Character
+        if character then
+            local hrp = character:FindFirstChild("HumanoidRootPart")
+            local humanoid = character:FindFirstChild("Humanoid")
+            if hrp and humanoid then
+                -- Passe character, hrp, humanoid para as funções de verificação se desejar otimizar ainda mais
+                local playerThreats = self:_scanPlayerForThreats(player, myPosition)
+                for j = 1, #playerThreats do
+                    threatCount = threatCount + 1
+                    allDetectedThreats[threatCount] = playerThreats[j]
+                end
+            end
         end
     end
-    
+
     self:_updateBlockingState(allDetectedThreats)
 end
 
