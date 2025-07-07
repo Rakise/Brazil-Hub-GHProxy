@@ -46,14 +46,41 @@ function PlayerData:getBasicData(player)
     }
 end
 
+--// Function: PlayerData:_getRogueNameFromModels
+--// Description: Gets rogue name from character models with FakeHumanoid.
+function PlayerData:_getRogueNameFromModels(player)
+    if not player or not player.Character then return "" end
+    
+    for _, model in pairs(player.Character:GetChildren()) do
+        if model:IsA("Model") then
+            local fakeHumanoid = model:FindFirstChild("FakeHumanoid")
+            if fakeHumanoid then
+                return model.Name
+            end
+        end
+    end
+    
+    return ""
+end
+
 --// Function: PlayerData:getRogueData
 --// Description: Retrieves player rogue information.
 function PlayerData:getRogueData(player)
     if not player then return {} end
+    
     local firstName = tostring(self:_safeGetAttribute(player, "FirstName", ""))
     local lastName  = tostring(self:_safeGetAttribute(player, "LastName", ""))
     local houseRank = self:_safeGetAttribute(player, "HouseRank", nil)
     local gender    = self:_safeGetAttribute(player, "Gender", nil)
+    
+    -- Fallback: if attributes don't exist, try to get name from models with FakeHumanoid
+    if firstName == "" and lastName == "" then
+        local modelName = self:_getRogueNameFromModels(player)
+        if modelName ~= "" then
+            firstName = modelName
+        end
+    end
+    
     local rogueName = self:_formatRogueName(firstName, lastName, houseRank, gender)
     return {
         firstName    = firstName,
