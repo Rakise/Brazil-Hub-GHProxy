@@ -37,6 +37,9 @@ function KeyHandler:loadKey()
         if ok and result and #result > 0 then
             self.key = result
             return result
+        elseif writefile then
+            -- Se o arquivo não existe, cria vazio
+            writefile(KEY_FILE, "")
         end
     end
     return nil
