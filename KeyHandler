@@ -1,0 +1,121 @@
+-- KeyHandler: Sistema de key OOP para BrazilHub
+-- Usa writefile/readfile para persistência local
+-- Integração com LinoriaLib para input de key
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local KEY_FILE = "brazilhub_key.txt"
+local API_URL = "https://meuservidordekey.com/validate?key=" -- Substitua pela sua API real
+
+local KeyHandler = {}
+KeyHandler.__index = KeyHandler
+
+-- LinoriaLib deve ser passado na criação
+function KeyHandler.new(linoriaLib)
+    local self = setmetatable({}, KeyHandler)
+    self.key = nil
+    self.isValid = false
+    self.linoriaLib = linoriaLib -- Referência à LinoriaLib
+    return self
+end
+
+-- Salva a key localmente
+function KeyHandler:saveKey(key)
+    if writefile then
+        writefile(KEY_FILE, key)
+    end
+    self.key = key
+end
+
+-- Lê a key salva localmente
+function KeyHandler:loadKey()
+    if readfile then
+        local ok, result = pcall(function()
+            return readfile(KEY_FILE)
+        end)
+        if ok and result and #result > 0 then
+            self.key = result
+            return result
+        end
+    end
+    return nil
+end
+
+-- Solicita a key do usuário via LinoriaLib AddInput
+function KeyHandler:promptKey()
+    if not self.linoriaLib then
+        Players.LocalPlayer:Kick("LinoriaLib não disponível para input de key.")
+    end
+
+    -- Cria uma janela temporária só para a key
+    local window = self.linoriaLib:CreateWindow({
+        Title = 'BrazilHub Key System',
+        Center = true,
+        AutoShow = true,
+        TabPadding = 8,
+        MenuFadeTime = 0.2
+    })
+    local tab = window:AddTab('Key')
+    local group = tab:AddLeftGroupbox('Insira sua key')
+
+    local keyReceived = false
+    local keyValue = nil
+
+    group:AddInput('KeyInput', {
+        Default = '',
+        Numeric = false,
+        Finished = true, -- só chama callback ao pressionar Enter
+        Text = 'Key',
+        Tooltip = 'Digite sua key e pressione Enter',
+        Placeholder = 'Sua key aqui',
+        Callback = function(val)
+            if val and #val > 0 then
+                keyValue = val
+                keyReceived = true
+            end
+        end
+    })
+
+    -- Espera até o usuário digitar a key
+    repeat task.wait() until keyReceived
+
+    window:Close()
+    self:saveKey(keyValue)
+    return keyValue
+end
+
+-- Lista de keys fixas válidas
+local VALID_KEYS = {
+    ["EXEMPLO-KEY-123"] = true,
+    ["MINHA-KEY-456"] = true,
+    ["BRAZIL-HUB-789"] = true
+    -- Adicione mais keys conforme necessário
+}
+
+-- Valida a key localmente usando a lista fixa
+function KeyHandler:validateKey(key)
+    if VALID_KEYS[key] then
+        self.isValid = true
+        return true
+    end
+    self.isValid = false
+    return false
+end
+
+-- Fluxo principal: carrega, valida, solicita se necessário
+function KeyHandler:requireValidKey()
+    local key = self:loadKey()
+    if not key then
+        key = self:promptKey()
+    end
+    while not self:validateKey(key) do
+        key = self:promptKey()
+    end
+    self:saveKey(key)
+    self.key = key
+    self.isValid = true
+    return key
+end
+
+return KeyHandler 
