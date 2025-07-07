@@ -53,6 +53,8 @@ initializeUtilsService()
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+
 --- Creates a new BetterLeaderboard instance
 -- @return BetterLeaderboard: New instance of the leaderboard
 function BetterLeaderboard.new()
@@ -65,6 +67,8 @@ function BetterLeaderboard.new()
     self.scrollingFrame = nil
     self._playerAddedConn = nil
     self._lbConn = nil
+    self._connMgr = ConnectionManager.new()
+    self._playerLabelConns = {} -- [player] = {charAdded, charRemoving}
     
     return self
 end
@@ -245,7 +249,8 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     local playerLabel = Instance.new("TextButton")
     playerLabel.Name = "PlayerLabel"
     playerLabel.FontSize = Enum.FontSize.Size18
-    playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+    local hasCharacter = player.Character ~= nil
+    playerLabel.TextColor3 = hasCharacter and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120)
     playerLabel.BorderColor3 = CONFIG.COLORS.BLACK
     playerLabel.Text = rogueName or "Loading"
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -258,7 +263,7 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     playerLabel.BorderSizePixel = 0
     playerLabel.BackgroundColor3 = CONFIG.COLORS.WHITE
     playerLabel.Parent = parent
-    
+
     -- Hover
     self:_setupLabelHover(playerLabel, player, rogueName)
 
@@ -266,7 +271,18 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     playerLabel.MouseButton2Click:Connect(function()
         self:_toggleCameraToPlayer(player)
     end)
-    
+
+    -- Atualiza cor se o character aparecer/desaparecer
+    local charAddedConn = player.CharacterAdded:Connect(function()
+        playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+    end)
+    local charRemovingConn = player.CharacterRemoving:Connect(function()
+        playerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+    end)
+    self._connMgr:add(charAddedConn)
+    self._connMgr:add(charRemovingConn)
+    self._playerLabelConns[player] = {charAddedConn, charRemovingConn}
+
     return playerLabel
 end
 
@@ -279,9 +295,12 @@ function BetterLeaderboard:_setupLabelHover(playerLabel, player, rogueName)
         playerLabel.TextColor3 = CONFIG.COLORS.GRAY
         playerLabel.Text = player.Name
     end)
-    
     playerLabel.MouseLeave:Connect(function()
-        playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+        if player.Character then
+            playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+        else
+            playerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+        end
         playerLabel.Text = rogueName or "Loading"
     end)
 end
@@ -415,6 +434,12 @@ function BetterLeaderboard:disable()
         self._lbConn:Disconnect()
         self._lbConn = nil
     end
+    
+    if self._connMgr then
+        self._connMgr:disconnectAll()
+    end
+    
+    self._playerLabelConns = {}
     
     -- Clean up GUI
     if self.screenGui and self.screenGui.Parent then
