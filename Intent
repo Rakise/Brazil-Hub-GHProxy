@@ -14,7 +14,7 @@ Intent.enabled = false
 local Players = game:GetService("Players")
 
 -- Load UtilsService
-local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/UtilsService"))()
 local utils = Utils.new()
 
 -- Configuration constants
