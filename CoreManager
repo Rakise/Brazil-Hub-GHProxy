@@ -24,6 +24,22 @@ end
 
 waitForGameLoaded()
 
+local function waitForRobloxReady()
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    while not LocalPlayer do
+        Players.PlayerAdded:Wait()
+        LocalPlayer = Players.LocalPlayer
+    end
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    while not playerGui do
+        playerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
+    end
+    return LocalPlayer, playerGui
+end
+
+waitForRobloxReady()
+
 local REPO_BASE_URL = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/"
 
