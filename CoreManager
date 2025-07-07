@@ -769,5 +769,5 @@ end
 main()
 
 if queue_on_teleport then
-    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Core/CoreManager"))()')
+    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/CoreManager"))()')
 end
