@@ -190,24 +190,6 @@ local function createLabel(text, parent)
     return label
 end
 
--- Função para criar frame com layout
-local function createFrameWithLayout(frameName, layoutConfig, parent)
-    local frame = newInstance("Frame")
-    frame.Name = frameName
-    frame.BackgroundTransparency = 1
-    frame.Size = UDim2.new(1, 0, 0.1, 0)
-    frame.Parent = parent
-
-    local layout = newInstance("UIListLayout")
-    layout.FillDirection = layoutConfig.fillDirection
-    layout.HorizontalAlignment = layoutConfig.horizontalAlignment
-    layout.VerticalAlignment = layoutConfig.verticalAlignment
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = frame
-
-    return frame
-end
-
 function PlayerESP:createBillboard(player)
     local character = player.Character
     if not character or character:FindFirstChild("PlayerESP") then return end
@@ -216,21 +198,14 @@ function PlayerESP:createBillboard(player)
     if not adornee then return end
 
     -- Criação otimizada do billboard com propriedades em lote
-    local billboard = newInstance("BillboardGui")
-    billboard.Name = "PlayerESP"
-    billboard.LightInfluence = 1
-    billboard.Active = true
-    billboard.Adornee = adornee
-    billboard.ClipsDescendants = true
-    billboard.AlwaysOnTop = true
-    billboard.Size = UDim2.new(0, 500, 0, 100)
-    billboard.Parent = adornee
+    local billboard = utils:createBillboard(adornee, adornee, UDim2.new(0, 500, 0, 100), "PlayerESP")
 
     -- Layout principal
-    local mainLayout = newInstance("UIListLayout")
-    mainLayout.Padding = UDim.new(0, 3)
-    mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    mainLayout.Parent = billboard
+    utils:createUIListLayout(billboard, {
+        fillDirection = Enum.FillDirection.Vertical,
+        horizontalAlignment = Enum.HorizontalAlignment.Center,
+        verticalAlignment = Enum.VerticalAlignment.Top
+    })
 
     -- Estrutura para armazenar todos os elementos criados
     local billboardData = {
@@ -241,13 +216,13 @@ function PlayerESP:createBillboard(player)
 
     -- Criação dos frames e labels baseada na configuração
     for i, frameConfig in ipairs(FRAME_CONFIG) do
-        local frame = createFrameWithLayout(frameConfig.name, frameConfig.layout, billboard)
+        local frame, _ = utils:createFrameWithLayout(billboard, frameConfig.name, frameConfig.layout)
         frame.LayoutOrder = i
         billboardData.frames[frameConfig.name] = frame
 
         -- Criação dos labels para este frame
         for j, labelConfig in ipairs(frameConfig.labels) do
-            local label = createLabel("", frame)
+            local label = utils:createLabel(frame, "")
             label.LayoutOrder = j
             billboardData.labels[labelConfig.key] = label
         end
