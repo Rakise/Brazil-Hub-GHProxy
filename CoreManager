@@ -767,3 +767,8 @@ end
 
 -- Start the script
 main()
+
+-- Garantir execução automática após teleport
+if queue_on_teleport then
+    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Core/CoreManager.lua"))()')
+end
