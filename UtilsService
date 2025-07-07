@@ -1,393 +1,135 @@
--- utils.lua
--- Player Data Utility Module (READ-ONLY) - OOP Implementation
+-- UtilsService Module
+-- Main utility service that orchestrates all utility modules
 -- Usage: local Utils = require(path); local utils = Utils.new(); utils:getPlayerData(player)
 
---// Variables
+-- Load sub-modules using loadstring
+local PlayerData = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/PlayerData"))()
+local ForceField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/ForceField"))()
+local ToolManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/ToolManager"))()
 
-local Players = game:GetService("Players")
+local UtilsService = {}
+UtilsService.__index = UtilsService
 
---// Constants
-local CONSTANTS = {
-    FORCEFIELD_DURATION     = 120,    -- ForceField duration in seconds
-    FORCEFIELD_WARNING_TIME = 60,     -- Warning threshold in seconds
-    FORCEFIELD_CRITICAL_TIME= 20,     -- Critical threshold in seconds
-    COLORS = {
-        SAFE     = Color3.fromRGB(0, 255, 0),     -- Green
-        WARNING  = Color3.fromRGB(255, 255, 0),   -- Yellow
-        CRITICAL = Color3.fromRGB(255, 0, 0)      -- Red
-    }
-}
-
-local Utils = {}
-Utils.__index = Utils
-
---// Functions
-
---// Function: Utils.new
---// Description: Creates a new Utils instance.
-function Utils.new()
-    local self = setmetatable({}, Utils)
+--// Function: UtilsService.new
+--// Description: Creates a new UtilsService instance with all sub-modules.
+function UtilsService.new()
+    local self = setmetatable({}, UtilsService)
+    
+    -- Initialize sub-modules
+    self.playerData = PlayerData.new()
+    self.forceField = ForceField.new()
+    self.toolManager = ToolManager.new()
+    
     return self
 end
 
---// Function: Utils:_safeGetAttribute
---// Description: Safely gets a player attribute with fallback value.
-function Utils:_safeGetAttribute(player, attributeName, fallback)
-    if not player then return fallback end
-    local success, value = pcall(function()
-        return player:GetAttribute(attributeName)
-    end)
-    return success and value or fallback
+--// PlayerData Delegation Methods
+function UtilsService:getPlayerBasicData(player)
+    return self.playerData:getBasicData(player)
 end
 
---// Function: Utils:_formatRogueName
---// Description: Formats a rogue name based on rank and gender.
-function Utils:_formatRogueName(firstName, lastName, houseRank, gender)
-    local hasLastName = lastName ~= ""
-    local isOwner     = houseRank == "Owner"
-    if isOwner and hasLastName then
-        local title = gender == "Female" and "Lady" or "Lord"
-        return string.format("%s %s %s", title, firstName, lastName)
-    end
-    return hasLastName and string.format("%s %s", firstName, lastName) or firstName
+function UtilsService:getPlayerRogueData(player)
+    return self.playerData:getRogueData(player)
 end
 
---// Function: Utils:getPlayerBasicData
---// Description: Retrieves basic player information.
-function Utils:getPlayerBasicData(player)
-    if not player then return {} end
-    return {
-        name        = player.Name,
-        displayName = player.DisplayName,
-        userId      = player.UserId,
-        accountAge  = player.AccountAge,
-        firstTime   = self:_safeGetAttribute(player, "FirstTime", false)
-    }
+function UtilsService:getPlayerEdictData(player)
+    return self.playerData:getEdictData(player)
 end
 
---// Function: Utils:getPlayerRogueData
---// Description: Retrieves player rogue information.
-function Utils:getPlayerRogueData(player)
-    if not player then return {} end
-    local firstName = tostring(self:_safeGetAttribute(player, "FirstName", ""))
-    local lastName  = tostring(self:_safeGetAttribute(player, "LastName", ""))
-    local houseRank = self:_safeGetAttribute(player, "HouseRank", nil)
-    local gender    = self:_safeGetAttribute(player, "Gender", nil)
-    local rogueName = self:_formatRogueName(firstName, lastName, houseRank, gender)
-    return {
-        firstName    = firstName,
-        lastName     = lastName,
-        houseRank    = houseRank,
-        gender       = gender,
-        rogueName    = rogueName,
-        fullRogueName= rogueName -- Kept for backward compatibility
-    }
+function UtilsService:getPlayerPrestigeData(player)
+    return self.playerData:getPrestigeData(player)
 end
 
---// Function: Utils:getPlayerEdictData
---// Description: Retrieves player edict information.
-function Utils:getPlayerEdictData(player)
-    if not player then return {} end
-    local edict = self:_safeGetAttribute(player, "Edict", "None")
-    return {
-        edict        = edict,
-        edictDisplay = edict
-    }
+function UtilsService:getPlayerHealthData(player)
+    return self.playerData:getHealthData(player)
 end
 
---// Function: Utils:getPlayerPrestigeData
---// Description: Retrieves player prestige information.
-function Utils:getPlayerPrestigeData(player)
-    if not player then return { level = 0 } end
-    local prestigeLevel = self:_safeGetAttribute(player, "Prestige", 0)
-    return {
-        level       = prestigeLevel,
-        hasPrestige = prestigeLevel > 0
-    }
+function UtilsService:getPlayerFullData(player)
+    return self.playerData:getFullData(player)
 end
 
---// Function: Utils:getPlayerHealthData
---// Description: Retrieves player health information.
-function Utils:getPlayerHealthData(player)
-    if not player or not player.Character then return {} end
-    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return {} end
-    local health       = math.floor(humanoid.Health)
-    local maxHealth    = math.floor(humanoid.MaxHealth)
-    local healthPercent= maxHealth > 0 and math.floor((health / maxHealth) * 100) or 0
-    return {
-        health               = health,
-        maxHealth            = maxHealth,
-        healthPercent        = healthPercent,
-        healthDisplay        = string.format("%d/%d", health, maxHealth),
-        healthPercentDisplay = string.format("%d%%", healthPercent)
-    }
+function UtilsService:getPlayerRogueDisplay(player)
+    return self.playerData:getRogueDisplay(player)
 end
 
---// Function: Utils:getPlayerFullData
---// Description: Retrieves complete player data structure.
-function Utils:getPlayerFullData(player)
-    if not player then return {} end
-    return {
-        basic    = self:getPlayerBasicData(player),
-        rogue    = self:getPlayerRogueData(player),
-        edict    = self:getPlayerEdictData(player),
-        prestige = self:getPlayerPrestigeData(player),
-        health   = self:getPlayerHealthData(player)
-    }
+function UtilsService:getPlayerEdictDisplay(player)
+    return self.playerData:getEdictDisplay(player)
 end
 
---// Function: Utils:getPlayerRogueDisplay
---// Description: Gets formatted rogue name for display.
-function Utils:getPlayerRogueDisplay(player)
-    local rogueData = self:getPlayerRogueData(player)
-    return rogueData.rogueName or ""
+function UtilsService:getPlayerHealthDisplay(player)
+    return self.playerData:getHealthDisplay(player)
 end
 
---// Function: Utils:getPlayerEdictDisplay
---// Description: Gets formatted edict for display.
-function Utils:getPlayerEdictDisplay(player)
-    local edictData = self:getPlayerEdictData(player)
-    return edictData.edictDisplay or "None"
+--// ForceField Delegation Methods
+function UtilsService:hasForceField(player)
+    return self.forceField:hasForceField(player)
 end
 
---// Function: Utils:getPlayerHealthDisplay
---// Description: Gets formatted health for display.
-function Utils:getPlayerHealthDisplay(player)
-    local healthData = self:getPlayerHealthData(player)
-    return healthData.healthDisplay or "0/0", healthData.healthPercentDisplay or "0%"
+function UtilsService:getForceFieldTimeLeft(player)
+    return self.forceField:getTimeLeft(player)
 end
 
---// Function: Utils:hasForceField
---// Description: Checks if player has ForceField.
-function Utils:hasForceField(player)
-    if not player or not player.Character then return false end
-    return player.Character:FindFirstChildOfClass("ForceField") ~= nil
+function UtilsService:getForceFieldColor(timeLeft)
+    return self.forceField:getColor(timeLeft)
 end
 
---// Function: Utils:getForceFieldTimeLeft
---// Description: Gets remaining ForceField time in seconds.
-function Utils:getForceFieldTimeLeft(player)
-    if not player or not player.Character then return 0 end
-    local forceField = player.Character:FindFirstChildOfClass("ForceField")
-    if not forceField then return 0 end
-    local startTime = self:_safeGetAttribute(forceField, "StartTime", tick())
-    local elapsed   = tick() - startTime
-    return math.max(0, CONSTANTS.FORCEFIELD_DURATION - elapsed)
+function UtilsService:getForceFieldData(player)
+    return self.forceField:getData(player)
 end
 
---// Function: Utils:getForceFieldColor
---// Description: Gets ForceField status color based on remaining time.
-function Utils:getForceFieldColor(timeLeft)
-    if timeLeft > CONSTANTS.FORCEFIELD_WARNING_TIME then
-        return CONSTANTS.COLORS.SAFE
-    elseif timeLeft > CONSTANTS.FORCEFIELD_CRITICAL_TIME then
-        return CONSTANTS.COLORS.WARNING
-    else
-        return CONSTANTS.COLORS.CRITICAL
-    end
+function UtilsService:getForceFieldStatus(player)
+    return self.forceField:getStatus(player)
 end
 
---// Function: Utils:getForceFieldData
---// Description: Gets comprehensive ForceField information.
-function Utils:getForceFieldData(player)
-    local hasFF   = self:hasForceField(player)
-    local timeLeft= hasFF and self:getForceFieldTimeLeft(player) or 0
-    local color   = self:getForceFieldColor(timeLeft)
-    return {
-        hasForceField     = hasFF,
-        timeLeft          = timeLeft,
-        timeLeftFormatted = string.format("%.1fs", timeLeft),
-        color             = color,
-        status            = hasFF and "Active" or "Inactive"
-    }
+function UtilsService:isForceFieldActive(player)
+    return self.forceField:isActive(player)
 end
 
---// Function: Utils.getEquippedToolName
---// Description: Returns the name of the currently equipped tool for a player, or 'None' if none is equipped.
-function Utils.getEquippedToolName(player)
-    local character = player and player.Character
-    if not character then return "None" end
-    local tool = character:FindFirstChildOfClass("Tool")
-    return tool and tool.Name or "None"
+function UtilsService:getForceFieldTimeRemaining(player)
+    return self.forceField:getTimeRemaining(player)
 end
 
---// Function: Utils:getPlayerTools
---// Description: Gets all tools from player's character and backpack
-function Utils:getPlayerTools(player)
-    if not player then return {} end
-    
-    local tools = {}
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Get tools from character (equipped)
-    if character then
-        for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") then
-                table.insert(tools, {
-                    name = tool.Name,
-                    location = "Equipped",
-                    tool = tool
-                })
-            end
-        end
-    end
-    
-    -- Get tools from backpack
-    if backpack then
-        for _, tool in pairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                table.insert(tools, {
-                    name = tool.Name,
-                    location = "Backpack",
-                    tool = tool
-                })
-            end
-        end
-    end
-    
-    return tools
+--// ToolManager Delegation Methods
+function UtilsService:getEquippedToolName(player)
+    return self.toolManager:getEquippedToolName(player)
 end
 
---// Function: Utils:getPlayerToolsByName
---// Description: Gets tools by name from player's inventory
-function Utils:getPlayerToolsByName(player, toolNames)
-    if not player or not toolNames then return {} end
-    
-    local availableTools = {}
-    local toolCount = 0
-    local toolLocations = {}
-    
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Check character's equipped tools
-    if character then
-        for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") and toolNames[tool.Name] then
-                availableTools[tool.Name] = true
-                toolLocations[tool.Name] = "Equipped"
-                toolCount = toolCount + 1
-            end
-        end
-    end
-    
-    -- Check backpack tools
-    if backpack then
-        for _, tool in pairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and toolNames[tool.Name] then
-                availableTools[tool.Name] = true
-                toolLocations[tool.Name] = "Backpack"
-                toolCount = toolCount + 1
-            end
-        end
-    end
-    
-    return {
-        tools = availableTools,
-        locations = toolLocations,
-        count = toolCount
-    }
+function UtilsService:getPlayerTools(player)
+    return self.toolManager:getPlayerTools(player)
 end
 
---// Function: Utils:getAvailableToolsForAutoAim
---// Description: Gets available tools for auto-aim with display names
-function Utils:getAvailableToolsForAutoAim(player, availableToolNames)
-    if not player or not availableToolNames then 
-        return availableToolNames or {} 
-    end
-    
-    local toolData = self:getPlayerToolsByName(player, availableToolNames)
-    local toolArray = {}
-    
-    -- Convert to array with location info
-    for toolName, _ in pairs(toolData.tools) do
-        local location = toolData.locations[toolName] or "Unknown"
-        local displayName = toolName
-        if location == "Equipped" then
-            displayName = toolName .. " [Equipped]"
-        elseif location == "Backpack" then
-            displayName = toolName .. " [Backpack]"
-        end
-        table.insert(toolArray, displayName)
-    end
-    
-    -- Sort alphabetically
-    table.sort(toolArray)
-    
-    -- If no tools found, return original list
-    if toolData.count == 0 then
-        return availableToolNames
-    end
-    
-    return toolArray
+function UtilsService:getPlayerToolsByName(player, toolNames)
+    return self.toolManager:getPlayerToolsByName(player, toolNames)
 end
 
---// Function: Utils:extractToolNamesFromDisplay
---// Description: Extracts clean tool names from display names
-function Utils:extractToolNamesFromDisplay(displayNames)
-    local cleanNames = {}
-    for _, displayName in ipairs(displayNames) do
-        local toolName = displayName:gsub(" %[Equipped%]$", ""):gsub(" %[Backpack%]$", "")
-        table.insert(cleanNames, toolName)
-    end
-    return cleanNames
+function UtilsService:getAvailableToolsForAutoAim(player, availableToolNames)
+    return self.toolManager:getAvailableToolsForAutoAim(player, availableToolNames)
 end
 
---// Function: Utils:hasTool
---// Description: Checks if player has a specific tool
-function Utils:hasTool(player, toolName)
-    if not player or not toolName then return false end
-    
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Check character
-    if character then
-        local tool = character:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return true
-        end
-    end
-    
-    -- Check backpack
-    if backpack then
-        local tool = backpack:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return true
-        end
-    end
-    
-    return false
+function UtilsService:extractToolNamesFromDisplay(displayNames)
+    return self.toolManager:extractToolNamesFromDisplay(displayNames)
 end
 
---// Function: Utils:getToolLocation
---// Description: Gets the location of a specific tool
-function Utils:getToolLocation(player, toolName)
-    if not player or not toolName then return "None" end
-    
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Check character first (equipped takes priority)
-    if character then
-        local tool = character:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return "Equipped"
-        end
-    end
-    
-    -- Check backpack
-    if backpack then
-        local tool = backpack:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return "Backpack"
-        end
-    end
-    
-    return "None"
+function UtilsService:hasTool(player, toolName)
+    return self.toolManager:hasTool(player, toolName)
+end
+
+function UtilsService:getToolLocation(player, toolName)
+    return self.toolManager:getToolLocation(player, toolName)
+end
+
+function UtilsService:getEquippedTool(player)
+    return self.toolManager:getEquippedTool(player)
+end
+
+function UtilsService:getToolCount(player)
+    return self.toolManager:getToolCount(player)
+end
+
+--// Backward Compatibility Methods (for existing code)
+function UtilsService:getPlayerData(player)
+    return self:getPlayerFullData(player)
 end
 
 --// Main Export
-return Utils
+return UtilsService 
