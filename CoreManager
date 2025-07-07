@@ -629,14 +629,12 @@ end
     })
     
     -- Better Leaderboard toggle (moved to Utils group)
-    --[[
     utilsGroup:AddToggle('BetterLeaderboard', {
         Text = 'Better Leaderboard',
         Default = false,
         Tooltip = 'Improve the leaderboard interface',
         Callback = UICallbacks.onToggleBetterLeaderboard
     })
-    ]]
     -- Intent Billboard toggle (agora no grupo Edicts)
     edictsGroup:AddToggle('IntentBillboard', {
         Text = 'Intent Billboard',
