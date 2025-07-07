@@ -31,7 +31,7 @@ local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Kaic-dev/Brazil-H
 local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
 
 -- Carrega e executa o sistema de key
-local KeyHandler = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. 'KeyHandler.lua'))()
+local KeyHandler = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. 'KeyHandler'))()
 local keyHandler = KeyHandler.new(Library)
 keyHandler:requireValidKey()
 
@@ -68,24 +68,6 @@ local TriggerMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "TriggerMonitor")
 local PerformanceMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "PerformanceMonitor")
 local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
 
--- Verifica se todos os módulos principais foram carregados corretamente
-local failedModules = {}
-for name, inst in pairs(ModuleInstances) do
-    if not inst then
-        table.insert(failedModules, name)
-    end
-end
-
-if #failedModules == 0 then
-    print("[BrazilHub] All modules loaded successfully.")
-else
-    warn("[BrazilHub] Some modules failed to load:", table.concat(failedModules, ", "))
-end
-
--- ========================================
--- MODULE INSTANCES AND CONFIGURATION
--- ========================================
-
 -- Helper para instanciar módulos com segurança
 local function safeNew(module, name)
     if module and type(module.new) == "function" then
@@ -110,6 +92,24 @@ local ModuleInstances = {
     trinketEsp = safeNew(TrinketESP, "TrinketESP"),
     autoBlock = safeNew(AutoBlock, "AutoBlock")
 }
+
+-- Verifica se todos os módulos principais foram carregados corretamente
+local failedModules = {}
+for name, inst in pairs(ModuleInstances) do
+    if not inst then
+        table.insert(failedModules, name)
+    end
+end
+
+if #failedModules == 0 then
+    print("[BrazilHub] All modules loaded successfully.")
+else
+    warn("[BrazilHub] Some modules failed to load:", table.concat(failedModules, ", "))
+end
+
+-- ========================================
+-- MODULE INSTANCES AND CONFIGURATION
+-- ========================================
 
 -- Configuration constants
 local CONFIG = {
