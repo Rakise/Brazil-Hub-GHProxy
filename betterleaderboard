@@ -329,27 +329,31 @@ end
 function BetterLeaderboard:_hideOriginalLeaderboard()
     local playerGui = self:_getPlayerGui()
     if not playerGui then return end
-    
+
     local function disableLeaderboard()
         local originalLeaderboard = playerGui:FindFirstChild("LeaderboardGui")
         if originalLeaderboard then
             originalLeaderboard.Enabled = false
+            -- Listener para garantir que não seja reativado
+            if self._lbEnabledConn then self._lbEnabledConn:Disconnect() end
+            self._lbEnabledConn = originalLeaderboard:GetPropertyChangedSignal("Enabled"):Connect(function()
+                if self.enabled and originalLeaderboard.Enabled then
+                    originalLeaderboard.Enabled = false
+                end
+            end)
+            self._connMgr:add(self._lbEnabledConn)
         end
     end
-    
-    -- Disable immediately if it exists
+    -- Desabilita imediatamente se já existir
     disableLeaderboard()
-    
-    -- Set up listener to disable if recreated
-    if self._lbConn then 
-        self._lbConn:Disconnect() 
-    end
-    
+    -- Listener para desabilitar se for recriado
+    if self._lbConn then self._lbConn:Disconnect() end
     self._lbConn = playerGui.ChildAdded:Connect(function(child)
         if child.Name == "LeaderboardGui" then
             disableLeaderboard()
         end
     end)
+    self._connMgr:add(self._lbConn)
 end
 
 --- Shows the original Roblox leaderboard
@@ -421,37 +425,29 @@ end
 --- Disables the better leaderboard and restores original
 function BetterLeaderboard:disable()
     if not self.enabled then return end
-    
     self.enabled = false
-    
-    -- Disconnect all connections
     if self._playerAddedConn then
         self._playerAddedConn:Disconnect()
         self._playerAddedConn = nil
     end
-    
     if self._lbConn then
         self._lbConn:Disconnect()
         self._lbConn = nil
     end
-    
+    if self._lbEnabledConn then
+        self._lbEnabledConn:Disconnect()
+        self._lbEnabledConn = nil
+    end
     if self._connMgr then
         self._connMgr:disconnectAll()
     end
-    
     self._playerLabelConns = {}
-    
-    -- Clean up GUI
     if self.screenGui and self.screenGui.Parent then
         self.screenGui:Destroy()
     end
-    
-    -- Reset references
     self.screenGui = nil
     self.leaderboard = nil
     self.scrollingFrame = nil
-    
-    -- Restore original leaderboard
     self:_showOriginalLeaderboard()
 end
 
