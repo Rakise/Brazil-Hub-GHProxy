@@ -27,8 +27,15 @@ waitForGameLoaded()
 local REPO_BASE_URL = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/"
 
--- Load LinoriaLib components
+-- Carrega LinoriaLib
 local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
+
+-- Carrega e executa o sistema de key
+local KeyHandler = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. 'KeyHandler'))()
+local keyHandler = KeyHandler.new(Library)
+keyHandler:requireValidKey()
+
+-- Load LinoriaLib components
 local ThemeManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/SaveManager.lua'))()
 
