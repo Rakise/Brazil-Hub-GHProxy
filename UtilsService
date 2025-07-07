@@ -6,6 +6,7 @@
 local PlayerData = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/PlayerData"))()
 local ForceField = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/ForceField"))()
 local ToolManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/ToolManager"))()
+local BillboardUtils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/Utils/BillboardUtils"))()
 
 local UtilsService = {}
 UtilsService.__index = UtilsService
@@ -129,6 +130,23 @@ end
 --// Backward Compatibility Methods (for existing code)
 function UtilsService:getPlayerData(player)
     return self:getPlayerFullData(player)
+end
+
+--// Billboard/Frame/Label Utility Methods
+function UtilsService:createBillboard(parent, adornee, size, name)
+    return BillboardUtils.createBillboard(parent, adornee, size, name)
+end
+
+function UtilsService:createFrameWithLayout(parent, frameName, layoutConfig)
+    return BillboardUtils.createFrameWithLayout(parent, frameName, layoutConfig)
+end
+
+function UtilsService:createLabel(parent, text)
+    return BillboardUtils.createLabel(parent, text)
+end
+
+function UtilsService:createUIListLayout(parent, layoutConfig)
+    return BillboardUtils.createUIListLayout(parent, layoutConfig)
 end
 
 --// Main Export
