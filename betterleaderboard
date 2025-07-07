@@ -287,6 +287,7 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
         or (hasCharacter and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120))
     playerLabel.BorderColor3 = CONFIG.COLORS.BLACK
     playerLabel.Text = rogueName or "Loading"
+    playerLabel:SetAttribute("RogueDisplay", rogueName or "")
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
     playerLabel.TextStrokeTransparency = 0.5
     playerLabel.Size = CONFIG.PLAYER_LABEL_SIZE
@@ -299,7 +300,7 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     playerLabel.Parent = parent
 
     -- Hover
-    self:_setupLabelHover(playerLabel, player, rogueName)
+    self:_setupLabelHover(playerLabel, player)
 
     -- Right-click: alterna câmera
     playerLabel.MouseButton2Click:Connect(function()
@@ -310,7 +311,7 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
                 if frame:IsA("Frame") then
                     local label = frame:FindFirstChild("PlayerLabel")
                     if label and label:IsA("TextButton") then
-                        if self._currentCameraTarget and label.Text == (rogueName or "Loading") then
+                        if self._currentCameraTarget and label.Text == (label:GetAttribute("RogueDisplay") ~= "" and label:GetAttribute("RogueDisplay") or "Loading") then
                             label.TextColor3 = (player == self._currentCameraTarget) and Color3.fromRGB(80, 180, 255)
                                 or (player.Character and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120))
                         end
@@ -345,8 +346,7 @@ end
 --- Sets up hover functionality for player labels
 -- @param playerLabel TextButton: The label to add hover to
 -- @param player Player: The player this label represents
--- @param rogueName string: The player's rogue display name
-function BetterLeaderboard:_setupLabelHover(playerLabel, player, rogueName)
+function BetterLeaderboard:_setupLabelHover(playerLabel, player)
     playerLabel.MouseEnter:Connect(function()
         playerLabel.TextColor3 = CONFIG.COLORS.GRAY
         playerLabel.Text = player.Name
@@ -359,7 +359,8 @@ function BetterLeaderboard:_setupLabelHover(playerLabel, player, rogueName)
         else
             playerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
         end
-        playerLabel.Text = rogueName or "Loading"
+        local rogueDisplay = playerLabel:GetAttribute("RogueDisplay")
+        playerLabel.Text = (rogueDisplay and rogueDisplay ~= "") and rogueDisplay or "Loading"
     end)
 end
 
@@ -375,6 +376,7 @@ function BetterLeaderboard:_startRogueNameLoading(playerLabel, player)
         while playerLabel and playerLabel.Parent do
             local display = utils:getPlayerRogueDisplay(player)
             if display and #display > 0 then
+                playerLabel:SetAttribute("RogueDisplay", display)
                 playerLabel.Text = display
                 break
             end
