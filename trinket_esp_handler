@@ -1,4 +1,5 @@
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
 -- Cache de constantes para evitar re-alocações
@@ -34,16 +35,9 @@ local UDim2_new = UDim2.new
 local Color3_new = Color3.new
 local Instance_new = Instance.new
 
--- Otimização: pattern cache para gsub
-local PATTERN_CACHE = {
-    ["%%20"] = "",
-    ["%s+"] = ""
-}
-
 -- Função otimizada para limpar mesh IDs
 local function cleanMeshId(id)
     local str = tostring(id)
-    -- Aplicar patterns em sequência (mais eficiente que múltiplos gsub)
     str = str:gsub("%%20", "")
     return str:gsub("%s+", "")
 end
@@ -142,6 +136,9 @@ function TrinketESP.new()
         espBillboards = {},
         _connectionManager = ConnectionManager.new(),
         enabled = false,
+        -- Sistema de fila para processamento assíncrono
+        _pendingTrinkets = {},
+        _processingQueue = false,
         -- Cache para evitar re-verificações
         _processedObjects = {}
     }, TrinketESP)
@@ -188,49 +185,90 @@ function TrinketESP:removeBillboard(trinket)
     self._processedObjects[trinket] = nil
 end
 
--- Throttling para eventos de adição/remoção
-local lastProcessTime = 0
-local THROTTLE_DELAY = 0.1 -- 100ms throttle
+-- SOLUÇÃO 1: Sistema de fila assíncrona
+function TrinketESP:processQueue()
+    if self._processingQueue or #self._pendingTrinkets == 0 then return end
+    
+    self._processingQueue = true
+    
+    -- Processa até 5 trinkets por frame para evitar lag
+    local maxPerFrame = 5
+    local processed = 0
+    
+    while #self._pendingTrinkets > 0 and processed < maxPerFrame do
+        local trinket = table.remove(self._pendingTrinkets, 1)
+        
+        -- Verificar se o trinket ainda é válido
+        if trinket and trinket.Parent and not self._processedObjects[trinket] then
+            self._processedObjects[trinket] = true
+            local trinketName = getTrinketName(trinket)
+            self:createBillboard(trinket, trinketName)
+        end
+        
+        processed = processed + 1
+    end
+    
+    self._processingQueue = false
+    
+    -- Se ainda há trinkets na fila, agenda próximo processamento
+    if #self._pendingTrinkets > 0 then
+        RunService.Heartbeat:Wait()
+        self:processQueue()
+    end
+end
 
+-- SOLUÇÃO 2: Detecção imediata com processamento assíncrono
 function TrinketESP:onChildAdded(obj)
     if not self.enabled then return end
     
-    -- Throttling simples para evitar spam
-    local currentTime = tick()
-    if currentTime - lastProcessTime < THROTTLE_DELAY then
-        return
-    end
-    lastProcessTime = currentTime
-    
-    -- Verificação com cache
-    if self._processedObjects[obj] or not isTrinket(obj) then 
+    -- Verificação imediata sem throttling
+    if not isTrinket(obj) or self._processedObjects[obj] then 
         return 
     end
     
-    self._processedObjects[obj] = true
-    local trinketName = getTrinketName(obj)
-    self:createBillboard(obj, trinketName)
+    -- Adiciona à fila para processamento assíncrono
+    table.insert(self._pendingTrinkets, obj)
+    
+    -- Inicia processamento se não está rodando
+    if not self._processingQueue then
+        self:processQueue()
+    end
 end
 
 function TrinketESP:onChildRemoved(obj)
     if not self.enabled or not self.espBillboards[obj] then return end
     
     self:removeBillboard(obj)
+    
+    -- Remove da fila pendente se ainda estiver lá
+    for i = #self._pendingTrinkets, 1, -1 do
+        if self._pendingTrinkets[i] == obj then
+            table.remove(self._pendingTrinkets, i)
+            break
+        end
+    end
 end
 
--- Função otimizada para scan inicial
+-- SOLUÇÃO 3: Scan inicial otimizado em lotes
 function TrinketESP:scanExistingTrinkets()
     local workspaceChildren = Workspace:GetChildren()
-    local processedCount = 0
+    local trinkets = {}
     
+    -- Primeiro pass: identifica todos os trinkets
     for i = 1, #workspaceChildren do
         local obj = workspaceChildren[i]
         if isTrinket(obj) and not self._processedObjects[obj] then
-            self._processedObjects[obj] = true
-            local trinketName = getTrinketName(obj)
-            self:createBillboard(obj, trinketName)
-            processedCount = processedCount + 1
+            table.insert(trinkets, obj)
         end
+    end
+    
+    -- Segundo pass: processa em lotes assíncronos
+    for i = 1, #trinkets do
+        table.insert(self._pendingTrinkets, trinkets[i])
+    end
+    
+    if #self._pendingTrinkets > 0 then
+        self:processQueue()
     end
 end
 
@@ -242,7 +280,7 @@ function TrinketESP:enable()
     -- Scan inicial otimizado
     self:scanExistingTrinkets()
     
-    -- Conexões com throttling
+    -- Conexões sem throttling - detecção imediata
     self._connectionManager:add(Workspace.ChildAdded:Connect(function(obj)
         self:onChildAdded(obj)
     end))
@@ -261,9 +299,11 @@ function TrinketESP:disable()
         self:removeBillboard(trinket)
     end
     
-    -- Limpar caches
+    -- Limpar caches e fila
     trinketCache = {}
     self._processedObjects = {}
+    self._pendingTrinkets = {}
+    self._processingQueue = false
 end
 
 function TrinketESP:destroy()
@@ -271,6 +311,7 @@ function TrinketESP:destroy()
     self._connectionManager = nil
     self.espBillboards = nil
     self._processedObjects = nil
+    self._pendingTrinkets = nil
 end
 
 return TrinketESP
