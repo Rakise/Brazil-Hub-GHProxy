@@ -18,9 +18,7 @@
 -- Aguarda o jogo estar completamente carregado antes de iniciar o script principal
 local function waitForGameLoaded()
     if not game:IsLoaded() then
-        repeat
-            wait(0.1)
-        until game:IsLoaded()
+        game.Loaded:Wait()
     end
 end
 
