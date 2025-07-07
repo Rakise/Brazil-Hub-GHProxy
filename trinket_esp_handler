@@ -1,419 +1,435 @@
-local Workspace = game:GetService("Workspace")
+-- PlayerESP Otimizado para Performance Máxima
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/UtilsService"))()
+local utils = Utils.new()
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
--- Sistema de tipos de trinkets
-local TRINKET_TYPES = {
-    USUAL_TRINKET = "Usual_Trinket",
-    SCROLL_TYPE = "Scroll_Type", 
-    GEMS = "Gems",
-    SEMI_ARTIFACTS = "Semi_Artifacts",
-    ARTIFACTS = "Artifacts",
-    EVENT_TRINKET = "Event-Trinkets"
-}
-
--- Cache de constantes para evitar re-alocações
-local MESH_IDS = {
-    -- Usual Trinkets
-    ["rbxassetid://5196551436"] = { name = "Amulet", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5196577540"] = { name = "Old Amulet", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5204003946"] = { name = "Goblet", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5196782997"] = { name = "Old Ring", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5196776695"] = { name = "Ring", type = TRINKET_TYPES.USUAL_TRINKET },
-    
-    -- Scroll Type
-    ["rbxassetid://5204453430"] = { name = "Scroll", type = TRINKET_TYPES.SCROLL_TYPE },
-    
-    -- Gems
-    ["rbxassetid://2877143560"] = { name = "Ruby", type = TRINKET_TYPES.GEMS },
-    ["rbxassetid://2877143592"] = { name = "Sapphire", type = TRINKET_TYPES.GEMS },
-    ["rbxassetid://2877143624"] = { name = "Emerald", type = TRINKET_TYPES.GEMS },
-    
-    -- Semi-Artifacts
-    ["rbxassetid://2520762076"] = { name = "Howler Friend", type = TRINKET_TYPES.ARTIFACTS }
-}
-
--- Sistema de cores por tipo
-local TYPE_COLORS = {
-    [TRINKET_TYPES.USUAL_TRINKET] = Color3.new(0.7, 0.7, 0.7),      -- Cinza claro
-    [TRINKET_TYPES.SCROLL_TYPE] = Color3.new(0.9, 0.8, 0.5),        -- Amarelo pergaminho
-    [TRINKET_TYPES.GEMS] = Color3.new(0.4, 0.8, 0.9),               -- Azul cristal
-    [TRINKET_TYPES.SEMI_ARTIFACTS] = Color3.new(0.9, 0.6, 0.2),     -- Laranja
-    [TRINKET_TYPES.ARTIFACTS] = Color3.new(1.0, 0.2, 0.2),          -- Vermelho brilhante
-    [TRINKET_TYPES.EVENT_TRINKET] = Color3.new(0.760784, 0.827450, 0.243137)
-}
-
-local PHOENIX_TEXTURE = "rbxassetid://1536547385"
-local BILLBOARD_SIZE = UDim2.new(0, 100, 0, 100)
-
--- Cache de enums para evitar lookups repetidos
-local MATERIAL_SLATE = Enum.Material.Slate
-local MATERIAL_NEON = Enum.Material.Neon
-local MATERIAL_GLASS = Enum.Material.Glass
-local MESHTYPE_SPHERE = Enum.MeshType.Sphere
-local ZBEHAVIOR_SIBLING = Enum.ZIndexBehavior.Sibling
-local FONT_SOURCESANS = Enum.Font.SourceSans
-
--- Cache de funções frequentemente usadas
-local tostring = tostring
+-- Cache global de objetos pesados
+local LocalPlayer = Players.LocalPlayer
+local floor = math.floor
+local format = string.format
+local tick = tick
 local pairs = pairs
-local setmetatable = setmetatable
-local Vector2_new = Vector2.new
-local UDim2_new = UDim2.new
-local Color3_new = Color3.new
-local Instance_new = Instance.new
+local ipairs = ipairs
 
--- Função otimizada para limpar mesh IDs
-local function cleanMeshId(id)
-    local str = tostring(id)
-    str = str:gsub("%%20", "")
-    return str:gsub("%s+", "")
+-- Cache de funções Roblox para evitar indexação repetida
+local newInstance = Instance.new
+
+-- Constantes para otimização
+local UPDATE_INTERVAL = 0.5 -- Intervalo de atualização dos billboards
+
+-- Função otimizada para encontrar adornee
+local function getBestAdornee(character)
+    return character:FindFirstChild("Head") or 
+           character:FindFirstChild("UpperTorso") or 
+           character:FindFirstChild("Torso") or 
+           character:FindFirstChildWhichIsA("BasePart")
 end
 
--- Função otimizada para verificar trinkets usando cache de verificações
-local trinketCache = {}
-local function isTrinket(obj)
-    local objType = obj.ClassName
-    -- Cache hit check primeiro
-    if trinketCache[obj] ~= nil then
-        return trinketCache[obj]
-    end
-    
-    -- Verificação otimizada: só verifica se é Part/MeshPart primeiro
-    if objType ~= "Part" and objType ~= "MeshPart" then
-        trinketCache[obj] = false
-        return false
-    end
-    
-    local hasID = obj:FindFirstChild("ID") ~= nil
-    trinketCache[obj] = hasID
-    return hasID
-end
+-- Configuração dos frames e labels por tabela
+local FRAME_CONFIG = {
+    {
+        name = "nameFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "nameLabel",
+                key = "playerName",
+                format = "[%s]",
+                dataKey = "name",
+                showByDefault = true,
+                getData = function(player, cache)
+                    return player.Name
+                end
+            },
+            {
+                name = "distanceLabel",
+                key = "distance",
+                format = "[%s]",
+                dataKey = "distance",
+                showByDefault = true,
+                getData = function(player, cache, localChar, targetChar)
+                    if localChar and targetChar then
+                        local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+                        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                        
+                        if localRoot and targetRoot then
+                            local dist = (localRoot.Position - targetRoot.Position).Magnitude
+                            return floor(dist) .. "m"
+                        end
+                    end
+                    return "0m"
+                end
+            }
+        }
+    },
+    {
+        name = "infoFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "rogueLabel",
+                key = "rogueName",
+                format = "[%s]",
+                dataKey = "rogueName",
+                showByDefault = true,
+                getData = function(player, cache)
+                    return utils:getPlayerRogueDisplay(player)
+                end
+            },
+            {
+                name = "edictLabel",
+                key = "edict",
+                format = "[%s]",
+                dataKey = "edict",
+                showByDefault = true,
+                getData = function(player, cache)
+                    return utils:getPlayerEdictDisplay(player)
+                end
+            }
+        }
+    },
+    {
+        name = "hpFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "hpLabel",
+                key = "health",
+                format = "[%s]",
+                dataKey = "healthDisplay",
+                showByDefault = true,
+                getData = function(player, cache)
+                    local healthDisplay, _ = utils:getPlayerHealthDisplay(player)
+                    return healthDisplay
+                end
+            },
+            {
+                name = "hpPercLabel",
+                key = "healthPercent",
+                format = "[%s]",
+                dataKey = "healthPercentDisplay",
+                showByDefault = true,
+                getData = function(player, cache)
+                    local _, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
+                    return healthPercentDisplay
+                end
+            }
+        }
+    }
+}
 
--- Função otimizada para obter informações do trinket
-local function getTrinketInfo(part)
-    local material = part.Material
-    
-    -- Verificações mais rápidas primeiro (material checks) - ARTIFACTS
-    if material == MATERIAL_SLATE and part:FindFirstChildOfClass("ParticleEmitter") then
-        return "Idol of the Forgotten", TRINKET_TYPES.USUAL_TRINKET
-    end
+local PlayerESP = {}
+PlayerESP.__index = PlayerESP
 
-    if material == MATERIAL_GLASS and part:FindFirstChildOfClass("SpecialMesh") then
-        return "Opal", TRINKET_TYPES.GEMS
-    end
+function PlayerESP.new()
+    local self = setmetatable({}, PlayerESP)
+    self.enabled = false
+    self._connMgr = ConnectionManager.new()
+    self._playerConnMgrs = {}
+    self.espBillboards = {}
+    self.dataCache = {}
     
-    if material == MATERIAL_NEON then
-        if part.BrickColor == BrickColor.new("Gold") then
-            return "Lost Sunshine", TRINKET_TYPES.EVENT_TRINKET
+    -- Gera configuração de exibição automaticamente baseada na tabela
+    self.displayConfig = {}
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
+            self.displayConfig[configKey] = labelConfig.showByDefault
         end
-        local name = part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
-        return name, TRINKET_TYPES.ARTIFACTS
     end
     
-    if part.Transparency == 1 then
-        local hasOrb, hasLight, hasSphere = false, false, false
-        local children = part:GetChildren()
-        
-        -- Loop otimizado com early break conditions
-        for i = 1, #children do
-            local child = children[i]
-            local childType = child.ClassName
-            
-            if childType == "ParticleEmitter" and child.Name == "OrbParticle" then
-                hasOrb = true
-            elseif childType == "PointLight" then
-                hasLight = true
-            elseif childType == "SpecialMesh" and child.MeshType == MESHTYPE_SPHERE then
-                hasSphere = true
-            elseif childType == "Attachment" then
-                -- Verificação otimizada para Phoenix Down
-                local attachChildren = child:GetChildren()
-                for j = 1, #attachChildren do
-                    local subChild = attachChildren[j]
-                    if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == PHOENIX_TEXTURE then
-                        return "Phoenix Down", TRINKET_TYPES.ARTIFACTS
+    -- Timestamps otimizados para diferentes tipos de atualização
+    self._lastBillboardUpdate = 0
+    
+    -- Cache de caracteres locais para evitar múltiplas consultas
+    self._localCharCache = nil
+    self._localCharCacheTime = 0
+    
+    return self
+end
+
+-- Cache otimizado para character local
+function PlayerESP:getLocalCharacter()
+    local currentTime = tick()
+    if currentTime - self._localCharCacheTime > 1 then
+        self._localCharCache = LocalPlayer and LocalPlayer.Character
+        self._localCharCacheTime = currentTime
+    end
+    return self._localCharCache
+end
+
+-- Função helper para criar labels de forma otimizada
+local function createLabel(text, parent)
+    local label = newInstance("TextLabel")
+    label.FontSize = Enum.FontSize.Size14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Text = text
+    label.TextStrokeTransparency = 0.5
+    label.Font = Enum.Font.SourceSansSemibold
+    label.BackgroundTransparency = 1
+    label.TextSize = 14
+    label.Size = UDim2.new(0, 0, 0.1, 0)
+    label.AutomaticSize = Enum.AutomaticSize.X
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.Parent = parent
+    return label
+end
+
+function PlayerESP:createBillboard(player)
+    local character = player.Character
+    if not character or character:FindFirstChild("PlayerESP") then return end
+    
+    local adornee = getBestAdornee(character)
+    if not adornee then return end
+
+    -- Criação otimizada do billboard com propriedades em lote
+    local billboard = utils:createBillboard(adornee, adornee, UDim2.new(0, 500, 0, 100), "PlayerESP")
+
+    -- Layout principal
+    utils:createUIListLayout(billboard, {
+        fillDirection = Enum.FillDirection.Vertical,
+        horizontalAlignment = Enum.HorizontalAlignment.Center,
+        verticalAlignment = Enum.VerticalAlignment.Top
+    })
+
+    -- Estrutura para armazenar todos os elementos criados
+    local billboardData = {
+        billboard = billboard,
+        frames = {},
+        labels = {}
+    }
+
+    -- Criação dos frames e labels baseada na configuração
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        local frame, _ = utils:createFrameWithLayout(billboard, frameConfig.name, frameConfig.layout)
+        frame.LayoutOrder = i
+        billboardData.frames[frameConfig.name] = frame
+
+        -- Criação dos labels para este frame
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local label = utils:createLabel(frame, "")
+            label.LayoutOrder = j
+            billboardData.labels[labelConfig.key] = label
+        end
+    end
+
+    self.espBillboards[player] = billboardData
+    
+    -- Cache de dados simplificado
+    self.dataCache[player] = {
+        lastUpdate = 0
+    }
+    
+    self:setDisplayConfig(self.displayConfig)
+    self:updatePlayerData(player)
+end
+
+function PlayerESP:removeBillboard(player)
+    local data = self.espBillboards[player]
+    if data and data.billboard then
+        data.billboard:Destroy()
+        self.espBillboards[player] = nil
+    end
+    self.dataCache[player] = nil
+end
+
+-- Função otimizada para atualizar dados dos players
+function PlayerESP:updatePlayerData(player)
+    if not player or not player.Parent then return end
+    
+    local cache = self.dataCache[player]
+    if not cache then return end
+    
+    local data = self.espBillboards[player]
+    if not data then return end
+    
+    -- Cache de characters para otimização
+    local localChar = self:getLocalCharacter()
+    local targetChar = player.Character
+    
+    -- Atualização dos textos usando as funções getData da tabela
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local label = data.labels[labelConfig.key]
+            if label and labelConfig.getData then
+                local value = labelConfig.getData(player, cache, localChar, targetChar)
+                label.Text = labelConfig.format:format(value)
+            end
+        end
+    end
+end
+
+-- Função otimizada para atualizar billboards
+function PlayerESP:updateBillboards()
+    local currentTime = tick()
+    if currentTime - self._lastBillboardUpdate < UPDATE_INTERVAL then return end
+    self._lastBillboardUpdate = currentTime
+    
+    -- Lista de players a serem removidos (para evitar modificação durante iteração)
+    local toRemove = {}
+    
+    for player, data in pairs(self.espBillboards) do
+        if player and player.Parent and player.Character then
+            self:updatePlayerData(player)
+        else
+            toRemove[#toRemove + 1] = player
+        end
+    end
+    
+    -- Remove players inválidos
+    for i = 1, #toRemove do
+        self:removeBillboard(toRemove[i])
+    end
+end
+
+function PlayerESP:connectPlayer(player)
+    if player == LocalPlayer then return end
+    
+    local mgr = self._playerConnMgrs[player]
+    if mgr then mgr:disconnectAll() end
+    
+    mgr = ConnectionManager.new()
+    self._playerConnMgrs[player] = mgr
+    
+    mgr:add(player.CharacterAdded:Connect(function(character)
+        if self.enabled then
+            -- Pequeno delay para garantir que o character esteja totalmente carregado
+            task.wait(0.1)
+            self:createBillboard(player)
+        end
+    end))
+    
+    mgr:add(player.CharacterRemoving:Connect(function(character)
+        self:removeBillboard(player)
+    end))
+    
+    if player.Character then
+        self:createBillboard(player)
+    end
+end
+
+function PlayerESP:enable()
+    self.enabled = true
+    self:cleanup()
+    
+    -- Conecta players existentes
+    local playerList = Players:GetPlayers()
+    for i = 1, #playerList do
+        self:connectPlayer(playerList[i])
+    end
+    
+    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
+        self:connectPlayer(player)
+    end))
+    
+    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
+        self:removeBillboard(player)
+        local mgr = self._playerConnMgrs[player]
+        if mgr then
+            mgr:disconnectAll()
+            self._playerConnMgrs[player] = nil
+        end
+    end))
+    
+    -- Usa Heartbeat com throttling interno otimizado
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
+        self:updateBillboards()
+    end))
+end
+
+function PlayerESP:disable()
+    self.enabled = false
+    self:cleanup()
+end
+
+function PlayerESP:cleanup()
+    self._connMgr:disconnectAll()
+    for _, mgr in pairs(self._playerConnMgrs) do
+        mgr:disconnectAll()
+    end
+    self._playerConnMgrs = {}
+    for player, _ in pairs(self.espBillboards) do
+        self:removeBillboard(player)
+    end
+    self.dataCache = {}
+    -- Limpa cache local
+    self._localCharCache = nil
+    self._localCharCacheTime = 0
+end
+
+-- Funções de configuração otimizadas
+function PlayerESP:setTextSize(size)
+    for _, data in pairs(self.espBillboards) do
+        for _, label in pairs(data.labels) do
+            label.TextSize = size
+        end
+    end
+end
+
+function PlayerESP:setTextColor(color)
+    for _, data in pairs(self.espBillboards) do
+        for _, label in pairs(data.labels) do
+            label.TextColor3 = color
+        end
+    end
+end
+
+function PlayerESP:setDisplayConfig(config)
+    -- Atualiza configuração se fornecida
+    if config then
+        for key, value in pairs(config) do
+            self.displayConfig[key] = value
+        end
+    end
+    
+    for _, data in pairs(self.espBillboards) do
+        -- Configuração baseada na tabela FRAME_CONFIG
+        for i, frameConfig in ipairs(FRAME_CONFIG) do
+            local frame = data.frames[frameConfig.name]
+            if frame then
+                local hasContent = false
+                
+                -- Remove apenas elementos não-layout
+                local children = frame:GetChildren()
+                for j = 1, #children do
+                    local child = children[j]
+                    if not child:IsA("UIListLayout") then
+                        child.Parent = nil
                     end
                 end
+                
+                -- Adiciona labels visíveis baseado na configuração
+                for j, labelConfig in ipairs(frameConfig.labels) do
+                    local label = data.labels[labelConfig.key]
+                    local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
+                    local shouldShow = self.displayConfig[configKey]
+                    
+                    if shouldShow ~= false and label then
+                        label.Parent = frame
+                        hasContent = true
+                    end
+                end
+                
+                frame.LayoutOrder = i
+                frame.Parent = hasContent and data.billboard or nil
             end
-            
-            -- Early break se já encontrou tudo necessário
-            if hasOrb and hasLight and hasSphere then
-                break
-            end
-        end
-        
-        if hasOrb and hasLight and hasSphere then
-            return "???", TRINKET_TYPES.SEMI_ARTIFACTS
-        end
-    end
-    
-    -- Verificação otimizada de mesh ID
-    local meshId
-    if part:IsA("MeshPart") then
-        meshId = part.MeshId
-    else
-        local mesh = part:FindFirstChildWhichIsA("SpecialMesh") or part:FindFirstChildWhichIsA("Mesh")
-        meshId = mesh and mesh.MeshId
-    end
-    
-    if meshId and meshId ~= "" then
-        local cleanId = cleanMeshId(meshId)
-        local trinketData = MESH_IDS[cleanId]
-        if trinketData then
-            return trinketData.name, trinketData.type
-        else
-            return meshId, TRINKET_TYPES.USUAL_TRINKET
-        end
-    else
-        return "Unknown", TRINKET_TYPES.USUAL_TRINKET
-    end
-end
-
-local TrinketESP = {}
-TrinketESP.__index = TrinketESP
-
-function TrinketESP.new()
-    return setmetatable({
-        espBillboards = {},
-        _connectionManager = ConnectionManager.new(),
-        enabled = false,
-        -- Sistema de fila para processamento assíncrono
-        _pendingTrinkets = {},
-        _processingQueue = false,
-        -- Cache para evitar re-verificações
-        _processedObjects = {},
-        -- Contador de tipos para estatísticas
-        _typeCount = {
-            [TRINKET_TYPES.USUAL_TRINKET] = 0,
-            [TRINKET_TYPES.SCROLL_TYPE] = 0,
-            [TRINKET_TYPES.GEMS] = 0,
-            [TRINKET_TYPES.SEMI_ARTIFACTS] = 0,
-            [TRINKET_TYPES.ARTIFACTS] = 0
-        }
-    }, TrinketESP)
-end
-
--- Função otimizada para criar billboard com cores por tipo
-function TrinketESP:createBillboard(trinket, trinketName, trinketType)
-    if self.espBillboards[trinket] then return end
-
-    local billboard = Instance_new("BillboardGui")
-    billboard.Name = "TrinketESP"
-    billboard.Adornee = trinket
-    billboard.LightInfluence = 1
-    billboard.ZIndexBehavior = ZBEHAVIOR_SIBLING
-    billboard.AlwaysOnTop = true
-    billboard.Size = BILLBOARD_SIZE
-    billboard.Parent = trinket
-
-    local label = Instance_new("TextLabel")
-    label.Text = trinketName
-    
-    -- Definir cor baseada no tipo
-    local typeColor = TYPE_COLORS[trinketType] or TYPE_COLORS[TRINKET_TYPES.USUAL_TRINKET]
-    label.TextColor3 = typeColor
-    
-    -- Ajustar stroke baseado no tipo para melhor visibilidade
-    label.TextStrokeTransparency = trinketType == TRINKET_TYPES.ARTIFACTS and 0.2 or 0.5
-    label.TextStrokeColor3 = trinketType == TRINKET_TYPES.ARTIFACTS and Color3_new(0, 0, 0) or Color3_new(0.2, 0.2, 0.2)
-    
-    label.Font = FONT_SOURCESANS
-    label.TextSize = 14
-    label.BackgroundTransparency = 1
-    label.BorderSizePixel = 0
-    label.Size = UDim2_new(1, 0, 1, 0)
-    label.Position = UDim2_new(0.5, 0, 0.5, 0)
-    label.AnchorPoint = Vector2_new(0.5, 0.5)
-    label.Parent = billboard
-
-    self.espBillboards[trinket] = billboard
-    
-    -- Incrementar contador do tipo
-    self._typeCount[trinketType] = self._typeCount[trinketType] + 1
-end
-
-function TrinketESP:removeBillboard(trinket)
-    local billboard = self.espBillboards[trinket]
-    if billboard then
-        -- Decrementar contador do tipo
-        if trinket and trinket.Parent then
-            local _, trinketType = getTrinketInfo(trinket)
-            self._typeCount[trinketType] = math.max(0, self._typeCount[trinketType] - 1)
-        end
-        
-        billboard:Destroy()
-        self.espBillboards[trinket] = nil
-    end
-    
-    -- Limpar cache relacionado
-    trinketCache[trinket] = nil
-    self._processedObjects[trinket] = nil
-end
-
--- SOLUÇÃO 1: Sistema de fila assíncrona
-function TrinketESP:processQueue()
-    if self._processingQueue or #self._pendingTrinkets == 0 then return end
-    
-    self._processingQueue = true
-    
-    -- Processa até 5 trinkets por frame para evitar lag
-    local maxPerFrame = 5
-    local processed = 0
-    
-    while #self._pendingTrinkets > 0 and processed < maxPerFrame do
-        local trinket = table.remove(self._pendingTrinkets, 1)
-        
-        -- Verificar se o trinket ainda é válido
-        if trinket and trinket.Parent and not self._processedObjects[trinket] then
-            self._processedObjects[trinket] = true
-            local trinketName, trinketType = getTrinketInfo(trinket)
-            self:createBillboard(trinket, trinketName, trinketType)
-        end
-        
-        processed = processed + 1
-    end
-    
-    self._processingQueue = false
-    
-    -- Se ainda há trinkets na fila, agenda próximo processamento
-    if #self._pendingTrinkets > 0 then
-        RunService.Heartbeat:Wait()
-        self:processQueue()
-    end
-end
-
--- SOLUÇÃO 2: Detecção imediata com processamento assíncrono
-function TrinketESP:onChildAdded(obj)
-    if not self.enabled then return end
-    
-    -- Verificação imediata sem throttling
-    if not isTrinket(obj) or self._processedObjects[obj] then 
-        return 
-    end
-    
-    -- Adiciona à fila para processamento assíncrono
-    table.insert(self._pendingTrinkets, obj)
-    
-    -- Inicia processamento se não está rodando
-    if not self._processingQueue then
-        self:processQueue()
-    end
-end
-
-function TrinketESP:onChildRemoved(obj)
-    if not self.enabled or not self.espBillboards[obj] then return end
-    
-    self:removeBillboard(obj)
-    
-    -- Remove da fila pendente se ainda estiver lá
-    for i = #self._pendingTrinkets, 1, -1 do
-        if self._pendingTrinkets[i] == obj then
-            table.remove(self._pendingTrinkets, i)
-            break
         end
     end
 end
 
--- SOLUÇÃO 3: Scan inicial otimizado em lotes
-function TrinketESP:scanExistingTrinkets()
-    local workspaceChildren = Workspace:GetChildren()
-    local trinkets = {}
-    
-    -- Primeiro pass: identifica todos os trinkets
-    for i = 1, #workspaceChildren do
-        local obj = workspaceChildren[i]
-        if isTrinket(obj) and not self._processedObjects[obj] then
-            table.insert(trinkets, obj)
-        end
-    end
-    
-    -- Segundo pass: processa em lotes assíncronos
-    for i = 1, #trinkets do
-        table.insert(self._pendingTrinkets, trinkets[i])
-    end
-    
-    if #self._pendingTrinkets > 0 then
-        self:processQueue()
-    end
-end
-
-function TrinketESP:enable()
-    if self.enabled then return end
-    
-    self.enabled = true
-    
-    -- Scan inicial otimizado
-    self:scanExistingTrinkets()
-    
-    -- Conexões sem throttling - detecção imediata
-    self._connectionManager:add(Workspace.ChildAdded:Connect(function(obj)
-        self:onChildAdded(obj)
-    end))
-    
-    self._connectionManager:add(Workspace.ChildRemoved:Connect(function(obj)
-        self:onChildRemoved(obj)
-    end))
-end
-
-function TrinketESP:disable()
-    self.enabled = false
-    self._connectionManager:disconnectAll()
-    
-    -- Limpeza otimizada
-    for trinket in pairs(self.espBillboards) do
-        self:removeBillboard(trinket)
-    end
-    
-    -- Limpar caches e fila
-    trinketCache = {}
-    self._processedObjects = {}
-    self._pendingTrinkets = {}
-    self._processingQueue = false
-    
-    -- Resetar contadores
-    for trinketType in pairs(self._typeCount) do
-        self._typeCount[trinketType] = 0
-    end
-end
-
--- Função para obter estatísticas dos tipos
-function TrinketESP:getTypeStats()
-    local total = 0
-    for _, count in pairs(self._typeCount) do
-        total = total + count
-    end
-    
-    return {
-        total = total,
-        usual_trinkets = self._typeCount[TRINKET_TYPES.USUAL_TRINKET],
-        scrolls = self._typeCount[TRINKET_TYPES.SCROLL_TYPE],
-        gems = self._typeCount[TRINKET_TYPES.GEMS],
-        semi_artifacts = self._typeCount[TRINKET_TYPES.SEMI_ARTIFACTS],
-        artifacts = self._typeCount[TRINKET_TYPES.ARTIFACTS]
-    }
-end
-
--- Função para imprimir estatísticas formatadas
-function TrinketESP:printStats()
-    local stats = self:getTypeStats()
-    print("=== TRINKET ESP STATISTICS ===")
-    print("Total Trinkets Found: " .. stats.total)
-    print("├─ Usual Trinkets: " .. stats.usual_trinkets)
-    print("├─ Scrolls: " .. stats.scrolls)
-    print("├─ Gems: " .. stats.gems)
-    print("├─ Semi-Artifacts: " .. stats.semi_artifacts)
-    print("└─ Artifacts: " .. stats.artifacts)
-    print("==============================")
-end
-
-function TrinketESP:destroy()
-    self:disable()
-    self._connectionManager = nil
-    self.espBillboards = nil
-    self._processedObjects = nil
-    self._pendingTrinkets = nil
-    self._typeCount = nil
-end
-
-return TrinketESP
+return PlayerESP
