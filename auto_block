@@ -53,6 +53,10 @@ local DEFAULT_SINGLE_THREATS = {
             {
                 type = ConditionType.ACCESSORY,
                 value = "Charge"
+            },
+            {
+                type = ConditionType.EQUIPPED_ITEM,
+                value = "Verdien"
             }
         },
         operator = MatchOperator.AND,
