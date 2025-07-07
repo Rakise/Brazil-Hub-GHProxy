@@ -248,20 +248,12 @@ function BetterLeaderboard:_updateAllLabelsColor()
         if frame:IsA("Frame") then
             local label = frame:FindFirstChild("PlayerLabel")
             if label and label:IsA("TextButton") then
-                local playerName = label.Text
-                local playerObj = nil
-                -- Tenta encontrar o player pelo label
-                for _, p in ipairs(Players:GetPlayers()) do
-                    local rogueName = self:_getPlayerRogueName(p) or "Loading"
-                    if rogueName == label.Text or p.Name == label.Text then
-                        playerObj = p
-                        break
-                    end
-                end
-                if playerObj then
-                    if self._currentCameraTarget == playerObj then
+                local labelUserId = label:GetAttribute("PlayerUserId")
+                if labelUserId then
+                    local p = Players:GetPlayerByUserId(labelUserId)
+                    if self._currentCameraTarget and labelUserId == self._currentCameraTarget.UserId then
                         label.TextColor3 = Color3.fromRGB(80, 180, 255)
-                    elseif playerObj.Character then
+                    elseif p and p.Character then
                         label.TextColor3 = CONFIG.COLORS.WHITE
                     else
                         label.TextColor3 = Color3.fromRGB(120, 120, 120)
@@ -288,6 +280,7 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     playerLabel.BorderColor3 = CONFIG.COLORS.BLACK
     playerLabel.Text = rogueName or "Loading"
     playerLabel:SetAttribute("RogueDisplay", rogueName or "")
+    playerLabel:SetAttribute("PlayerUserId", player.UserId)
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
     playerLabel.TextStrokeTransparency = 0.5
     playerLabel.Size = CONFIG.PLAYER_LABEL_SIZE
@@ -311,9 +304,16 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
                 if frame:IsA("Frame") then
                     local label = frame:FindFirstChild("PlayerLabel")
                     if label and label:IsA("TextButton") then
-                        if self._currentCameraTarget and label.Text == (label:GetAttribute("RogueDisplay") ~= "" and label:GetAttribute("RogueDisplay") or "Loading") then
-                            label.TextColor3 = (player == self._currentCameraTarget) and Color3.fromRGB(80, 180, 255)
-                                or (player.Character and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120))
+                        local labelUserId = label:GetAttribute("PlayerUserId")
+                        if labelUserId and self._currentCameraTarget and labelUserId == self._currentCameraTarget.UserId then
+                            label.TextColor3 = Color3.fromRGB(80, 180, 255)
+                        elseif labelUserId then
+                            local p = Players:GetPlayerByUserId(labelUserId)
+                            if p and p.Character then
+                                label.TextColor3 = CONFIG.COLORS.WHITE
+                            else
+                                label.TextColor3 = Color3.fromRGB(120, 120, 120)
+                            end
                         end
                     end
                 end
@@ -522,9 +522,10 @@ function BetterLeaderboard:_updateCanvasSize()
     if typeof(CONFIG.PLAYER_FRAME_SIZE) == "UDim2" then
         frameHeight = CONFIG.PLAYER_FRAME_SIZE.Y.Offset
     end
-    local padding = 5
+    local padding = 15
     local totalHeight = playerCount * frameHeight + padding
-    self.scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+    local minHeight = 230
+    self.scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(totalHeight, minHeight))
 end
 
 return BetterLeaderboard
