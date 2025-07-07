@@ -49,43 +49,82 @@ end
 
 -- Solicita a key do usuário via LinoriaLib AddInput
 function KeyHandler:promptKey()
-    if not self.linoriaLib then
-        Players.LocalPlayer:Kick("LinoriaLib não disponível para input de key.")
+    local player = Players.LocalPlayer
+
+    -- Remove UI antiga se existir
+    if player.PlayerGui:FindFirstChild("BrazilHubKeyUI") then
+        player.PlayerGui.BrazilHubKeyUI:Destroy()
     end
 
-    -- Cria uma janela temporária só para a key
-    local window = self.linoriaLib:CreateWindow({
-        Title = 'BrazilHub Key System',
-        Center = true,
-        AutoShow = true,
-        TabPadding = 8,
-        MenuFadeTime = 0.2
-    })
-    local tab = window:AddTab('Key')
-    local group = tab:AddLeftGroupbox('Insira sua key')
+    -- Cria UI
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "BrazilHubKeyUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = player:WaitForChild("PlayerGui")
 
-    local keyReceived = false
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 350, 0, 140)
+    frame.Position = UDim2.new(0.5, -175, 0.5, -70)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 40)
+    title.Position = UDim2.new(0, 0, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "BrazilHub Key System"
+    title.Font = Enum.Font.SourceSansBold
+    title.TextSize = 24
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Parent = frame
+
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(0.8, 0, 0, 36)
+    input.Position = UDim2.new(0.1, 0, 0, 55)
+    input.PlaceholderText = "Digite sua key aqui"
+    input.Text = ""
+    input.Font = Enum.Font.SourceSans
+    input.TextSize = 20
+    input.TextColor3 = Color3.fromRGB(0, 0, 0)
+    input.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+    input.BorderSizePixel = 0
+    input.Parent = frame
+
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(0.8, 0, 0, 32)
+    button.Position = UDim2.new(0.1, 0, 0, 100)
+    button.Text = "Confirmar"
+    button.Font = Enum.Font.SourceSansBold
+    button.TextSize = 20
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+    button.BorderSizePixel = 0
+    button.Parent = frame
+
     local keyValue = nil
+    local keyReceived = false
 
-    group:AddInput('KeyInput', {
-        Default = '',
-        Numeric = false,
-        Finished = true, -- só chama callback ao pressionar Enter
-        Text = 'Key',
-        Tooltip = 'Digite sua key e pressione Enter',
-        Placeholder = 'Sua key aqui',
-        Callback = function(val)
-            if val and #val > 0 then
-                keyValue = val
-                keyReceived = true
-            end
+    button.MouseButton1Click:Connect(function()
+        local val = input.Text
+        if val and #val > 0 then
+            keyValue = val
+            keyReceived = true
+        else
+            input.PlaceholderText = "Digite uma key válida!"
         end
-    })
+    end)
 
-    -- Espera até o usuário digitar a key
+    input.FocusLost:Connect(function(enter)
+        if enter then
+            button:Activate()
+        end
+    end)
+
+    -- Espera até o usuário digitar e confirmar
     repeat task.wait() until keyReceived
 
-    window:Close()
+    screenGui:Destroy()
     self:saveKey(keyValue)
     return keyValue
 end
