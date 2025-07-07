@@ -29,7 +29,7 @@ local MESH_IDS = {
     ["rbxassetid://2877143624"] = { name = "Emerald", type = TRINKET_TYPES.GEMS },
     
     -- Semi-Artifacts
-    ["rbxassetid://2520762076"] = { name = "Howler Friend", type = TRINKET_TYPES.SEMI_ARTIFACTS }
+    ["rbxassetid://2520762076"] = { name = "Howler Friend", type = TRINKET_TYPES.ARTIFACTS }
 }
 
 -- Sistema de cores por tipo
