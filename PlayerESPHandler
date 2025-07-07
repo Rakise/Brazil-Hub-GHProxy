@@ -2,7 +2,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/UtilsService"))()
 local utils = Utils.new()
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
@@ -16,23 +16,9 @@ local ipairs = ipairs
 
 -- Cache de funções Roblox para evitar indexação repetida
 local newInstance = Instance.new
-local findFirstChild = game.FindFirstChild
-local getChildren = game.GetChildren
 
 -- Constantes para otimização
 local UPDATE_INTERVAL = 0.5 -- Intervalo de atualização dos billboards
-local DATA_CACHE_INTERVAL = 1.0 -- Intervalo de cache de dados dos players
-local DISTANCE_UPDATE_INTERVAL = 0.25 -- Intervalo específico para atualização de distância
-
--- Pool de objetos reutilizáveis
-local stringPool = {}
-local function getPooledString(template, ...)
-    local key = template .. tostring(...)
-    if not stringPool[key] then
-        stringPool[key] = format(template, ...)
-    end
-    return stringPool[key]
-end
 
 -- Função otimizada para encontrar adornee
 local function getBestAdornee(character)
@@ -41,6 +27,111 @@ local function getBestAdornee(character)
            character:FindFirstChild("Torso") or 
            character:FindFirstChildWhichIsA("BasePart")
 end
+
+-- Configuração dos frames e labels por tabela
+local FRAME_CONFIG = {
+    {
+        name = "nameFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "nameLabel",
+                key = "playerName",
+                format = "[%s]",
+                dataKey = "name",
+                showByDefault = true,
+                getData = function(player, cache)
+                    return player.Name
+                end
+            },
+            {
+                name = "distanceLabel",
+                key = "distance",
+                format = "[%dm]",
+                dataKey = "distance",
+                showByDefault = true,
+                getData = function(player, cache, localChar, targetChar)
+                    if localChar and targetChar then
+                        local localRoot = localChar:FindFirstChild("HumanoidRootPart")
+                        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+                        
+                        if localRoot and targetRoot then
+                            local dist = (localRoot.Position - targetRoot.Position).Magnitude
+                            return floor(dist)
+                        end
+                    end
+                    return 0
+                end
+            }
+        }
+    },
+    {
+        name = "infoFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "rogueLabel",
+                key = "rogueName",
+                format = "[%s]",
+                dataKey = "rogueName",
+                showByDefault = true,
+                getData = function(player, cache)
+                    return utils:getPlayerRogueDisplay(player)
+                end
+            },
+            {
+                name = "edictLabel",
+                key = "edict",
+                format = "[%s]",
+                dataKey = "edict",
+                showByDefault = true,
+                getData = function(player, cache)
+                    return utils:getPlayerEdictDisplay(player)
+                end
+            }
+        }
+    },
+    {
+        name = "hpFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "hpLabel",
+                key = "health",
+                format = "[%s]",
+                dataKey = "healthDisplay",
+                showByDefault = true,
+                getData = function(player, cache)
+                    local healthDisplay, _ = utils:getPlayerHealthDisplay(player)
+                    return healthDisplay
+                end
+            },
+            {
+                name = "hpPercLabel",
+                key = "healthPercent",
+                format = "[%s]",
+                dataKey = "healthPercentDisplay",
+                showByDefault = true,
+                getData = function(player, cache)
+                    local _, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
+                    return healthPercentDisplay
+                end
+            }
+        }
+    }
+}
 
 local PlayerESP = {}
 PlayerESP.__index = PlayerESP
@@ -53,19 +144,17 @@ function PlayerESP.new()
     self.espBillboards = {}
     self.dataCache = {}
     
-    -- Cache de configuração com valores padrão
-    self.displayConfig = {
-        showPlayerName = true,
-        showRogueName = true,
-        showEdict = true,
-        showHealth = true,
-        showHealthPercent = true,
-        showDistance = true
-    }
+    -- Gera configuração de exibição automaticamente baseada na tabela
+    self.displayConfig = {}
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
+            self.displayConfig[configKey] = labelConfig.showByDefault
+        end
+    end
     
     -- Timestamps otimizados para diferentes tipos de atualização
     self._lastBillboardUpdate = 0
-    self._lastDistanceUpdate = 0
     
     -- Cache de caracteres locais para evitar múltiplas consultas
     self._localCharCache = nil
@@ -82,6 +171,41 @@ function PlayerESP:getLocalCharacter()
         self._localCharCacheTime = currentTime
     end
     return self._localCharCache
+end
+
+-- Função helper para criar labels de forma otimizada
+local function createLabel(text, parent)
+    local label = newInstance("TextLabel")
+    label.FontSize = Enum.FontSize.Size14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Text = text
+    label.TextStrokeTransparency = 0.5
+    label.Font = Enum.Font.SourceSansSemibold
+    label.BackgroundTransparency = 1
+    label.TextSize = 14
+    label.Size = UDim2.new(0, 0, 0.1, 0)
+    label.AutomaticSize = Enum.AutomaticSize.X
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.Parent = parent
+    return label
+end
+
+-- Função para criar frame com layout
+local function createFrameWithLayout(frameName, layoutConfig, parent)
+    local frame = newInstance("Frame")
+    frame.Name = frameName
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1, 0, 0.1, 0)
+    frame.Parent = parent
+
+    local layout = newInstance("UIListLayout")
+    layout.FillDirection = layoutConfig.fillDirection
+    layout.HorizontalAlignment = layoutConfig.horizontalAlignment
+    layout.VerticalAlignment = layoutConfig.verticalAlignment
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = frame
+
+    return frame
 end
 
 function PlayerESP:createBillboard(player)
@@ -103,100 +227,37 @@ function PlayerESP:createBillboard(player)
     billboard.Parent = adornee
 
     -- Layout principal
-    local layout = newInstance("UIListLayout")
-    layout.Padding = UDim.new(0, 3)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = billboard
+    local mainLayout = newInstance("UIListLayout")
+    mainLayout.Padding = UDim.new(0, 3)
+    mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    mainLayout.Parent = billboard
 
-    -- Função helper para criar labels de forma otimizada
-    local function createLabel(text, parent)
-        local label = newInstance("TextLabel")
-        label.FontSize = Enum.FontSize.Size14
-        label.TextColor3 = Color3.new(1, 1, 1)
-        label.Text = text
-        label.TextStrokeTransparency = 0.5
-        label.Font = Enum.Font.SourceSansSemibold
-        label.BackgroundTransparency = 1
-        label.TextSize = 14
-        label.Size = UDim2.new(0, 0, 0.1, 0)
-        label.AutomaticSize = Enum.AutomaticSize.X
-        label.TextXAlignment = Enum.TextXAlignment.Center
-        label.Parent = parent
-        return label
+    -- Estrutura para armazenar todos os elementos criados
+    local billboardData = {
+        billboard = billboard,
+        frames = {},
+        labels = {}
+    }
+
+    -- Criação dos frames e labels baseada na configuração
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        local frame = createFrameWithLayout(frameConfig.name, frameConfig.layout, billboard)
+        frame.LayoutOrder = i
+        billboardData.frames[frameConfig.name] = frame
+
+        -- Criação dos labels para este frame
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local label = createLabel(labelConfig.format:format(""), frame)
+            label.LayoutOrder = j
+            billboardData.labels[labelConfig.key] = label
+        end
     end
 
-    -- Criação otimizada dos frames e labels
-    local nameFrame = newInstance("Frame")
-    nameFrame.BackgroundTransparency = 1
-    nameFrame.Size = UDim2.new(1, 0, 0.1, 0)
-    nameFrame.Parent = billboard
-
-    local nameLabel = createLabel("[" .. player.Name .. "]", nameFrame)
-    local distanceLabel = createLabel("[0m]", nameFrame)
-
-    local nameLayout = newInstance("UIListLayout")
-    nameLayout.FillDirection = Enum.FillDirection.Horizontal
-    nameLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    nameLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    nameLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    nameLayout.Parent = nameFrame
-
-    local infoFrame = newInstance("Frame")
-    infoFrame.BackgroundTransparency = 1
-    infoFrame.Size = UDim2.new(1, 0, 0.1, 0)
-    infoFrame.Parent = billboard
-
-    local infoLayout = newInstance("UIListLayout")
-    infoLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    infoLayout.FillDirection = Enum.FillDirection.Horizontal
-    infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    infoLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    infoLayout.Parent = infoFrame
-
-    local rogueLabel = createLabel("[Lord Abadon Terrified]", infoFrame)
-    local edictLabel = createLabel("[Healer]", infoFrame)
-
-    local hpFrame = newInstance("Frame")
-    hpFrame.BackgroundTransparency = 1
-    hpFrame.Size = UDim2.new(1, 0, 0.1, 0)
-    hpFrame.Parent = billboard
-
-    local hpLayout = newInstance("UIListLayout")
-    hpLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-    hpLayout.FillDirection = Enum.FillDirection.Horizontal
-    hpLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    hpLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    hpLayout.Parent = hpFrame
-
-    local hpLabel = createLabel("[100/100]", hpFrame)
-    local hpPercLabel = createLabel("[100%]", hpFrame)
-
-    -- Cache otimizado dos objetos
-    self.espBillboards[player] = {
-        billboard = billboard,
-        nameLabel = nameLabel,
-        distanceLabel = distanceLabel,
-        rogueLabel = rogueLabel,
-        edictLabel = edictLabel,
-        hpLabel = hpLabel,
-        hpPercLabel = hpPercLabel,
-        infoFrame = infoFrame,
-        hpFrame = hpFrame,
-        nameFrame = nameFrame,
-        -- Cache de character para evitar múltiplas consultas
-        cachedCharacter = character,
-        characterCacheTime = tick()
-    }
+    self.espBillboards[player] = billboardData
     
-    -- Cache de dados com valores padrão
+    -- Cache de dados simplificado
     self.dataCache[player] = {
-        lastUpdate = 0,
-        rogueName = "",
-        edict = "",
-        healthDisplay = "",
-        healthPercentDisplay = "",
-        lastDistance = 0,
-        lastDistanceUpdate = 0
+        lastUpdate = 0
     }
     
     self:setDisplayConfig(self.displayConfig)
@@ -219,57 +280,23 @@ function PlayerESP:updatePlayerData(player)
     local cache = self.dataCache[player]
     if not cache then return end
     
-    local currentTime = tick()
-    
-    -- Throttling para dados pesados (rogue, edict, health)
-    if currentTime - cache.lastUpdate >= DATA_CACHE_INTERVAL then
-        cache.rogueName = utils:getPlayerRogueDisplay(player)
-        cache.edict = utils:getPlayerEdictDisplay(player)
-        cache.healthDisplay, cache.healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-        cache.lastUpdate = currentTime
-    end
-    
     local data = self.espBillboards[player]
     if not data then return end
     
-    -- Atualização dos textos apenas se necessário
-    data.nameLabel.Text = "[" .. player.Name .. "]"
-    data.rogueLabel.Text = "[" .. cache.rogueName .. "]"
-    data.edictLabel.Text = "[" .. cache.edict .. "]"
-    data.hpLabel.Text = "[" .. cache.healthDisplay .. "]"
-    data.hpPercLabel.Text = "[" .. cache.healthPercentDisplay .. "]"
-    
-    -- Atualização de distância com throttling separado
-    if currentTime - cache.lastDistanceUpdate >= DISTANCE_UPDATE_INTERVAL then
-        self:updateDistance(player, data, cache, currentTime)
-    end
-end
-
--- Função separada para atualização de distância (otimizada)
-function PlayerESP:updateDistance(player, data, cache, currentTime)
+    -- Cache de characters para otimização
     local localChar = self:getLocalCharacter()
     local targetChar = player.Character
     
-    if localChar and targetChar then
-        local localRoot = localChar:FindFirstChild("HumanoidRootPart")
-        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-        
-        if localRoot and targetRoot then
-            local dist = (localRoot.Position - targetRoot.Position).Magnitude
-            local distanceInt = floor(dist)
-            
-            -- Só atualiza se a distância mudou significativamente
-            if distanceInt ~= cache.lastDistance then
-                data.distanceLabel.Text = getPooledString("[%dm]", distanceInt)
-                cache.lastDistance = distanceInt
+    -- Atualização dos textos usando as funções getData da tabela
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local label = data.labels[labelConfig.key]
+            if label and labelConfig.getData then
+                local value = labelConfig.getData(player, cache, localChar, targetChar)
+                label.Text = labelConfig.format:format(value)
             end
-        else
-            data.distanceLabel.Text = "[0m]"
-            cache.lastDistance = 0
         end
     end
-    
-    cache.lastDistanceUpdate = currentTime
 end
 
 -- Função otimizada para atualizar billboards
@@ -373,81 +400,59 @@ end
 -- Funções de configuração otimizadas
 function PlayerESP:setTextSize(size)
     for _, data in pairs(self.espBillboards) do
-        data.nameLabel.TextSize = size
-        data.rogueLabel.TextSize = size
-        data.edictLabel.TextSize = size
-        data.hpLabel.TextSize = size
-        data.hpPercLabel.TextSize = size
-        data.distanceLabel.TextSize = size
+        for _, label in pairs(data.labels) do
+            label.TextSize = size
+        end
     end
 end
 
 function PlayerESP:setTextColor(color)
     for _, data in pairs(self.espBillboards) do
-        data.nameLabel.TextColor3 = color
-        data.rogueLabel.TextColor3 = color
-        data.edictLabel.TextColor3 = color
-        data.hpLabel.TextColor3 = color
-        data.hpPercLabel.TextColor3 = color
-        data.distanceLabel.TextColor3 = color
+        for _, label in pairs(data.labels) do
+            label.TextColor3 = color
+        end
     end
 end
 
 function PlayerESP:setDisplayConfig(config)
-    self.displayConfig = config or self.displayConfig
+    -- Atualiza configuração se fornecida
+    if config then
+        for key, value in pairs(config) do
+            self.displayConfig[key] = value
+        end
+    end
     
     for _, data in pairs(self.espBillboards) do
-        -- Configuração otimizada com menos loops
-        local frameConfigs = {
-            {
-                frame = data.nameFrame,
-                labels = {
-                    {label = data.nameLabel, show = self.displayConfig.showPlayerName},
-                    {label = data.distanceLabel, show = self.displayConfig.showDistance}
-                }
-            },
-            {
-                frame = data.infoFrame,
-                labels = {
-                    {label = data.rogueLabel, show = self.displayConfig.showRogueName},
-                    {label = data.edictLabel, show = self.displayConfig.showEdict}
-                }
-            },
-            {
-                frame = data.hpFrame,
-                labels = {
-                    {label = data.hpLabel, show = self.displayConfig.showHealth},
-                    {label = data.hpPercLabel, show = self.displayConfig.showHealthPercent}
-                }
-            }
-        }
-        
-        for i = 1, #frameConfigs do
-            local frameConfig = frameConfigs[i]
-            local frame = frameConfig.frame
-            local hasContent = false
-            
-            -- Remove apenas elementos não-layout
-            local children = frame:GetChildren()
-            for j = 1, #children do
-                local child = children[j]
-                if not child:IsA("UIListLayout") then
-                    child.Parent = nil
+        -- Configuração baseada na tabela FRAME_CONFIG
+        for i, frameConfig in ipairs(FRAME_CONFIG) do
+            local frame = data.frames[frameConfig.name]
+            if frame then
+                local hasContent = false
+                
+                -- Remove apenas elementos não-layout
+                local children = frame:GetChildren()
+                for j = 1, #children do
+                    local child = children[j]
+                    if not child:IsA("UIListLayout") then
+                        child.Parent = nil
+                    end
                 end
-            end
-            
-            -- Adiciona labels visíveis
-            local labels = frameConfig.labels
-            for j = 1, #labels do
-                local labelConfig = labels[j]
-                if labelConfig.show ~= false and labelConfig.label then
-                    labelConfig.label.Parent = frame
-                    hasContent = true
+                
+                -- Adiciona labels visíveis baseado na configuração
+                for j, labelConfig in ipairs(frameConfig.labels) do
+                    local label = data.labels[labelConfig.key]
+                    local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
+                    local shouldShow = self.displayConfig[configKey]
+                    
+                    if shouldShow ~= false and label then
+                        label.Parent = frame
+                        hasContent = true
+                    end
                 end
+                
+                frame.LayoutOrder = i
+                frame.Parent = hasContent and data.billboard or nil
             end
-            
-            frame.LayoutOrder = i
-            frame.Parent = hasContent and data.billboard or nil
         end
     end
 end
