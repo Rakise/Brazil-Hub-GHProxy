@@ -238,6 +238,37 @@ function BetterLeaderboard:_toggleCameraToPlayer(targetPlayer)
             end
         end
     end
+    self:_updateAllLabelsColor()
+end
+
+function BetterLeaderboard:_updateAllLabelsColor()
+    if not self.scrollingFrame then return end
+    for _, frame in ipairs(self.scrollingFrame:GetChildren()) do
+        if frame:IsA("Frame") then
+            local label = frame:FindFirstChild("PlayerLabel")
+            if label and label:IsA("TextButton") then
+                local playerName = label.Text
+                local playerObj = nil
+                -- Tenta encontrar o player pelo label
+                for _, p in ipairs(Players:GetPlayers()) do
+                    local rogueName = self:_getPlayerRogueName(p) or "Loading"
+                    if rogueName == label.Text or p.Name == label.Text then
+                        playerObj = p
+                        break
+                    end
+                end
+                if playerObj then
+                    if self._currentCameraTarget == playerObj then
+                        label.TextColor3 = Color3.fromRGB(80, 180, 255)
+                    elseif playerObj.Character then
+                        label.TextColor3 = CONFIG.COLORS.WHITE
+                    else
+                        label.TextColor3 = Color3.fromRGB(120, 120, 120)
+                    end
+                end
+            end
+        end
+    end
 end
 
 --- Creates a player label with hover and right-click camera functionality
