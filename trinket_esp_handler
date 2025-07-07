@@ -239,7 +239,7 @@ function TrinketESP:removeBillboard(trinket)
         -- Decrementar contador do tipo
         if trinket and trinket.Parent then
             local _, trinketType = getTrinketInfo(trinket)
-            self._typeCount[trinketType] = math.max(0, self._typeCount[trinketType] - 1)
+            self._typeCount[trinketType] = math.max(0, (self._typeCount[trinketType] or 0) - 1)
         end
         
         billboard:Destroy()
