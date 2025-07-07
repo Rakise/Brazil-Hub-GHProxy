@@ -117,7 +117,7 @@ local DEFAULT_SINGLE_THREATS = {
             },
             {
                 type = ConditionType.FACING,
-                angle = 80
+                angle = 180
             }
         },
         operator = MatchOperator.AND,
