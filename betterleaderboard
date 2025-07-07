@@ -9,7 +9,7 @@ local UserInputService = game:GetService("UserInputService")
 -- Carrega o módulo Utils com tratamento de erro
 local Utils, utils
 local success, err = pcall(function()
-    Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Utils"))()
+    Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/UtilsService"))()
     utils = Utils.new()
 end)
 
