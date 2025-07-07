@@ -250,7 +250,9 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     playerLabel.Name = "PlayerLabel"
     playerLabel.FontSize = Enum.FontSize.Size18
     local hasCharacter = player.Character ~= nil
-    playerLabel.TextColor3 = hasCharacter and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120)
+    local isObserved = self._currentCameraTarget == player
+    playerLabel.TextColor3 = isObserved and Color3.fromRGB(80, 180, 255)
+        or (hasCharacter and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120))
     playerLabel.BorderColor3 = CONFIG.COLORS.BLACK
     playerLabel.Text = rogueName or "Loading"
     playerLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -270,14 +272,36 @@ function BetterLeaderboard:_createPlayerLabel(player, rogueName, parent)
     -- Right-click: alterna câmera
     playerLabel.MouseButton2Click:Connect(function()
         self:_toggleCameraToPlayer(player)
+        -- Atualiza cor de todos os labels se necessário
+        if self.scrollingFrame then
+            for _, frame in ipairs(self.scrollingFrame:GetChildren()) do
+                if frame:IsA("Frame") then
+                    local label = frame:FindFirstChild("PlayerLabel")
+                    if label and label:IsA("TextButton") then
+                        if self._currentCameraTarget and label.Text == (rogueName or "Loading") then
+                            label.TextColor3 = (player == self._currentCameraTarget) and Color3.fromRGB(80, 180, 255)
+                                or (player.Character and CONFIG.COLORS.WHITE or Color3.fromRGB(120, 120, 120))
+                        end
+                    end
+                end
+            end
+        end
     end)
 
     -- Atualiza cor se o character aparecer/desaparecer
     local charAddedConn = player.CharacterAdded:Connect(function()
-        playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+        if self._currentCameraTarget == player then
+            playerLabel.TextColor3 = Color3.fromRGB(80, 180, 255)
+        else
+            playerLabel.TextColor3 = CONFIG.COLORS.WHITE
+        end
     end)
     local charRemovingConn = player.CharacterRemoving:Connect(function()
-        playerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+        if self._currentCameraTarget == player then
+            playerLabel.TextColor3 = Color3.fromRGB(80, 180, 255)
+        else
+            playerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
+        end
     end)
     self._connMgr:add(charAddedConn)
     self._connMgr:add(charRemovingConn)
@@ -296,7 +320,9 @@ function BetterLeaderboard:_setupLabelHover(playerLabel, player, rogueName)
         playerLabel.Text = player.Name
     end)
     playerLabel.MouseLeave:Connect(function()
-        if player.Character then
+        if self._currentCameraTarget == player then
+            playerLabel.TextColor3 = Color3.fromRGB(80, 180, 255)
+        elseif player.Character then
             playerLabel.TextColor3 = CONFIG.COLORS.WHITE
         else
             playerLabel.TextColor3 = Color3.fromRGB(120, 120, 120)
