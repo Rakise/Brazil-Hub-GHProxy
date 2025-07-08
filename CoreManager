@@ -599,14 +599,7 @@ end
     })
     -- Function to get available tools from player's backpack using UtilsService
     local function getAvailableToolsFromBackpack()
-        if not UtilsService then
-            return CONFIG.AUTO_AIM.AVAILABLE_TOOLS -- Fallback if UtilsService not available
-        end
-        
-        local utils = UtilsService.new()
-        local player = game.Players.LocalPlayer
-        
-        return utils:getAvailableToolsForAutoAim(player, CONFIG.AUTO_AIM.AVAILABLE_TOOLS)
+        return CONFIG.AUTO_AIM.AVAILABLE_TOOLS -- Fallback if UtilsService not available
     end
     
     -- Get available tools for dropdown
