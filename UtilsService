@@ -92,40 +92,23 @@ function UtilsService:getForceFieldTimeRemaining(player)
 end
 
 --// ToolManager Delegation Methods
-function UtilsService:getEquippedToolName(player)
-    return self.toolManager:getEquippedToolName(player)
-end
-
 function UtilsService:getPlayerTools(player)
     return self.toolManager:getPlayerTools(player)
 end
 
-function UtilsService:getPlayerToolsByName(player, toolNames)
-    return self.toolManager:getPlayerToolsByName(player, toolNames)
-end
-
-function UtilsService:getAvailableToolsForAutoAim(player, availableToolNames)
-    return self.toolManager:getAvailableToolsForAutoAim(player, availableToolNames)
-end
-
-function UtilsService:extractToolNamesFromDisplay(displayNames)
-    return self.toolManager:extractToolNamesFromDisplay(displayNames)
-end
-
-function UtilsService:hasTool(player, toolName)
-    return self.toolManager:hasTool(player, toolName)
-end
-
-function UtilsService:getToolLocation(player, toolName)
-    return self.toolManager:getToolLocation(player, toolName)
+function UtilsService:getToolDetails(tool)
+    return self.toolManager:getToolDetails(tool)
 end
 
 function UtilsService:getEquippedTool(player)
-    return self.toolManager:getEquippedTool(player)
+    local character = player and player.Character
+    if not character then return nil end
+    return character:FindFirstChildOfClass("Tool")
 end
 
 function UtilsService:getToolCount(player)
-    return self.toolManager:getToolCount(player)
+    local tools = self.toolManager:getPlayerTools(player)
+    return #tools
 end
 
 --// Backward Compatibility Methods (for existing code)
