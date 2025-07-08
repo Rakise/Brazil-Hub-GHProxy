@@ -139,10 +139,16 @@ local function createPlayerBillboard(player)
     -- Create billboard structure
     local billboard = createBillboardStructure(head)
     
-    -- Initialize label text using UtilsService
+    -- Inicializa o texto do label corretamente
     local label = billboard:FindFirstChild("Tool")
     if label then
-        label.Text = utils:getEquippedTool(player)
+        local equippedTool = utils:getEquippedTool(player)
+        if equippedTool then
+            local details = utils:getToolDetails(equippedTool)
+            label.Text = details and details.name or CONFIG.DEFAULT_TOOL_TEXT
+        else
+            label.Text = CONFIG.DEFAULT_TOOL_TEXT
+        end
     end
     
     -- Register billboard
@@ -150,6 +156,8 @@ local function createPlayerBillboard(player)
     
     -- Set up tool change monitoring
     setupToolChangeMonitoring(player)
+    -- Garante atualização do texto
+    updateBillboardLabel(player)
 end
 
 --[[
