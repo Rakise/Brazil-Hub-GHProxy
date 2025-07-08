@@ -2,46 +2,32 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
--- Sistema de tipos de trinkets
-local TRINKET_TYPES = {
-    USUAL_TRINKET = "Usual_Trinket",
-    SCROLL_TYPE = "Scroll_Type", 
-    GEMS = "Gems",
-    SEMI_ARTIFACTS = "Semi_Artifacts",
-    ARTIFACTS = "Artifacts",
-    EVENT_TRINKET = "Event-Trinkets"
-}
+-- Sistema de tipos de trinkets (REMOVER)
+-- local TRINKET_TYPES = { ... }
 
 -- Cache de constantes para evitar re-alocações
 local MESH_IDS = {
     -- Usual Trinkets
-    ["rbxassetid://5196551436"] = { name = "Amulet", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5196577540"] = { name = "Old Amulet", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5204003946"] = { name = "Goblet", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5196782997"] = { name = "Old Ring", type = TRINKET_TYPES.USUAL_TRINKET },
-    ["rbxassetid://5196776695"] = { name = "Ring", type = TRINKET_TYPES.USUAL_TRINKET },
+    ["rbxassetid://5196551436"] = { name = "Amulet" },
+    ["rbxassetid://5196577540"] = { name = "Old Amulet" },
+    ["rbxassetid://5204003946"] = { name = "Goblet" },
+    ["rbxassetid://5196782997"] = { name = "Old Ring" },
+    ["rbxassetid://5196776695"] = { name = "Ring" },
     
     -- Scroll Type
-    ["rbxassetid://5204453430"] = { name = "Scroll", type = TRINKET_TYPES.SCROLL_TYPE },
+    ["rbxassetid://5204453430"] = { name = "Scroll" },
     
     -- Gems
-    ["rbxassetid://2877143560"] = { name = "Ruby", type = TRINKET_TYPES.GEMS },
-    ["rbxassetid://2877143592"] = { name = "Sapphire", type = TRINKET_TYPES.GEMS },
-    ["rbxassetid://2877143624"] = { name = "Emerald", type = TRINKET_TYPES.GEMS },
+    ["rbxassetid://2877143560"] = { name = "Ruby" },
+    ["rbxassetid://2877143592"] = { name = "Sapphire" },
+    ["rbxassetid://2877143624"] = { name = "Emerald" },
     
     -- Semi-Artifacts
-    ["rbxassetid://2520762076"] = { name = "Howler Friend", type = TRINKET_TYPES.ARTIFACTS }
+    ["rbxassetid://2520762076"] = { name = "Howler Friend" }
 }
 
--- Sistema de cores por tipo
-local TYPE_COLORS = {
-    [TRINKET_TYPES.USUAL_TRINKET] = Color3.new(0.7, 0.7, 0.7),      -- Cinza claro
-    [TRINKET_TYPES.SCROLL_TYPE] = Color3.new(0.9, 0.8, 0.5),        -- Amarelo pergaminho
-    [TRINKET_TYPES.GEMS] = Color3.new(0.4, 0.8, 0.9),               -- Azul cristal
-    [TRINKET_TYPES.SEMI_ARTIFACTS] = Color3.new(0.9, 0.6, 0.2),     -- Laranja
-    [TRINKET_TYPES.ARTIFACTS] = Color3.new(1.0, 0.2, 0.2),          -- Vermelho brilhante
-    [TRINKET_TYPES.EVENT_TRINKET] = Color3.new(0.760784, 0.827450, 0.243137)
-}
+-- Sistema de cores por tipo (REMOVIDO)
+-- local TYPE_COLORS = { ... }
 
 local PHOENIX_TEXTURE = "rbxassetid://1536547385"
 local BILLBOARD_SIZE = UDim2.new(0, 100, 0, 100)
@@ -90,65 +76,64 @@ local function isTrinket(obj)
     return hasID
 end
 
--- Função otimizada para obter informações do trinket
-local function getTrinketInfo(part)
-    local material = part.Material
-    
-    -- Verificações mais rápidas primeiro (material checks) - ARTIFACTS
-    if material == MATERIAL_SLATE and part:FindFirstChildOfClass("ParticleEmitter") then
-        return "Idol of the Forgotten", TRINKET_TYPES.USUAL_TRINKET
-    end
-
-    if material == MATERIAL_GLASS and part:FindFirstChildOfClass("SpecialMesh") then
-        return "Opal", TRINKET_TYPES.GEMS
-    end
-    
-    if material == MATERIAL_NEON then
-        if part.BrickColor == BrickColor.new("Gold") then
-            return "Lost Sunshine", TRINKET_TYPES.EVENT_TRINKET
-        end
-        local name = part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
-        return name, TRINKET_TYPES.ARTIFACTS
-    end
-    
-    if part.Transparency == 1 then
-        local hasOrb, hasLight, hasSphere = false, false, false
-        local children = part:GetChildren()
-        
-        -- Loop otimizado com early break conditions
-        for i = 1, #children do
-            local child = children[i]
-            local childType = child.ClassName
-            
-            if childType == "ParticleEmitter" and child.Name == "OrbParticle" then
-                hasOrb = true
-            elseif childType == "PointLight" then
-                hasLight = true
-            elseif childType == "SpecialMesh" and child.MeshType == MESHTYPE_SPHERE then
-                hasSphere = true
-            elseif childType == "Attachment" then
-                -- Verificação otimizada para Phoenix Down
-                local attachChildren = child:GetChildren()
-                for j = 1, #attachChildren do
-                    local subChild = attachChildren[j]
-                    if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == PHOENIX_TEXTURE then
-                        return "Phoenix Down", TRINKET_TYPES.SEMI_ARTIFACTS
+local function identifyAttachmentTrinket(attachment)
+    for _, subChild in ipairs(attachment:GetChildren()) do
+        if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == PHOENIX_TEXTURE then
+            local cs = subChild.Color
+            if cs and cs.Keypoints and #cs.Keypoints == 2 then
+                local k1, k2 = cs.Keypoints[1], cs.Keypoints[2]
+                if k1.Time == 0 and k2.Time == 1 then
+                    if k1.Value == Color3.new(1, 4/5, 0) and k2.Value == Color3.new(1, 128/255, 0) then
+                        return "Phoenix Down"
+                    elseif k1.Value == Color3.new(1, 2/51, 2/51) and k2.Value == Color3.new(1, 2/51, 2/51) then
+                        return "Azael Horn"
+                    elseif k1.Value == Color3.new(38/85, 1, 0) and k2.Value == Color3.new(41/85, 1, 0) then
+                        return "Mysterious Artifact"
                     end
                 end
             end
-            
-            -- Early break se já encontrou tudo necessário
-            if hasOrb and hasLight and hasSphere then
-                break
-            end
-        end
-        
-        if hasOrb and hasLight and hasSphere then
-            return "???", TRINKET_TYPES.SEMI_ARTIFACTS
         end
     end
-    
-    -- Verificação otimizada de mesh ID
+end
+
+local function getTrinketInfo(part)
+    local material = part.Material
+
+    if material == MATERIAL_SLATE and part:FindFirstChildOfClass("ParticleEmitter") then
+        return "Idol of the Forgotten"
+    end
+
+    if material == MATERIAL_GLASS and part:FindFirstChildOfClass("SpecialMesh") then
+        return "Opal"
+    end
+
+    if material == MATERIAL_NEON then
+        if part.BrickColor == BrickColor.new("Gold") then
+            return "Lost Sunshine"
+        end
+        return part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
+    end
+
+    if part.Transparency == 1 then
+        local hasOrb, hasLight, hasSphere = false, false, false
+        for _, child in ipairs(part:GetChildren()) do
+            if child.ClassName == "ParticleEmitter" and child.Name == "OrbParticle" then
+                hasOrb = true
+            elseif child.ClassName == "PointLight" then
+                hasLight = true
+            elseif child.ClassName == "SpecialMesh" and child.MeshType == MESHTYPE_SPHERE then
+                hasSphere = true
+            elseif child.ClassName == "Attachment" then
+                local result = identifyAttachmentTrinket(child)
+                if result then return result end
+            end
+            if hasOrb and hasLight and hasSphere then break end
+        end
+        if hasOrb and hasLight and hasSphere then
+            return "???"
+        end
+    end
+
     local meshId
     if part:IsA("MeshPart") then
         meshId = part.MeshId
@@ -156,19 +141,37 @@ local function getTrinketInfo(part)
         local mesh = part:FindFirstChildWhichIsA("SpecialMesh") or part:FindFirstChildWhichIsA("Mesh")
         meshId = mesh and mesh.MeshId
     end
-    
+
     if meshId and meshId ~= "" then
         local cleanId = cleanMeshId(meshId)
         local trinketData = MESH_IDS[cleanId]
-        if trinketData then
-            return trinketData.name, trinketData.type
-        else
-            return meshId, TRINKET_TYPES.USUAL_TRINKET
-        end
-    else
-        return "Unknown", TRINKET_TYPES.USUAL_TRINKET
+        return trinketData and trinketData.name or meshId
     end
+
+    return "Unknown"
 end
+
+-- Mapa declarativo de cores por nome de trinket
+local TRINKET_COLORS = {
+    ["Amulet"] = Color3.new(0.7, 0.7, 0.7),
+    ["Old Amulet"] = Color3.new(0.5, 0.5, 0.5),
+    ["Goblet"] = Color3.new(0.8, 0.7, 0.3),
+    ["Ruby"] = Color3.new(1, 0, 0),
+    ["Sapphire"] = Color3.new(0, 0.3, 1),
+    ["Emerald"] = Color3.new(0, 1, 0.3),
+    ["Howler Friend"] = Color3.new(0.956862, 0.933333, 0.901960),
+    ["Opal"] = Color3.new(0.4, 0.8, 0.9),
+    ["Idol of the Forgotten"] = Color3.new(0.380392, 0.376470, 0.376470),
+    ["Lost Sunshine"] = Color3.new(1.0, 0.9, 0.2),
+    ["Phoenix Down"] = Color3.new(0.956862, 0.564705, 0.266666),
+    ["Nightstone"] = Color3.new(0.2, 0.2, 0.2),
+    ["Amulet of the White King"] = Color3.new(1, 1, 1),
+    ["Scroll"] = Color3.new(0.9, 0.8, 0.5),
+    ["???"] = Color3.new(0.5, 0, 0.5),
+    ["Azael Horn"] = Color3.new(0.8, 0.1, 0.1),
+    ["Mysterious Artifact"] = Color3.new(0.2, 0.8, 0.2),
+    -- Adicione outros trinkets conforme necessário
+}
 
 local TrinketESP = {}
 TrinketESP.__index = TrinketESP
@@ -183,19 +186,11 @@ function TrinketESP.new()
         _processingQueue = false,
         -- Cache para evitar re-verificações
         _processedObjects = {},
-        -- Contador de tipos para estatísticas
-        _typeCount = {
-            [TRINKET_TYPES.USUAL_TRINKET] = 0,
-            [TRINKET_TYPES.SCROLL_TYPE] = 0,
-            [TRINKET_TYPES.GEMS] = 0,
-            [TRINKET_TYPES.SEMI_ARTIFACTS] = 0,
-            [TRINKET_TYPES.ARTIFACTS] = 0
-        }
     }, TrinketESP)
 end
 
--- Função otimizada para criar billboard com cores por tipo
-function TrinketESP:createBillboard(trinket, trinketName, trinketType)
+-- Função otimizada para criar billboard com cor definida pelo próprio trinket
+function TrinketESP:createBillboard(trinket, trinketName)
     if self.espBillboards[trinket] then return end
 
     local billboard = Instance_new("BillboardGui")
@@ -210,13 +205,13 @@ function TrinketESP:createBillboard(trinket, trinketName, trinketType)
     local label = Instance_new("TextLabel")
     label.Text = trinketName
     
-    -- Definir cor baseada no tipo
-    local typeColor = TYPE_COLORS[trinketType] or TYPE_COLORS[TRINKET_TYPES.USUAL_TRINKET]
-    label.TextColor3 = typeColor
+    -- Definir cor baseada no nome do trinket (declarativo)
+    local color = TRINKET_COLORS[trinketName] or Color3_new(0.7, 0.7, 0.7)
+    label.TextColor3 = color
     
     -- Ajustar stroke baseado no tipo para melhor visibilidade
-    label.TextStrokeTransparency = trinketType == TRINKET_TYPES.ARTIFACTS and 0.2 or 0.5
-    label.TextStrokeColor3 = trinketType == TRINKET_TYPES.ARTIFACTS and Color3_new(0, 0, 0) or Color3_new(0.2, 0.2, 0.2)
+    label.TextStrokeTransparency = 0.5
+    label.TextStrokeColor3 = Color3_new(0.2, 0.2, 0.2)
     
     label.Font = FONT_SOURCESANS
     label.TextSize = 14
@@ -228,25 +223,14 @@ function TrinketESP:createBillboard(trinket, trinketName, trinketType)
     label.Parent = billboard
 
     self.espBillboards[trinket] = billboard
-    
-    -- Incrementar contador do tipo
-    self._typeCount[trinketType] = (self._typeCount[trinketType] or 0) + 1
 end
 
 function TrinketESP:removeBillboard(trinket)
     local billboard = self.espBillboards[trinket]
     if billboard then
-        -- Decrementar contador do tipo
-        if trinket and trinket.Parent then
-            local _, trinketType = getTrinketInfo(trinket)
-            self._typeCount[trinketType] = math.max(0, (self._typeCount[trinketType] or 0) - 1)
-        end
-        
         billboard:Destroy()
         self.espBillboards[trinket] = nil
     end
-    
-    -- Limpar cache relacionado
     trinketCache[trinket] = nil
     self._processedObjects[trinket] = nil
 end
@@ -267,8 +251,8 @@ function TrinketESP:processQueue()
         -- Verificar se o trinket ainda é válido
         if trinket and trinket.Parent and not self._processedObjects[trinket] then
             self._processedObjects[trinket] = true
-            local trinketName, trinketType = getTrinketInfo(trinket)
-            self:createBillboard(trinket, trinketName, trinketType)
+            local trinketName = getTrinketInfo(trinket)
+            self:createBillboard(trinket, trinketName)
         end
         
         processed = processed + 1
@@ -370,41 +354,6 @@ function TrinketESP:disable()
     self._processedObjects = {}
     self._pendingTrinkets = {}
     self._processingQueue = false
-    
-    -- Resetar contadores
-    for trinketType in pairs(self._typeCount) do
-        self._typeCount[trinketType] = 0
-    end
-end
-
--- Função para obter estatísticas dos tipos
-function TrinketESP:getTypeStats()
-    local total = 0
-    for _, count in pairs(self._typeCount) do
-        total = total + count
-    end
-    
-    return {
-        total = total,
-        usual_trinkets = self._typeCount[TRINKET_TYPES.USUAL_TRINKET],
-        scrolls = self._typeCount[TRINKET_TYPES.SCROLL_TYPE],
-        gems = self._typeCount[TRINKET_TYPES.GEMS],
-        semi_artifacts = self._typeCount[TRINKET_TYPES.SEMI_ARTIFACTS],
-        artifacts = self._typeCount[TRINKET_TYPES.ARTIFACTS]
-    }
-end
-
--- Função para imprimir estatísticas formatadas
-function TrinketESP:printStats()
-    local stats = self:getTypeStats()
-    print("=== TRINKET ESP STATISTICS ===")
-    print("Total Trinkets Found: " .. stats.total)
-    print("├─ Usual Trinkets: " .. stats.usual_trinkets)
-    print("├─ Scrolls: " .. stats.scrolls)
-    print("├─ Gems: " .. stats.gems)
-    print("├─ Semi-Artifacts: " .. stats.semi_artifacts)
-    print("└─ Artifacts: " .. stats.artifacts)
-    print("==============================")
 end
 
 function TrinketESP:destroy()
@@ -413,7 +362,6 @@ function TrinketESP:destroy()
     self.espBillboards = nil
     self._processedObjects = nil
     self._pendingTrinkets = nil
-    self._typeCount = nil
 end
 
 return TrinketESP
