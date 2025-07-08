@@ -68,7 +68,7 @@ local function safeRequire(url)
         return result
     else
         warn("[BrazilHub] Module load error:", url)
-        warn(tostring(result))
+        warn("error:", tostring(result))
         return nil
     end
 end
