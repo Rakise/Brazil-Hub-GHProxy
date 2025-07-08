@@ -44,7 +44,13 @@ local function updateBillboardLabel(player)
     if not billboard then return end
     local textBox = billboard:FindFirstChild("Tool")
     if not textBox then return end
-    textBox.Text = utils:getEquippedToolName(player)
+    local equippedTool = utils:getEquippedTool(player)
+    if equippedTool then
+        local details = utils:getToolDetails(equippedTool)
+        textBox.Text = details and details.name or CONFIG.DEFAULT_TOOL_TEXT
+    else
+        textBox.Text = CONFIG.DEFAULT_TOOL_TEXT
+    end
 end
 
 --[[
@@ -136,7 +142,7 @@ local function createPlayerBillboard(player)
     -- Initialize label text using UtilsService
     local label = billboard:FindFirstChild("Tool")
     if label then
-        label.Text = utils:getEquippedToolName(player)
+        label.Text = utils:getEquippedTool(player)
     end
     
     -- Register billboard
