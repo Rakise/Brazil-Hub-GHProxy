@@ -605,6 +605,19 @@ end
     -- Get available tools for dropdown
     local availableTools = getAvailableToolsFromBackpack()
     
+    -- Substituir uso de extractToolNamesFromDisplay por função local
+    local function extractToolNamesFromDisplay(displayNames)
+        local cleanNames = {}
+        for _, displayName in ipairs(displayNames) do
+            local toolName = displayName:gsub(" %[Equipped%]$", ""):gsub(" %[Backpack%]$", "")
+            table.insert(cleanNames, toolName)
+        end
+        return cleanNames
+    end
+    
+    -- Get available tools for dropdown
+    local availableTools = getAvailableToolsFromBackpack()
+    
     -- Create dropdown with dynamic tool list
     local autoAimToolsDropdown = autoAimGroup:AddDropdown('AutoAimTools', {
         Values = availableTools,
@@ -614,22 +627,7 @@ end
         Tooltip = 'Select which tools activate auto-aim (based on your backpack)',
         Callback = function(selected)
             -- Extract tool names from display names using UtilsService
-            local cleanSelected = {}
-            if UtilsService then
-                local utils = UtilsService.new()
-                local displayNames = {}
-                for _, index in ipairs(selected) do
-                    table.insert(displayNames, availableTools[index])
-                end
-                cleanSelected = utils:extractToolNamesFromDisplay(displayNames)
-            else
-                -- Fallback if UtilsService not available
-                for _, index in ipairs(selected) do
-                    local displayName = availableTools[index]
-                    local toolName = displayName:gsub(" %[Equipped%]$", ""):gsub(" %[Backpack%]$", "")
-                    table.insert(cleanSelected, toolName)
-                end
-            end
+            local cleanSelected = extractToolNamesFromDisplay(selected)
             UICallbacks.onAutoAimToolsChanged(cleanSelected)
         end
     })
