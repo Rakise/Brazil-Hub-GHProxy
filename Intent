@@ -245,6 +245,13 @@ function Intent.enable()
     Intent.enabled = true
     createAllBillboards()
     setupPlayerEventConnections()
+    -- Deixa todos os labels visíveis
+    for _, billboard in pairs(billboardRegistry) do
+        local label = billboard:FindFirstChild("Tool")
+        if label then
+            label.TextTransparency = 0
+        end
+    end
 end
 
 --[[
@@ -255,6 +262,13 @@ function Intent.disable()
     if not Intent.enabled then return end
     
     Intent.enabled = false
+    -- Deixa todos os labels invisíveis
+    for _, billboard in pairs(billboardRegistry) do
+        local label = billboard:FindFirstChild("Tool")
+        if label then
+            label.TextTransparency = 1
+        end
+    end
     removeAllBillboards()
     disconnectAllConnections()
 end
