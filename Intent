@@ -36,6 +36,22 @@ local connectionMgr = ConnectionManager.new() -- global (PlayerAdded, etc)
 local connectionMgrs = {} -- [player] = ConnectionManager para tool monitoring
 
 --[[
+    Removes the intent billboard for a specific player
+    @param player: Player - The player whose billboard should be removed
+]]
+local function removePlayerBillboard(player)
+    local billboard = billboardRegistry[player]
+    if billboard then
+        billboard:Destroy()
+        billboardRegistry[player] = nil
+    end
+    if connectionMgrs[player] then
+        connectionMgrs[player]:disconnectAll()
+        connectionMgrs[player] = nil
+    end
+end
+
+--[[
     Updates the text label of a player's intent billboard
     @param player: Player - The player whose billboard should be updated
 ]]
@@ -47,9 +63,11 @@ local function updateBillboardLabel(player)
     local equippedTool = utils:getEquippedTool(player)
     if equippedTool then
         local details = utils:getToolDetails(equippedTool)
-        textBox.Text = details and details.name or CONFIG.DEFAULT_TOOL_TEXT
+        textBox.Text = details and details.name or ""
+        textBox.TextTransparency = 0
     else
-        textBox.Text = CONFIG.DEFAULT_TOOL_TEXT
+        textBox.Text = ""
+        textBox.TextTransparency = 1
     end
 end
 
@@ -125,7 +143,9 @@ end
     @param player: Player - The player to create a billboard for
 ]]
 local function createPlayerBillboard(player)
-    -- Skip if player is local player or billboard already exists
+    -- Remove billboard/conexões antigos antes de criar novo
+    removePlayerBillboard(player)
+    -- Skip if player is local player or billboard já existe (após remoção, nunca existirá)
     if not player or player == Players.LocalPlayer or billboardRegistry[player] then 
         return 
     end
@@ -145,9 +165,11 @@ local function createPlayerBillboard(player)
         local equippedTool = utils:getEquippedTool(player)
         if equippedTool then
             local details = utils:getToolDetails(equippedTool)
-            label.Text = details and details.name or CONFIG.DEFAULT_TOOL_TEXT
+            label.Text = details and details.name or ""
+            label.TextTransparency = 0
         else
-            label.Text = CONFIG.DEFAULT_TOOL_TEXT
+            label.Text = ""
+            label.TextTransparency = 1
         end
     end
     
@@ -158,22 +180,6 @@ local function createPlayerBillboard(player)
     setupToolChangeMonitoring(player)
     -- Garante atualização do texto
     updateBillboardLabel(player)
-end
-
---[[
-    Removes the intent billboard for a specific player
-    @param player: Player - The player whose billboard should be removed
-]]
-local function removePlayerBillboard(player)
-    local billboard = billboardRegistry[player]
-    if billboard then
-        billboard:Destroy()
-        billboardRegistry[player] = nil
-    end
-    if connectionMgrs[player] then
-        connectionMgrs[player]:disconnectAll()
-        connectionMgrs[player] = nil
-    end
 end
 
 --[[
