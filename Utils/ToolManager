@@ -11,15 +11,6 @@ function ToolManager.new()
     return self
 end
 
---// Function: ToolManager:getEquippedToolName
---// Description: Returns the name of the currently equipped tool for a player, or 'None' if none is equipped.
-function ToolManager:getEquippedToolName(player)
-    local character = player and player.Character
-    if not character then return "None" end
-    local tool = character:FindFirstChildOfClass("Tool")
-    return tool and tool.Name or "None"
-end
-
 --// Function: ToolManager:getPlayerTools
 --// Description: Gets all tools from player's character and backpack
 function ToolManager:getPlayerTools(player)
@@ -58,158 +49,31 @@ function ToolManager:getPlayerTools(player)
     return tools
 end
 
---// Function: ToolManager:getPlayerToolsByName
---// Description: Gets tools by name from player's inventory
-function ToolManager:getPlayerToolsByName(player, toolNames)
-    if not player or not toolNames then return {} end
-    
-    local availableTools = {}
-    local toolCount = 0
-    local toolLocations = {}
-    
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Check character's equipped tools
-    if character then
-        for _, tool in pairs(character:GetChildren()) do
-            if tool:IsA("Tool") and toolNames[tool.Name] then
-                availableTools[tool.Name] = true
-                toolLocations[tool.Name] = "Equipped"
-                toolCount = toolCount + 1
-            end
-        end
-    end
-    
-    -- Check backpack tools
-    if backpack then
-        for _, tool in pairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and toolNames[tool.Name] then
-                availableTools[tool.Name] = true
-                toolLocations[tool.Name] = "Backpack"
-                toolCount = toolCount + 1
-            end
-        end
-    end
-    
-    return {
-        tools = availableTools,
-        locations = toolLocations,
-        count = toolCount
+function ToolManager:getToolDetails(tool)
+    if not tool or not tool:IsA("Tool") then return nil end
+
+    -- Propriedades básicas do Tool
+    local details = {
+        name = tool.Name,
+        className = tool.ClassName,
+        parent = tool.Parent and tool.Parent.Name or nil,
+        grip = tool.Grip,
+        requiresHandle = tool.RequiresHandle,
+        canBeDropped = tool.CanBeDropped,
+        enabled = tool.Enabled,
+        toolTip = tool.ToolTip,
+        children = {}
     }
-end
 
---// Function: ToolManager:getAvailableToolsForAutoAim
---// Description: Gets available tools for auto-aim with display names
-function ToolManager:getAvailableToolsForAutoAim(player, availableToolNames)
-    if not player or not availableToolNames then 
-        return availableToolNames or {} 
+    -- Lista os filhos do Tool (nome e tipo)
+    for _, child in ipairs(tool:GetChildren()) do
+        table.insert(details.children, {
+            name = child.Name,
+            className = child.ClassName
+        })
     end
-    
-    local toolData = self:getPlayerToolsByName(player, availableToolNames)
-    local toolArray = {}
-    
-    -- Convert to array with location info
-    for toolName, _ in pairs(toolData.tools) do
-        local location = toolData.locations[toolName] or "Unknown"
-        local displayName = toolName
-        if location == "Equipped" then
-            displayName = toolName .. " [Equipped]"
-        elseif location == "Backpack" then
-            displayName = toolName .. " [Backpack]"
-        end
-        table.insert(toolArray, displayName)
-    end
-    
-    -- Sort alphabetically
-    table.sort(toolArray)
-    
-    -- If no tools found, return original list
-    if toolData.count == 0 then
-        return availableToolNames
-    end
-    
-    return toolArray
-end
 
---// Function: ToolManager:extractToolNamesFromDisplay
---// Description: Extracts clean tool names from display names
-function ToolManager:extractToolNamesFromDisplay(displayNames)
-    local cleanNames = {}
-    for _, displayName in ipairs(displayNames) do
-        local toolName = displayName:gsub(" %[Equipped%]$", ""):gsub(" %[Backpack%]$", "")
-        table.insert(cleanNames, toolName)
-    end
-    return cleanNames
-end
-
---// Function: ToolManager:hasTool
---// Description: Checks if player has a specific tool
-function ToolManager:hasTool(player, toolName)
-    if not player or not toolName then return false end
-    
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Check character
-    if character then
-        local tool = character:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return true
-        end
-    end
-    
-    -- Check backpack
-    if backpack then
-        local tool = backpack:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return true
-        end
-    end
-    
-    return false
-end
-
---// Function: ToolManager:getToolLocation
---// Description: Gets the location of a specific tool
-function ToolManager:getToolLocation(player, toolName)
-    if not player or not toolName then return "None" end
-    
-    local character = player.Character
-    local backpack = player.Backpack
-    
-    -- Check character first (equipped takes priority)
-    if character then
-        local tool = character:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return "Equipped"
-        end
-    end
-    
-    -- Check backpack
-    if backpack then
-        local tool = backpack:FindFirstChild(toolName)
-        if tool and tool:IsA("Tool") then
-            return "Backpack"
-        end
-    end
-    
-    return "None"
-end
-
---// Function: ToolManager:getEquippedTool
---// Description: Gets the currently equipped tool object
-function ToolManager:getEquippedTool(player)
-    local character = player and player.Character
-    if not character then return nil end
-    return character:FindFirstChildOfClass("Tool")
-end
-
---// Function: ToolManager:getToolCount
---// Description: Gets the total number of tools in player's inventory
-function ToolManager:getToolCount(player)
-    local tools = self:getPlayerTools(player)
-    return #tools
+    return details
 end
 
 return ToolManager 
