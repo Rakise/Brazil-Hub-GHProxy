@@ -40,10 +40,6 @@ end
 
 waitForRobloxReady()
 
-if queue_on_teleport then
-    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/CoreManager"))()')
-end
-
 local REPO_BASE_URL = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
 local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/"
 
@@ -54,6 +50,10 @@ local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
 local KeyHandler = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. 'KeyHandler'))()
 local keyHandler = KeyHandler.new(Library)
 keyHandler:requireValidKey()
+
+if queue_on_teleport then
+    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/CoreManager"))()')
+end
 
 -- Load LinoriaLib components
 local ThemeManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/ThemeManager.lua'))()
