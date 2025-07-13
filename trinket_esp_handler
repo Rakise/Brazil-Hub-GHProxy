@@ -22,6 +22,7 @@ local Config = {
             ["Ruby"] = Color3.new(1, 0, 0),
             ["Sapphire"] = Color3.new(0, 0.3, 1),
             ["Emerald"] = Color3.new(0, 1, 0.3),
+            ["Diamond"] = Color3.new(1, 1, 1),
             ["Howler Friend"] = Color3.new(0.956862, 0.933333, 0.901960),
             ["Opal"] = Color3.new(0.4, 0.8, 0.9),
             ["Idol of the Forgotten"] = Color3.new(0.380392, 0.376470, 0.376470),
@@ -34,6 +35,7 @@ local Config = {
             ["Azael Horn"] = Color3.new(0.8, 0.1, 0.1),
             ["Mysterious Artifact"] = Color3.new(0.2, 0.8, 0.2),
             ["Phoenix Flower"] = Color3.new(0, 0.207843, 0.392157),
+            ["Rift Gem"] = Color3.new(1, 0.223529, 0.768627)
         },
     },
     
@@ -62,9 +64,10 @@ local Config = {
         ["5196782997"] = { name = "Old Ring" },
         ["5196776695"] = { name = "Ring" },
         ["5204453430"] = { name = "Scroll" },
-        ["2877143560"] = { name = "Ruby" },
-        ["2877143592"] = { name = "Sapphire" },
-        ["2877143624"] = { name = "Emerald" },
+        -- Gems são identificadas por cor, não por MeshID
+        -- ["2877143560"] = { name = "Ruby" },
+        -- ["2877143592"] = { name = "Sapphire" },
+        -- ["2877143624"] = { name = "Emerald" },
         ["2520762076"] = { name = "Howler Friend" },
         -- Khei Only
         ["4027112893"] = { name = "Bound Book"},
@@ -205,11 +208,39 @@ local function getTrinketInfo(part)
     if meshId and meshId ~= "" then
         local cleanId = cleanMeshId(meshId)
         local trinketData = Config.MeshIDs[cleanId]
-        -- Debug: print para verificar qual trinket está sendo identificado
-        print("MeshID:", meshId)
-        print("CleanID:", cleanId)
-        print("TrinketData:", trinketData and trinketData.name or "nil")
-        print("Final Result:", trinketData and trinketData.name or meshId)
+        
+        -- Identificação especial para gemas que compartilham o mesmo MeshID
+        if cleanId == "2877143560" or cleanId == "2877143592" or cleanId == "2877143624" then
+            local brickColor = part.BrickColor
+            local colorName = brickColor.Name
+            local colorValue = brickColor.Color
+            
+            -- Debug para verificar as cores
+            print("MeshID:", meshId)
+            print("CleanID:", cleanId)
+            print("BrickColor:", colorName)
+            print("BrickColor Value:", colorValue)
+            
+            -- Identificação por cor (nome e valor RGB)
+            if colorName == "Really red" or colorName == "Bright red" or 
+               (colorValue.R > 0.8 and colorValue.G < 0.3 and colorValue.B < 0.3) then
+                return "Ruby"
+            elseif colorName == "Bright blue" or colorName == "Cyan" or "Lapis" or 
+                   (colorValue.R < 0.3 and colorValue.G < 0.3 and colorValue.B > 0.8) then
+                return "Sapphire"
+            elseif colorName == "Bright green" or colorName == "Lime green" or 
+                   (colorValue.R < 0.3 and colorValue.G > 0.8 and colorValue.B < 0.3) then
+                return "Emerald"
+            elseif colorName == "White" or colorName == "Institutional white" or 
+                   (colorValue.R > 0.9 and colorValue.G > 0.9 and colorValue.B > 0.9) then
+                return "Diamond"
+            else
+                -- Fallback: retorna baseado no MeshID original
+                return "Rift Gem"
+            end
+        end
+        
+        -- Para outros trinkets, usa a lógica normal
         return trinketData and trinketData.name or meshId
     end
 
