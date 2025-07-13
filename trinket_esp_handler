@@ -2,43 +2,91 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
 
--- Sistema de tipos de trinkets (REMOVER)
--- local TRINKET_TYPES = { ... }
-
--- Cache de constantes para evitar re-alocações
-local MESH_IDS = {
-    -- Usual Trinkets
-    ["rbxassetid://5196551436"] = { name = "Amulet" },
-    ["rbxassetid://5196577540"] = { name = "Old Amulet" },
-    ["rbxassetid://5204003946"] = { name = "Goblet" },
-    ["rbxassetid://5196782997"] = { name = "Old Ring" },
-    ["rbxassetid://5196776695"] = { name = "Ring" },
+--// Configuration
+local Config = {
+    ESP = {
+        BillboardSize = UDim2.new(0, 100, 0, 100),
+        TextSize = 14,
+        TextStrokeTransparency = 0.5,
+        TextStrokeColor = Color3.new(0.2, 0.2, 0.2),
+        Font = Enum.Font.SourceSans,
+        MaxProcessPerFrame = 5,
+    },
     
-    -- Scroll Type
-    ["rbxassetid://5204453430"] = { name = "Scroll" },
+    Colors = {
+        Default = Color3.new(0.7, 0.7, 0.7),
+        Trinkets = {
+            ["Amulet"] = Color3.new(0.7, 0.7, 0.7),
+            ["Old Amulet"] = Color3.new(0.5, 0.5, 0.5),
+            ["Goblet"] = Color3.new(0.8, 0.7, 0.3),
+            ["Ruby"] = Color3.new(1, 0, 0),
+            ["Sapphire"] = Color3.new(0, 0.3, 1),
+            ["Emerald"] = Color3.new(0, 1, 0.3),
+            ["Howler Friend"] = Color3.new(0.956862, 0.933333, 0.901960),
+            ["Opal"] = Color3.new(0.4, 0.8, 0.9),
+            ["Idol of the Forgotten"] = Color3.new(0.380392, 0.376470, 0.376470),
+            ["Lost Sunshine"] = Color3.new(1.0, 0.9, 0.2),
+            ["Phoenix Down"] = Color3.new(0.956862, 0.564705, 0.266666),
+            ["Nightstone"] = Color3.new(0.2, 0.2, 0.2),
+            ["Amulet of the White King"] = Color3.new(1, 1, 1),
+            ["Scroll"] = Color3.new(0.9, 0.8, 0.5),
+            ["???"] = Color3.new(0.5, 0, 0.5),
+            ["Azael Horn"] = Color3.new(0.8, 0.1, 0.1),
+            ["Mysterious Artifact"] = Color3.new(0.2, 0.8, 0.2),
+            ["Phoenix Flower"] = Color3.new(0, 0.207843, 0.392157),
+        },
+    },
     
-    -- Gems
-    ["rbxassetid://2877143560"] = { name = "Ruby" },
-    ["rbxassetid://2877143592"] = { name = "Sapphire" },
-    ["rbxassetid://2877143624"] = { name = "Emerald" },
+    Materials = {
+        Slate = Enum.Material.Slate,
+        Neon = Enum.Material.Neon,
+        Glass = Enum.Material.Glass,
+    },
     
-    -- Semi-Artifacts
-    ["rbxassetid://2520762076"] = { name = "Howler Friend" }
+    MeshTypes = {
+        Sphere = Enum.MeshType.Sphere,
+    },
+    
+    UI = {
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    },
+    
+    Assets = {
+        PhoenixTexture = "rbxassetid://1536547385",
+    },
+    
+    MeshIDs = {
+        ["5196551436"] = { name = "Amulet" },
+        ["5196577540"] = { name = "Old Amulet" },
+        ["5204003946"] = { name = "Goblet" },
+        ["5196782997"] = { name = "Old Ring" },
+        ["5196776695"] = { name = "Ring" },
+        ["5204453430"] = { name = "Scroll" },
+        ["2877143560"] = { name = "Ruby" },
+        ["2877143592"] = { name = "Sapphire" },
+        ["2877143624"] = { name = "Emerald" },
+        ["2520762076"] = { name = "Howler Friend" },
+    },
+    
+    ColorSequences = {
+        PhoenixDown = {
+            ColorSequenceKeypoint.new(0, Color3.new(1, 4/5, 0)),
+            ColorSequenceKeypoint.new(1, Color3.new(1, 128/255, 0)),
+        },
+        AzaelHorn = {
+            ColorSequenceKeypoint.new(0, Color3.new(1, 2/51, 2/51)),
+            ColorSequenceKeypoint.new(1, Color3.new(1, 2/51, 2/51)),
+        },
+        MysteriousArtifact = {
+            ColorSequenceKeypoint.new(0, Color3.new(38/85, 1, 0)),
+            ColorSequenceKeypoint.new(1, Color3.new(41/85, 1, 0)),
+        },
+        PhoenixFlower = {
+            ColorSequenceKeypoint.new(0, Color3.new(0, 0.207843, 0.392157)),
+            ColorSequenceKeypoint.new(1, Color3.new(1, 0.207843, 0.392157)),
+        },
+    },
 }
-
--- Sistema de cores por tipo (REMOVIDO)
--- local TYPE_COLORS = { ... }
-
-local PHOENIX_TEXTURE = "rbxassetid://1536547385"
-local BILLBOARD_SIZE = UDim2.new(0, 100, 0, 100)
-
--- Cache de enums para evitar lookups repetidos
-local MATERIAL_SLATE = Enum.Material.Slate
-local MATERIAL_NEON = Enum.Material.Neon
-local MATERIAL_GLASS = Enum.Material.Glass
-local MESHTYPE_SPHERE = Enum.MeshType.Sphere
-local ZBEHAVIOR_SIBLING = Enum.ZIndexBehavior.Sibling
-local FONT_SOURCESANS = Enum.Font.SourceSans
 
 -- Cache de funções frequentemente usadas
 local tostring = tostring
@@ -53,7 +101,13 @@ local Instance_new = Instance.new
 local function cleanMeshId(id)
     local str = tostring(id)
     str = str:gsub("%%20", "")
-    return str:gsub("%s+", "")
+    str = str:gsub("%s+", "")
+    -- Remove rbxassetid:// se presente
+    str = str:gsub("rbxassetid://", "")
+    -- Debug: print para verificar se os IDs estão sendo limpos corretamente
+    print("Original MeshID:", id)
+    print("Cleaned MeshID:", str)
+    return str
 end
 
 -- Função otimizada para verificar trinkets usando cache de verificações
@@ -78,17 +132,19 @@ end
 
 local function identifyAttachmentTrinket(attachment)
     for _, subChild in ipairs(attachment:GetChildren()) do
-        if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == PHOENIX_TEXTURE then
+        if subChild.ClassName == "ParticleEmitter" and tostring(subChild.Texture) == Config.Assets.PhoenixTexture then
             local cs = subChild.Color
             if cs and cs.Keypoints and #cs.Keypoints == 2 then
                 local k1, k2 = cs.Keypoints[1], cs.Keypoints[2]
                 if k1.Time == 0 and k2.Time == 1 then
-                    if k1.Value == Color3.new(1, 4/5, 0) and k2.Value == Color3.new(1, 128/255, 0) then
+                    if k1.Value == Config.ColorSequences.PhoenixDown[1].Value and k2.Value == Config.ColorSequences.PhoenixDown[2].Value then
                         return "Phoenix Down"
-                    elseif k1.Value == Color3.new(1, 2/51, 2/51) and k2.Value == Color3.new(1, 2/51, 2/51) then
+                    elseif k1.Value == Config.ColorSequences.AzaelHorn[1].Value and k2.Value == Config.ColorSequences.AzaelHorn[2].Value then
                         return "Azael Horn"
-                    elseif k1.Value == Color3.new(38/85, 1, 0) and k2.Value == Color3.new(41/85, 1, 0) then
+                    elseif k1.Value == Config.ColorSequences.MysteriousArtifact[1].Value and k2.Value == Config.ColorSequences.MysteriousArtifact[2].Value then
                         return "Mysterious Artifact"
+                    elseif k1.Value == Config.ColorSequences.PhoenixFlower[1].Value and k2.Value == Config.ColorSequences.PhoenixFlower[2].Value then
+                        return "Phoenix Flower"
                     end
                 end
             end
@@ -99,15 +155,15 @@ end
 local function getTrinketInfo(part)
     local material = part.Material
 
-    if material == MATERIAL_SLATE and part:FindFirstChildOfClass("ParticleEmitter") then
+    if material == Config.Materials.Slate and part:FindFirstChildOfClass("ParticleEmitter") then
         return "Idol of the Forgotten"
     end
 
-    if material == MATERIAL_GLASS and part:FindFirstChildOfClass("SpecialMesh") then
+    if material == Config.Materials.Glass and part:FindFirstChildOfClass("SpecialMesh") then
         return "Opal"
     end
 
-    if material == MATERIAL_NEON then
+    if material == Config.Materials.Neon then
         if part.BrickColor == BrickColor.new("Gold") then
             return "Lost Sunshine"
         end
@@ -121,7 +177,7 @@ local function getTrinketInfo(part)
                 hasOrb = true
             elseif child.ClassName == "PointLight" then
                 hasLight = true
-            elseif child.ClassName == "SpecialMesh" and child.MeshType == MESHTYPE_SPHERE then
+            elseif child.ClassName == "SpecialMesh" and child.MeshType == Config.MeshTypes.Sphere then
                 hasSphere = true
             elseif child.ClassName == "Attachment" then
                 local result = identifyAttachmentTrinket(child)
@@ -144,34 +200,17 @@ local function getTrinketInfo(part)
 
     if meshId and meshId ~= "" then
         local cleanId = cleanMeshId(meshId)
-        local trinketData = MESH_IDS[cleanId]
+        local trinketData = Config.MeshIDs[cleanId]
+        -- Debug: print para verificar qual trinket está sendo identificado
+        print("MeshID:", meshId)
+        print("CleanID:", cleanId)
+        print("TrinketData:", trinketData and trinketData.name or "nil")
+        print("Final Result:", trinketData and trinketData.name or meshId)
         return trinketData and trinketData.name or meshId
     end
 
     return "Unknown"
 end
-
--- Mapa declarativo de cores por nome de trinket
-local TRINKET_COLORS = {
-    ["Amulet"] = Color3.new(0.7, 0.7, 0.7),
-    ["Old Amulet"] = Color3.new(0.5, 0.5, 0.5),
-    ["Goblet"] = Color3.new(0.8, 0.7, 0.3),
-    ["Ruby"] = Color3.new(1, 0, 0),
-    ["Sapphire"] = Color3.new(0, 0.3, 1),
-    ["Emerald"] = Color3.new(0, 1, 0.3),
-    ["Howler Friend"] = Color3.new(0.956862, 0.933333, 0.901960),
-    ["Opal"] = Color3.new(0.4, 0.8, 0.9),
-    ["Idol of the Forgotten"] = Color3.new(0.380392, 0.376470, 0.376470),
-    ["Lost Sunshine"] = Color3.new(1.0, 0.9, 0.2),
-    ["Phoenix Down"] = Color3.new(0.956862, 0.564705, 0.266666),
-    ["Nightstone"] = Color3.new(0.2, 0.2, 0.2),
-    ["Amulet of the White King"] = Color3.new(1, 1, 1),
-    ["Scroll"] = Color3.new(0.9, 0.8, 0.5),
-    ["???"] = Color3.new(0.5, 0, 0.5),
-    ["Azael Horn"] = Color3.new(0.8, 0.1, 0.1),
-    ["Mysterious Artifact"] = Color3.new(0.2, 0.8, 0.2),
-    -- Adicione outros trinkets conforme necessário
-}
 
 local TrinketESP = {}
 TrinketESP.__index = TrinketESP
@@ -197,24 +236,24 @@ function TrinketESP:createBillboard(trinket, trinketName)
     billboard.Name = "TrinketESP"
     billboard.Adornee = trinket
     billboard.LightInfluence = 1
-    billboard.ZIndexBehavior = ZBEHAVIOR_SIBLING
+    billboard.ZIndexBehavior = Config.UI.ZIndexBehavior
     billboard.AlwaysOnTop = true
-    billboard.Size = BILLBOARD_SIZE
+    billboard.Size = Config.ESP.BillboardSize
     billboard.Parent = trinket
 
     local label = Instance_new("TextLabel")
     label.Text = trinketName
     
     -- Definir cor baseada no nome do trinket (declarativo)
-    local color = TRINKET_COLORS[trinketName] or Color3_new(0.7, 0.7, 0.7)
+    local color = Config.Colors.Trinkets[trinketName] or Config.Colors.Default
     label.TextColor3 = color
     
     -- Ajustar stroke baseado no tipo para melhor visibilidade
-    label.TextStrokeTransparency = 0.5
-    label.TextStrokeColor3 = Color3_new(0.2, 0.2, 0.2)
+    label.TextStrokeTransparency = Config.ESP.TextStrokeTransparency
+    label.TextStrokeColor3 = Config.ESP.TextStrokeColor
     
-    label.Font = FONT_SOURCESANS
-    label.TextSize = 14
+    label.Font = Config.ESP.Font
+    label.TextSize = Config.ESP.TextSize
     label.BackgroundTransparency = 1
     label.BorderSizePixel = 0
     label.Size = UDim2_new(1, 0, 1, 0)
@@ -242,7 +281,7 @@ function TrinketESP:processQueue()
     self._processingQueue = true
     
     -- Processa até 5 trinkets por frame para evitar lag
-    local maxPerFrame = 5
+    local maxPerFrame = Config.ESP.MaxProcessPerFrame
     local processed = 0
     
     while #self._pendingTrinkets > 0 and processed < maxPerFrame do
