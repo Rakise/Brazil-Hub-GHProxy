@@ -66,6 +66,8 @@ local Config = {
         ["2877143592"] = { name = "Sapphire" },
         ["2877143624"] = { name = "Emerald" },
         ["2520762076"] = { name = "Howler Friend" },
+        -- Khei Only
+        ["4027112893"] = { name = "Bound Book"},
     },
     
     ColorSequences = {
