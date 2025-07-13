@@ -68,6 +68,8 @@ local Config = {
         ["2520762076"] = { name = "Howler Friend" },
         -- Khei Only
         ["4027112893"] = { name = "Bound Book"},
+        -- Event Only
+        ["122777605672182"] = { name = "Marshmallow on a Stick"},
     },
     
     ColorSequences = {
