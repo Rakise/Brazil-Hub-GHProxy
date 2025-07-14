@@ -1,0 +1,77 @@
+-- FFTracker.lua
+-- Gerencia rastreamento e dados de ForceFields nos personagens
+
+local Players = game:GetService("Players")
+local Config = loadstring(game:HttpGet('https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Modules/ForceField/Config/FFConfig'))()
+
+local getTime = tick
+local mathMax = math.max
+
+local FFTracker = {}
+FFTracker.__index = FFTracker
+
+function FFTracker.new()
+	local self = setmetatable({}, FFTracker)
+	self._ffData = {} -- [character] = { ff = ForceField, startTime = number }
+	return self
+end
+
+function FFTracker:set(character, ff)
+	if not character or not ff then return end
+
+	local startTime = ff:GetAttribute("StartTime") or getTime()
+	ff:SetAttribute("StartTime", startTime)
+
+	self._ffData[character] = {
+		ff = ff,
+		startTime = startTime,
+	}
+end
+
+function FFTracker:remove(character, ffToRemove)
+	local data = self._ffData[character]
+	if data and data.ff == ffToRemove then
+		self._ffData[character] = nil
+	end
+end
+
+function FFTracker:find(character)
+	local data = self._ffData[character]
+	return data and data.ff, data and data.startTime
+end
+
+function FFTracker:exists(character)
+	local ff, _ = self:find(character)
+	return ff ~= nil
+end
+
+function FFTracker:getFFTimeLeft(player)
+	if not player or not player.Character then return 0 end
+
+	local character = player.Character
+	local ff = character:FindFirstChildOfClass("ForceField")
+	if not ff then return 0 end
+
+	local startTime = ff:GetAttribute("StartTime")
+	if not startTime then
+		startTime = getTime()
+		ff:SetAttribute("StartTime", startTime)
+	end
+
+	local elapsed = getTime() - startTime
+	return mathMax(0, Config.FF.Duration - elapsed)
+end
+
+function FFTracker:getAll()
+	return self._ffData
+end
+
+function FFTracker:clear(character)
+	self._ffData[character] = nil
+end
+
+function FFTracker:clearAll()
+	table.clear(self._ffData)
+end
+
+return FFTracker
