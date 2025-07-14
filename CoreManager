@@ -15,6 +15,9 @@
 -- DEPENDENCIES AND LIBRARY SETUP
 -- ========================================
 
+if getgenv().BrazilHubLoaded then return end
+getgenv().BrazilHubLoaded = true
+
 local function waitForLoaded()
     -- Aguarda o carregamento do jogo
     if not game:IsLoaded() then
