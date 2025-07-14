@@ -35,7 +35,7 @@ local Config = {
             ["Azael Horn"] = Color3.new(0.8, 0.1, 0.1),
             ["Mysterious Artifact"] = Color3.new(0.2, 0.8, 0.2),
             ["Phoenix Flower"] = Color3.new(0, 0.207843, 0.392157),
-            ["Rift Gem"] = Color3.new(1, 0.223529, 0.768627)
+            ["Rift Gem"] = Color3.new(1, 0.223529, 0.768627),
         },
     },
     
@@ -216,26 +216,46 @@ local function getTrinketInfo(part)
             local colorValue = brickColor.Color
             
             -- Debug para verificar as cores
+            print("=== GEM DETECTION DEBUG ===")
             print("MeshID:", meshId)
             print("CleanID:", cleanId)
-            print("BrickColor:", colorName)
-            print("BrickColor Value:", colorValue)
+            print("BrickColor Name:", colorName)
+            print("BrickColor RGB:", colorValue.R, colorValue.G, colorValue.B)
+            print("Is Red (Ruby):", colorName == "Really red" or colorName == "Bright red" or (colorValue.R > 0.8 and colorValue.G < 0.3 and colorValue.B < 0.3))
+            print("Is Blue (Sapphire):", colorName == "Bright blue" or colorName == "Cyan" or "Lapis" or (colorValue.R < 0.3 and colorValue.G < 0.3 and colorValue.B > 0.8))
+            print("Is Green (Emerald):", colorName == "Bright green" or colorName == "Lime green" or (colorValue.R < 0.3 and colorValue.G > 0.8 and colorValue.B < 0.3))
+            print("Is White (Diamond):", colorName == "White" or colorName == "Institutional white" or (colorValue.R > 0.9 and colorValue.G > 0.9 and colorValue.B > 0.9))
+            print("========================")
             
             -- Identificação por cor (nome e valor RGB)
-            if colorName == "Really red" or colorName == "Bright red" or 
-               (colorValue.R > 0.8 and colorValue.G < 0.3 and colorValue.B < 0.3) then
+            -- Verificar primeiro por nome exato, depois por RGB
+            if colorName == "Really red" or colorName == "Bright red" then
+                print("-> Detected as Ruby (by name)")
                 return "Ruby"
-            elseif colorName == "Bright blue" or colorName == "Cyan" or "Lapis" or 
-                   (colorValue.R < 0.3 and colorValue.G < 0.3 and colorValue.B > 0.8) then
+            elseif colorName == "Bright blue" or colorName == "Cyan" or colorName == "Lapis" then
+                print("-> Detected as Sapphire (by name)")
                 return "Sapphire"
-            elseif colorName == "Bright green" or colorName == "Lime green" or 
-                   (colorValue.R < 0.3 and colorValue.G > 0.8 and colorValue.B < 0.3) then
+            elseif colorName == "Bright green" or colorName == "Lime green" then
+                print("-> Detected as Emerald (by name)")
                 return "Emerald"
-            elseif colorName == "White" or colorName == "Institutional white" or 
-                   (colorValue.R > 0.9 and colorValue.G > 0.9 and colorValue.B > 0.9) then
+            elseif colorName == "White" or colorName == "Institutional white" then
+                print("-> Detected as Diamond (by name)")
+                return "Diamond"
+            -- Se não encontrou por nome, verificar por RGB
+            elseif colorValue.R > 0.7 and colorValue.G < 0.2 and colorValue.B < 0.2 then
+                print("-> Detected as Ruby (by RGB)")
+                return "Ruby"
+            elseif colorValue.R < 0.2 and colorValue.G < 0.2 and colorValue.B > 0.7 then
+                print("-> Detected as Sapphire (by RGB)")
+                return "Sapphire"
+            elseif colorValue.R < 0.2 and colorValue.G > 0.7 and colorValue.B < 0.2 then
+                print("-> Detected as Emerald (by RGB)")
+                return "Emerald"
+            elseif colorValue.R > 0.8 and colorValue.G > 0.8 and colorValue.B > 0.8 then
+                print("-> Detected as Diamond (by RGB)")
                 return "Diamond"
             else
-                -- Fallback: retorna baseado no MeshID original
+                print("-> Fallback to Rift Gem")
                 return "Rift Gem"
             end
         end
