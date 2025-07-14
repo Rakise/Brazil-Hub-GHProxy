@@ -1,0 +1,29 @@
+-- FFConfig.lua
+-- Centralized configuration for ForceField detection system
+
+local FFConfig = {
+	FF = {
+		Duration = 120, -- Duration a ForceField is expected to last
+		UpdateInterval = 0.4, -- Delay between each billboard update check
+	},
+
+	UI = {
+		BillboardSize = UDim2.new(0, 80, 0, 24),
+		BillboardOffset = Vector3.new(0, 2.2, 0),
+		MaxDistance = 125,
+		TextSize = 18,
+		Font = Enum.Font.SourceSansBold,
+		TextStrokeTransparency = 0.5,
+	},
+
+	Performance = {
+		MaxProcessPerFrame = 5,
+		CacheTimeout = 0.1,
+	},
+
+	Text = {
+		Format = "%.1f s until FF is out", -- Display format for the countdown
+	},
+}
+
+return FFConfig
