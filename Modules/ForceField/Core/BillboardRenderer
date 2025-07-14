@@ -1,0 +1,120 @@
+-- FFBillboardRenderer.lua
+-- Handles creation and updates for FF Billboard UI elements
+
+local Players = game:GetService("Players")
+local Config = loadstring(game:HttpGet('https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Modules/ForceField/Config/FFConfig'))()
+
+local FFBillboardRenderer = {}
+FFBillboardRenderer.__index = FFBillboardRenderer
+
+local adorneeCache = {}
+
+local function getBestAdornee(character)
+	local cached = adorneeCache[character]
+	if cached and cached.Parent then
+		return cached
+	end
+
+	local adornee = character:FindFirstChild("Head")
+		or character:FindFirstChild("UpperTorso")
+		or character:FindFirstChild("Torso")
+		or character:FindFirstChildWhichIsA("BasePart")
+
+	if adornee then
+		adorneeCache[character] = adornee
+	end
+	return adornee
+end
+
+function FFBillboardRenderer.new()
+	local self = setmetatable({}, FFBillboardRenderer)
+	self.billboards = {}
+	self.maxDistance = Config.UI.MaxDistance
+	self.textSize = Config.UI.TextSize
+	return self
+end
+
+function FFBillboardRenderer:getFFColor(timeLeft)
+	return Color3.fromRGB(43, 255, 138)
+end
+
+function FFBillboardRenderer:create(character, ff, timeLeft)
+	if not character or not ff then return end
+
+	local data = self.billboards[character]
+	local billboard, label
+
+	if data and data.billboard and data.label then
+		billboard = data.billboard
+		label = data.label
+	else
+		billboard = Instance.new("BillboardGui")
+		label = Instance.new("TextLabel")
+
+		billboard.Name = "FFBillboard"
+		billboard.Size = Config.UI.BillboardSize
+		billboard.StudsOffset = Config.UI.BillboardOffset
+		billboard.AlwaysOnTop = true
+		billboard.MaxDistance = self.maxDistance
+		billboard.Adornee = getBestAdornee(character)
+
+		label.Size = UDim2.new(1, 0, 1, 0)
+		label.BackgroundTransparency = 1
+		label.TextStrokeTransparency = Config.UI.TextStrokeTransparency
+		label.TextScaled = false
+		label.TextSize = self.textSize
+		label.Font = Config.UI.Font
+		label.Parent = billboard
+
+		billboard.Parent = character
+	end
+
+	local formattedText = string.format(Config.Text.Format, timeLeft)
+	local color = self:getFFColor(timeLeft)
+
+	if label.Text ~= formattedText then
+		label.Text = formattedText
+	end
+	if label.TextColor3 ~= color then
+		label.TextColor3 = color
+	end
+	billboard.MaxDistance = self.maxDistance
+
+	self.billboards[character] = {
+		billboard = billboard,
+		label = label,
+	}
+end
+
+function FFBillboardRenderer:remove(character)
+	local data = self.billboards[character]
+	if data and data.billboard then
+		data.billboard:Destroy()
+	end
+	self.billboards[character] = nil
+	adorneeCache[character] = nil
+end
+
+function FFBillboardRenderer:setTextSize(size)
+	self.textSize = size
+	for _, data in pairs(self.billboards) do
+		if data.label then
+			data.label.TextSize = size
+		end
+	end
+end
+
+function FFBillboardRenderer:setMaxDistance(distance)
+	self.maxDistance = distance
+	for _, data in pairs(self.billboards) do
+		if data.billboard then
+			data.billboard.MaxDistance = distance
+		end
+	end
+end
+
+function FFBillboardRenderer:getBillboards()
+	return self.billboards
+end
+
+return FFBillboardRenderer
