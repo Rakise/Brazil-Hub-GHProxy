@@ -162,7 +162,7 @@ end
 local function getTrinketInfo(part)
     local material = part.Material
 
-    if material == Config.Materials.Slate and part:FindFirstChildOfClass("ParticleEmitter") then
+    if material == Config.Materials.Slate then
         return "Idol of the Forgotten"
     end
 
