@@ -82,7 +82,7 @@ local function safeRequire(url)
 end
 
 -- Load main-modules
-local FFDetector = safeRequire(BRAZIL_HUB_BASE_URL .. "FFHandler")
+local FFDetector = safeRequire(BRAZIL_HUB_BASE_URL .. "Modules/ForceField/Core/FFHandler/ForceFieldManager")
 local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
 local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
 local BetterLeaderboard = safeRequire(BRAZIL_HUB_BASE_URL .. "betterleaderboard")
