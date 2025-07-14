@@ -81,7 +81,7 @@ local function safeRequire(url)
     end
 end
 
--- Load game modules
+-- Load main-modules
 local FFDetector = safeRequire(BRAZIL_HUB_BASE_URL .. "FFHandler")
 local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
 local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
@@ -89,12 +89,18 @@ local BetterLeaderboard = safeRequire(BRAZIL_HUB_BASE_URL .. "betterleaderboard"
 local TrinketESP = safeRequire(BRAZIL_HUB_BASE_URL .. "trinket_esp_handler")
 local NoFog = safeRequire(BRAZIL_HUB_BASE_URL .. "NoFog")
 local Intent = safeRequire(BRAZIL_HUB_BASE_URL .. "Intent")
-local ConnectionManager = safeRequire(BRAZIL_HUB_BASE_URL .. "ConnectionManager")
-local connMgr = ConnectionManager and ConnectionManager.new() or nil
 local AutoBlock = safeRequire(BRAZIL_HUB_BASE_URL .. "auto_block")
 local TriggerMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "TriggerMonitor")
 local PerformanceMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "PerformanceMonitor")
+
+-- Load sub-modules
+local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
+
+-- Load util-modules
+local ConnectionManager = safeRequire(BRAZIL_HUB_BASE_URL .. "ConnectionManager")
 local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
+
+local connMgr = ConnectionManager and ConnectionManager.new() or nil
 
 -- Helper para instanciar módulos com segurança
 local function safeNew(module, name)
@@ -191,16 +197,7 @@ local function setupTabs(window)
     }
 end
 
--- ========================================
--- FOV CIRCLE MANAGEMENT
--- ========================================
-
 -- Load FOV Circle Manager module
-local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
-
--- ========================================
--- TRIGGER MONITORING (SPAWN TRIGGERS)
--- ========================================
 
 -- Initialize Trigger Monitor
 local triggerMonitor = TriggerMonitor and TriggerMonitor.new(connMgr) or nil
