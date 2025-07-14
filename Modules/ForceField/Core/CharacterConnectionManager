@@ -1,0 +1,62 @@
+-- CharacterConnections.lua
+-- Gerencia todas as conexões associadas a um personagem
+
+local ConnectionManager = loadstring(game:HttpGet('https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/ConnectionManager'))()
+
+local CharacterConnections = {}
+CharacterConnections.__index = CharacterConnections
+
+function CharacterConnections.new(character)
+	local self = setmetatable({}, CharacterConnections)
+	self.character = character
+	self._connMgr = ConnectionManager.new()
+	self._onFFAdded = nil
+	self._onCharacterRemoved = nil
+	self._onFFRemoved = nil
+	return self
+end
+
+-- Define callbacks externos
+function CharacterConnections:setHandlers(handlers)
+	self._onFFAdded = handlers.onFFAdded
+	self._onCharacterRemoved = handlers.onCharacterRemoved
+	self._onFFRemoved = handlers.onFFRemoved
+end
+
+-- Inicia escuta de eventos do personagem
+function CharacterConnections:watch()
+	local char = self.character
+
+	-- FF detectado manualmente
+	self._connMgr:add(char.ChildAdded:Connect(function(child)
+		if child:IsA("ForceField") and self._onFFAdded then
+			self._onFFAdded(child)
+		end
+	end))
+
+	-- Personagem removido
+	self._connMgr:add(char.AncestryChanged:Connect(function(_, parent)
+		if not parent and self._onCharacterRemoved then
+			self._onCharacterRemoved()
+		end
+	end))
+end
+
+-- Conecta FF individual
+function CharacterConnections:trackFF(ff)
+	if not ff or not ff:IsA("ForceField") then return end
+
+	local conn = ff.AncestryChanged:Connect(function(_, parent)
+		if not parent and self._onFFRemoved then
+			self._onFFRemoved(ff)
+		end
+	end)
+
+	self._connMgr:add(conn)
+end
+
+function CharacterConnections:disconnect()
+	self._connMgr:disconnectAll()
+end
+
+return CharacterConnections
