@@ -209,6 +209,7 @@ local triggerMonitor = TriggerMonitor and TriggerMonitor.new(connMgr) or nil
 local UICallbacks = {}
 
 -- FF Detector callbacks
+--[[
 function UICallbacks.onToggleFFDetector(enabled)
     if enabled then
         ModuleInstances.ffDetector:enable()
@@ -218,6 +219,7 @@ function UICallbacks.onToggleFFDetector(enabled)
         print("[FF Detector] Disabled")
     end
 end
+]]
 
 function UICallbacks.onBillboardDistanceChanged(value)
     ModuleInstances.ffDetector:setBillboardMaxDistance(value)
