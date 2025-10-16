@@ -426,9 +426,11 @@ local function createMainTabComponents(mainTab, fovManager)
     Tooltip = 'Detect and show countdown for player ForceField',
         Callback = UICallbacks.onToggleFFDetector
 })
+--[[
 if ffToggle.Value then
         UICallbacks.onToggleFFDetector(true)
 end
+]]
     utilsGroup:AddSlider('Billboard Max Distance', {
     Text = 'Billboard Max Distance',
         Default = CONFIG.FF_DETECTOR.DEFAULT_BILLBOARD_DISTANCE,
