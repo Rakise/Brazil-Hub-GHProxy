@@ -1,6 +1,6 @@
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
 
 --// Configuration
 local Config = {

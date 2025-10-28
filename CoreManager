@@ -53,7 +53,7 @@ end
 waitForLoaded()
 
 local REPO_BASE_URL = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
-local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/"
+local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
 
 -- Carrega LinoriaLib
 local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
@@ -822,5 +822,5 @@ end
 main()
 
 if queue_on_teleport and typeof(queue_on_teleport) == "function" then
-    queue_on_teleport('loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/CoreManager"))()')
+    queue_on_teleport('loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CoreManager"))()')
 end

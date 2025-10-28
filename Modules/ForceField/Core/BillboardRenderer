@@ -2,7 +2,7 @@
 -- Handles creation and updates for FF Billboard UI elements
 
 local Players = game:GetService("Players")
-local Config = loadstring(game:HttpGet('https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Modules/ForceField/Config/FFConfig'))()
+local Config = loadstring(game:HttpGet('https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/Modules/ForceField/Config/FFConfig'))()
 
 local FFBillboardRenderer = {}
 FFBillboardRenderer.__index = FFBillboardRenderer

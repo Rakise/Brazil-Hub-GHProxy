@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 -- External dependency for connection management
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
 
 -- Constants and cached values
 local DEFAULT_BLOCK_RADIUS = 200

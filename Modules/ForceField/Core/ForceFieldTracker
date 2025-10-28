@@ -2,7 +2,7 @@
 -- Gerencia rastreamento e dados de ForceFields nos personagens
 
 local Players = game:GetService("Players")
-local Config = loadstring(game:HttpGet('https://raw.githubusercontent.com/Kaic-dev/Brazil-Hub/refs/heads/main/Modules/ForceField/Config/FFConfig'))()
+local Config = loadstring(game:HttpGet('https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/Modules/ForceField/Config/FFConfig'))()
 
 local getTime = tick
 local mathMax = math.max
