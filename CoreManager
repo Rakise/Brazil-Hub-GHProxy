@@ -879,14 +879,6 @@ local function setupManagers(uiSettingsTab, fovManager)
     SaveManager:BuildConfigSection(uiSettingsTab)
     ThemeManager:ApplyToTab(uiSettingsTab) 
     
-    -- **FIX:** Apply Puppy theme again *after* ThemeManager:ApplyToTab 
-    -- and *after* loading autoload config to ensure it overrides.
-    applyPuppyTheme() 
-    
-    -- Load auto-load configuration (might override puppy theme if not reapplied)
-    SaveManager:LoadAutoloadConfig()
-    
-    -- **FIX:** Apply Puppy theme one last time to be absolutely sure
     applyPuppyTheme() 
 
     
