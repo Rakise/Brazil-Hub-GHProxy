@@ -1,28 +1,3 @@
--- Puppy Hub Script with LinoriaLib UI Integration
--- Refactored for better maintainability and organization
-
---[[
-    Main script that integrates multiple game enhancement modules:
-    - Player ESP (Class Colors, Held Item)
-    - Trinket ESP (Name only)
-    - Auto-Aim system
-    - Better Leaderboard
-    - Observe UI
-    - Chat Log
-    - Spell Percentage
-    - Walkspeed Control
-    - Fog Control
-    - Trans Trail
-    - Sanity Filter
-    - Combo Counter
-    
-    Uses LinoriaLib for UI management with theme and save support.
-]]
-
--- ========================================
--- DEPENDENCIES AND LIBRARY SETUP
--- ========================================
-
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting") -- Added for Fog/Sanity
 local TextChatService = game:GetService("TextChatService") -- Added for Chat Log
@@ -34,10 +9,8 @@ local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitFor
 
 local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
 local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
-print("aooo")
 -- Carrega LinoriaLib
 local Library = loadstring(game:HttpGet(RepoBaseURL .. 'Library.lua'))() -- Use HTTPS for GitHub Raw
-print("tiao")
 -- Load LinoriaLib components
 local ThemeManager = loadstring(game:HttpGet(RepoBaseURL .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(RepoBaseURL .. 'addons/SaveManager.lua'))()
@@ -59,7 +32,7 @@ local function safeRequire(url)
     end
 end
 
-
+warn("ao")
 -- Load existing main-modules (FFDetector commented out)
 local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
 local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
