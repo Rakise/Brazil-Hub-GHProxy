@@ -383,7 +383,6 @@ function UICallbacks.onToggleWalkspeedOverride(enabled)
     local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if enabled then
         if humanoid then
-            humanoid.WalkSpeed = features.Walkspeed -- Set initial speed
             -- Connect if not already connected
             if not walkspeedConnection then
                  walkspeedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
