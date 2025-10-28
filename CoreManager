@@ -15,42 +15,9 @@
 -- DEPENDENCIES AND LIBRARY SETUP
 -- ========================================
 
-if getgenv().BrazilHubLoaded then return end
-getgenv().BrazilHubLoaded = true
-
-local function waitForLoaded()
-    -- Aguarda o carregamento do jogo
-    if not game:IsLoaded() then
-        print("[waitForLoaded] Aguardando game:IsLoaded()...")
-        game.Loaded:Wait()
-    end
-
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    -- Aguarda o LocalPlayer existir
-    while not LocalPlayer do
-        print("[waitForLoaded] Aguardando Players.LocalPlayer...")
-        Players.PlayerAdded:Wait()
-        LocalPlayer = Players.LocalPlayer
-    end
-    -- Aguarda o PlayerGui existir
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    local tries = 0
-    while not playerGui and tries < 10 do
-        print("[waitForLoaded] Aguardando PlayerGui... tentativa " .. tostring(tries+1))
-        playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-        if not playerGui then
-            playerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
-        end
-        tries = tries + 1
-    end
-    if not playerGui then
-        warn("[waitForLoaded] PlayerGui não encontrado após várias tentativas!")
-    end
-    return LocalPlayer, playerGui
-end
-
-waitForLoaded()
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
 
 local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
 local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
