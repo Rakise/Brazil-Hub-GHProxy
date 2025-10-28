@@ -4,7 +4,7 @@
 
 -- Load sub-modules using loadstring
 local PlayerData = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/Utils/PlayerData"))()
-local ForceField = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/Utils/ForceField"))()
+-- local ForceField = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/Utils/ForceField"))()
 local ToolManager = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/Utils/ToolManager"))()
 local BillboardUtils = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/Utils/BillboardUtils"))()
 
@@ -18,7 +18,7 @@ function UtilsService.new()
     
     -- Initialize sub-modules
     self.playerData = PlayerData.new()
-    self.forceField = ForceField.new()
+    -- self.forceField = ForceField.new()
     self.toolManager = ToolManager.new()
     self.billboardUtils = BillboardUtils.new()
     
@@ -63,33 +63,33 @@ function UtilsService:getPlayerHealthDisplay(player)
 end
 
 --// ForceField Delegation Methods
-function UtilsService:hasForceField(player)
-    return self.forceField:hasForceField(player)
-end
-
-function UtilsService:getForceFieldTimeLeft(player)
-    return self.forceField:getTimeLeft(player)
-end
-
-function UtilsService:getForceFieldColor(timeLeft)
-    return self.forceField:getColor(timeLeft)
-end
-
-function UtilsService:getForceFieldData(player)
-    return self.forceField:getData(player)
-end
-
-function UtilsService:getForceFieldStatus(player)
-    return self.forceField:getStatus(player)
-end
-
-function UtilsService:isForceFieldActive(player)
-    return self.forceField:isActive(player)
-end
-
-function UtilsService:getForceFieldTimeRemaining(player)
-    return self.forceField:getTimeRemaining(player)
-end
+-- function UtilsService:hasForceField(player)
+--     return self.forceField:hasForceField(player)
+-- end
+-- 
+-- function UtilsService:getForceFieldTimeLeft(player)
+--     return self.forceField:getTimeLeft(player)
+-- end
+-- 
+-- function UtilsService:getForceFieldColor(timeLeft)
+--     return self.forceField:getColor(timeLeft)
+-- end
+-- 
+-- function UtilsService:getForceFieldData(player)
+--     return self.forceField:getData(player)
+-- end
+-- 
+-- function UtilsService:getForceFieldStatus(player)
+--     return self.forceField:getStatus(player)
+-- end
+-- 
+-- function UtilsService:isForceFieldActive(player)
+--     return self.forceField:isActive(player)
+-- end
+-- 
+-- function UtilsService:getForceFieldTimeRemaining(player)
+--     return self.forceField:getTimeRemaining(player)
+-- end
 
 --// ToolManager Delegation Methods
 function UtilsService:getPlayerTools(player)
@@ -134,4 +134,4 @@ function UtilsService:createUIListLayout(parent, layoutConfig)
 end
 
 --// Main Export
-return UtilsService 
+return UtilsService

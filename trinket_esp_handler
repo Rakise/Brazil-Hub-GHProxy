@@ -36,6 +36,7 @@ local Config = {
             ["Mysterious Artifact"] = Color3.new(0.2, 0.8, 0.2),
             ["Phoenix Flower"] = Color3.new(0, 0.207843, 0.392157),
             ["Rift Gem"] = Color3.new(1, 0.223529, 0.768627),
+            ["Candy"] = Color3.new(1, 0.75, 0.8), -- Example color for Candy
         },
     },
     
@@ -64,15 +65,13 @@ local Config = {
         ["5196782997"] = { name = "Old Ring" },
         ["5196776695"] = { name = "Ring" },
         ["5204453430"] = { name = "Scroll" },
-        -- Gems são identificadas por cor, não por MeshID
-        -- ["2877143560"] = { name = "Ruby" },
-        -- ["2877143592"] = { name = "Sapphire" },
-        -- ["2877143624"] = { name = "Emerald" },
+        -- Gems are identified by color, not by MeshID
         ["2520762076"] = { name = "Howler Friend" },
         -- Khei Only
         ["4027112893"] = { name = "Bound Book"},
         -- Event Only
         ["122777605672182"] = { name = "Marshmallow on a Stick"},
+        ["4103271893"] = { name = "Candy" }, -- Updated Candy ID
     },
     
     ColorSequences = {
@@ -112,8 +111,8 @@ local function cleanMeshId(id)
     -- Remove rbxassetid:// se presente
     str = str:gsub("rbxassetid://", "")
     -- Debug: print para verificar se os IDs estão sendo limpos corretamente
-    print("Original MeshID:", id)
-    print("Cleaned MeshID:", str)
+    -- print("Original MeshID:", id)
+    -- print("Cleaned MeshID:", str)
     return str
 end
 
@@ -127,14 +126,17 @@ local function isTrinket(obj)
     end
     
     -- Verificação otimizada: só verifica se é Part/MeshPart primeiro
-    if objType ~= "Part" and objType ~= "MeshPart" then
+    if objType ~= "Part" and objType ~= "MeshPart" and objType ~= "UnionOperation" then -- Added UnionOperation
         trinketCache[obj] = false
         return false
     end
     
     local hasID = obj:FindFirstChild("ID") ~= nil
-    trinketCache[obj] = hasID
-    return hasID
+    local hasClick = obj:FindFirstChildWhichIsA("ClickDetector", true) ~= nil -- Added ClickDetector check
+    
+    local result = hasID and hasClick
+    trinketCache[obj] = result
+    return result
 end
 
 local function identifyAttachmentTrinket(attachment)
@@ -159,44 +161,8 @@ local function identifyAttachmentTrinket(attachment)
     end
 end
 
+-- Function to get trinket name, prioritizing mesh ID lookup
 local function getTrinketInfo(part)
-    local material = part.Material
-
-    if material == Config.Materials.Slate then
-        return "Idol of the Forgotten"
-    end
-
-    if material == Config.Materials.Glass and part:FindFirstChildOfClass("SpecialMesh") then
-        return "Opal"
-    end
-
-    if material == Config.Materials.Neon then
-        if part.BrickColor == BrickColor.new("Gold") then
-            return "Lost Sunshine"
-        end
-        return part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
-    end
-
-    if part.Transparency == 1 then
-        local hasOrb, hasLight, hasSphere = false, false, false
-        for _, child in ipairs(part:GetChildren()) do
-            if child.ClassName == "ParticleEmitter" and child.Name == "OrbParticle" then
-                hasOrb = true
-            elseif child.ClassName == "PointLight" then
-                hasLight = true
-            elseif child.ClassName == "SpecialMesh" and child.MeshType == Config.MeshTypes.Sphere then
-                hasSphere = true
-            elseif child.ClassName == "Attachment" then
-                local result = identifyAttachmentTrinket(child)
-                if result then return result end
-            end
-            if hasOrb and hasLight and hasSphere then break end
-        end
-        if hasOrb and hasLight and hasSphere then
-            return "???"
-        end
-    end
-
     local meshId
     if part:IsA("MeshPart") then
         meshId = part.MeshId
@@ -208,64 +174,56 @@ local function getTrinketInfo(part)
     if meshId and meshId ~= "" then
         local cleanId = cleanMeshId(meshId)
         local trinketData = Config.MeshIDs[cleanId]
+        if trinketData and trinketData.name then
+            return trinketData.name -- Return name directly from MeshIDs table if found
+        end
         
-        -- Identificação especial para gemas que compartilham o mesmo MeshID
+        -- Special Gem Handling (if MeshID matches gem range)
         if cleanId == "2877143560" or cleanId == "2877143592" or cleanId == "2877143624" then
-            local brickColor = part.BrickColor
+             local brickColor = part.BrickColor
             local colorName = brickColor.Name
             local colorValue = brickColor.Color
             
-            -- Debug para verificar as cores
-            print("=== GEM DETECTION DEBUG ===")
-            print("MeshID:", meshId)
-            print("CleanID:", cleanId)
-            print("BrickColor Name:", colorName)
-            print("BrickColor RGB:", colorValue.R, colorValue.G, colorValue.B)
-            print("Is Red (Ruby):", colorName == "Really red" or colorName == "Bright red" or (colorValue.R > 0.8 and colorValue.G < 0.3 and colorValue.B < 0.3))
-            print("Is Blue (Sapphire):", colorName == "Bright blue" or colorName == "Cyan" or "Lapis" or (colorValue.R < 0.3 and colorValue.G < 0.3 and colorValue.B > 0.8))
-            print("Is Green (Emerald):", colorName == "Bright green" or colorName == "Lime green" or (colorValue.R < 0.3 and colorValue.G > 0.8 and colorValue.B < 0.3))
-            print("Is White (Diamond):", colorName == "White" or colorName == "Institutional white" or (colorValue.R > 0.9 and colorValue.G > 0.9 and colorValue.B > 0.9))
-            print("========================")
-            
-            -- Identificação por cor (nome e valor RGB)
-            -- Verificar primeiro por nome exato, depois por RGB
-            if colorName == "Really red" or colorName == "Bright red" then
-                print("-> Detected as Ruby (by name)")
+            if colorName == "Really red" or colorName == "Bright red" or (colorValue.R > 0.7 and colorValue.G < 0.2 and colorValue.B < 0.2) then
                 return "Ruby"
-            elseif colorName == "Bright blue" or colorName == "Cyan" or colorName == "Lapis" then
-                print("-> Detected as Sapphire (by name)")
+            elseif colorName == "Bright blue" or colorName == "Cyan" or colorName == "Lapis" or (colorValue.R < 0.2 and colorValue.G < 0.2 and colorValue.B > 0.7) then
                 return "Sapphire"
-            elseif colorName == "Bright green" or colorName == "Lime green" then
-                print("-> Detected as Emerald (by name)")
+            elseif colorName == "Bright green" or colorName == "Lime green" or (colorValue.R < 0.2 and colorValue.G > 0.7 and colorValue.B < 0.2) then
                 return "Emerald"
-            elseif colorName == "White" or colorName == "Institutional white" then
-                print("-> Detected as Diamond (by name)")
+            elseif colorName == "White" or colorName == "Institutional white" or (colorValue.R > 0.8 and colorValue.G > 0.8 and colorValue.B > 0.8) then
                 return "Diamond"
-            -- Se não encontrou por nome, verificar por RGB
-            elseif colorValue.R > 0.7 and colorValue.G < 0.2 and colorValue.B < 0.2 then
-                print("-> Detected as Ruby (by RGB)")
-                return "Ruby"
-            elseif colorValue.R < 0.2 and colorValue.G < 0.2 and colorValue.B > 0.7 then
-                print("-> Detected as Sapphire (by RGB)")
-                return "Sapphire"
-            elseif colorValue.R < 0.2 and colorValue.G > 0.7 and colorValue.B < 0.2 then
-                print("-> Detected as Emerald (by RGB)")
-                return "Emerald"
-            elseif colorValue.R > 0.8 and colorValue.G > 0.8 and colorValue.B > 0.8 then
-                print("-> Detected as Diamond (by RGB)")
-                return "Diamond"
-            else
-                print("-> Fallback to Rift Gem")
-                return "Rift Gem"
-            end
+             else
+                return "Rift Gem" -- Fallback for gems if color doesn't match known ones
+             end
         end
-        
-        -- Para outros trinkets, usa a lógica normal
-        return trinketData and trinketData.name or meshId
     end
 
-    return "Unknown"
+    -- If no Mesh ID match, proceed with other checks
+    local material = part.Material
+    if material == Config.Materials.Slate then return "Idol of the Forgotten" end
+    if material == Config.Materials.Glass and part:FindFirstChildOfClass("SpecialMesh") then return "Opal" end
+    if material == Config.Materials.Neon then
+        if part.BrickColor == BrickColor.new("Gold") then return "Lost Sunshine" end
+        return part:FindFirstChildOfClass("PointLight") and "Amulet of the White King" or "Nightstone"
+    end
+
+    if part.Transparency == 1 then
+        for _, child in ipairs(part:GetChildren()) do
+            if child.ClassName == "Attachment" then
+                local result = identifyAttachmentTrinket(child)
+                if result then return result end
+            end
+        end
+        -- Check for '???' particle signature if no attachment trinket found
+        local hasOrb = part:FindFirstChild("OrbParticle") and part.OrbParticle:IsA("ParticleEmitter")
+        local hasLight = part:FindFirstChildOfClass("PointLight")
+        local hasSphere = part:FindFirstChildOfClass("SpecialMesh") and part.SpecialMesh.MeshType == Config.MeshTypes.Sphere
+        if hasOrb and hasLight and hasSphere then return "???" end
+    end
+
+    return "Unknown" -- Default return if no identification matches
 end
+
 
 local TrinketESP = {}
 TrinketESP.__index = TrinketESP
@@ -286,6 +244,7 @@ end
 -- Função otimizada para criar billboard com cor definida pelo próprio trinket
 function TrinketESP:createBillboard(trinket, trinketName)
     if self.espBillboards[trinket] then return end
+    if trinketName == "Unknown" then return end -- Don't create for unknowns
 
     local billboard = Instance_new("BillboardGui")
     billboard.Name = "TrinketESP"
@@ -335,7 +294,7 @@ function TrinketESP:processQueue()
     
     self._processingQueue = true
     
-    -- Processa até 5 trinkets por frame para evitar lag
+    -- Processa até X trinkets por frame para evitar lag
     local maxPerFrame = Config.ESP.MaxProcessPerFrame
     local processed = 0
     
@@ -346,7 +305,9 @@ function TrinketESP:processQueue()
         if trinket and trinket.Parent and not self._processedObjects[trinket] then
             self._processedObjects[trinket] = true
             local trinketName = getTrinketInfo(trinket)
-            self:createBillboard(trinket, trinketName)
+            if trinketName ~= "Unknown" then -- Only create if name is known
+                self:createBillboard(trinket, trinketName)
+            end
         end
         
         processed = processed + 1
@@ -356,8 +317,8 @@ function TrinketESP:processQueue()
     
     -- Se ainda há trinkets na fila, agenda próximo processamento
     if #self._pendingTrinkets > 0 then
-        RunService.Heartbeat:Wait()
-        self:processQueue()
+        -- Use task.defer instead of RunService.Heartbeat:Wait() for better integration
+        task.defer(function() self:processQueue() end)
     end
 end
 
@@ -375,7 +336,7 @@ function TrinketESP:onChildAdded(obj)
     
     -- Inicia processamento se não está rodando
     if not self._processingQueue then
-        self:processQueue()
+        task.defer(function() self:processQueue() end) -- Use task.defer
     end
 end
 
@@ -398,7 +359,7 @@ function TrinketESP:scanExistingTrinkets()
     local workspaceChildren = Workspace:GetChildren()
     local trinkets = {}
     
-    -- Primeiro pass: identifica todos os trinkets
+    -- Primeiro pass: identifica todos os trinkets potenciais
     for i = 1, #workspaceChildren do
         local obj = workspaceChildren[i]
         if isTrinket(obj) and not self._processedObjects[obj] then
@@ -411,8 +372,8 @@ function TrinketESP:scanExistingTrinkets()
         table.insert(self._pendingTrinkets, trinkets[i])
     end
     
-    if #self._pendingTrinkets > 0 then
-        self:processQueue()
+    if #self._pendingTrinkets > 0 and not self._processingQueue then
+        task.defer(function() self:processQueue() end) -- Use task.defer
     end
 end
 

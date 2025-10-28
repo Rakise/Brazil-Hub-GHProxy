@@ -1,12 +1,20 @@
--- FF Detector Script with LinoriaLib UI Integration
+-- Puppy Hub Script with LinoriaLib UI Integration
 -- Refactored for better maintainability and organization
 
 --[[
     Main script that integrates multiple game enhancement modules:
-    - FF (ForceField) Detection
-    - Player ESP
+    - Player ESP (Class Colors, Held Item)
+    - Trinket ESP (Name only)
     - Auto-Aim system
     - Better Leaderboard
+    - Observe UI
+    - Chat Log
+    - Spell Percentage
+    - Walkspeed Control
+    - Fog Control
+    - Trans Trail
+    - Sanity Filter
+    - Combo Counter
     
     Uses LinoriaLib for UI management with theme and save support.
 ]]
@@ -16,44 +24,59 @@
 -- ========================================
 
 local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting") -- Added for Fog/Sanity
+local TextChatService = game:GetService("TextChatService") -- Added for Chat Log
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
-local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui") -- Ensure playerGui exists
 
 local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
 local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
 
 -- Carrega LinoriaLib
-local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
+local Library = loadstring(game:HttpGet(RepoBaseURL .. 'Library.lua'))() -- Use HTTPS for GitHub Raw
 
 -- Load LinoriaLib components
-local ThemeManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/ThemeManager.lua'))()
-local SaveManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/SaveManager.lua'))()
+local ThemeManager = loadstring(game:HttpGet(RepoBaseURL .. 'addons/ThemeManager.lua'))()
+local SaveManager = loadstring(game:HttpGet(RepoBaseURL .. 'addons/SaveManager.lua'))()
 
--- Safe module loading with pcall to prevent script breakage if any module fails
+
+-- Safe module loading with pcall
 local function safeRequire(url)
     local ok, result = pcall(function()
-        return loadstring(game:HttpGet(url))()
+        -- Use HTTPS for GitHub Raw URLs
+        local correctedUrl = url:gsub("http://", "https://") 
+        return loadstring(game:HttpGet(correctedUrl))()
     end)
     if ok then
         return result
     else
-        warn("[BrazilHub] Module load error:", url)
+        warn("[Puppy Hub] Module load error:", url)
         warn("error:", tostring(result))
         return nil
     end
 end
 
--- Load main-modules
-local FFDetector = safeRequire(BRAZIL_HUB_BASE_URL .. "Modules/ForceField/Core/FFHandler/ForceFieldManager")
+
+-- Load existing main-modules (FFDetector commented out)
 local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
 local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
 local BetterLeaderboard = safeRequire(BRAZIL_HUB_BASE_URL .. "betterleaderboard")
 local TrinketESP = safeRequire(BRAZIL_HUB_BASE_URL .. "trinket_esp_handler")
-local NoFog = safeRequire(BRAZIL_HUB_BASE_URL .. "NoFog")
 local Intent = safeRequire(BRAZIL_HUB_BASE_URL .. "Intent")
 local AutoBlock = safeRequire(BRAZIL_HUB_BASE_URL .. "auto_block")
 local TriggerMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "TriggerMonitor")
 local PerformanceMonitor = safeRequire(BRAZIL_HUB_BASE_URL .. "PerformanceMonitor")
+local Indicator = safeRequire(BRAZIL_HUB_BASE_URL .. "Indicator") -- For Damage Indicators
+
+-- Load new modules
+local ObserveUI = safeRequire(BRAZIL_HUB_BASE_URL .. "ObserveUI")
+local ChatLog = safeRequire(BRAZIL_HUB_BASE_URL .. "ChatLog")
+local SpellPercentage = safeRequire(BRAZIL_HUB_BASE_URL .. "SpellPercentage")
+local TransTrail = safeRequire(BRAZIL_HUB_BASE_URL .. "TransTrail")
+local ComboCounter = safeRequire(BRAZIL_HUB_BASE_URL .. "ComboCounter")
 
 -- Load sub-modules
 local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
@@ -65,29 +88,38 @@ local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
 local connMgr = ConnectionManager and ConnectionManager.new() or nil
 
 -- Helper para instanciar módulos com segurança
-local function safeNew(module, name)
+local function safeNew(module, name, ...) -- Added ... for arguments like playerGui
     if module and type(module.new) == "function" then
-        local ok, inst = pcall(function() return module.new() end)
+        local ok, inst = pcall(module.new, ...) -- Pass arguments
         if ok then
             return inst
         else
-            warn("[BrazilHub] Erro ao instanciar módulo:", name, inst)
+            warn("[Puppy Hub] Erro ao instanciar módulo:", name, inst)
             return nil
         end
     else
-        warn("[BrazilHub] Módulo não carregado ou não possui .new():", name)
+        warn("[Puppy Hub] Módulo não carregado ou não possui .new():", name)
         return nil
     end
 end
 
+
+-- Instantiate modules
 local ModuleInstances = {
-    ffDetector = safeNew(FFDetector, "FFDetector"),
     playerEsp = safeNew(PlayerESP, "PlayerESP"),
     autoAim = safeNew(AutoAim, "AutoAim"),
     betterLeaderboard = safeNew(BetterLeaderboard, "BetterLeaderboard"),
     trinketEsp = safeNew(TrinketESP, "TrinketESP"),
-    autoBlock = safeNew(AutoBlock, "AutoBlock")
+    autoBlock = safeNew(AutoBlock, "AutoBlock"),
+    indicator = safeNew(Indicator, "Indicator"),
+    -- New module instances
+    observeUI = safeNew(ObserveUI, "ObserveUI", playerGui), -- Pass playerGui
+    chatLog = safeNew(ChatLog, "ChatLog", playerGui),       -- Pass playerGui
+    spellPercentage = safeNew(SpellPercentage, "SpellPercentage", playerGui), -- Pass playerGui
+    transTrail = safeNew(TransTrail, "TransTrail"),
+    comboCounter = safeNew(ComboCounter, "ComboCounter", playerGui) -- Pass playerGui
 }
+
 
 -- Verifica se todos os módulos principais foram carregados corretamente
 local failedModules = {}
@@ -96,12 +128,43 @@ for name, inst in pairs(ModuleInstances) do
         table.insert(failedModules, name)
     end
 end
+-- Also check modules loaded directly (like TriggerMonitor, etc.)
+if not TriggerMonitor then table.insert(failedModules, "TriggerMonitor") end
+if not PerformanceMonitor then table.insert(failedModules, "PerformanceMonitor") end
+if not FOVCircleManager then table.insert(failedModules, "FOVCircleManager") end
+if not Intent then table.insert(failedModules, "Intent") end
+
 
 if #failedModules == 0 then
-    print("[BrazilHub] All modules loaded successfully.")
+    print("[Puppy Hub] All modules loaded successfully.")
 else
-    warn("[BrazilHub] Some modules failed to load:", table.concat(failedModules, ", "))
+    warn("[Puppy Hub] Some modules failed to load:", table.concat(failedModules, ", "))
 end
+
+-- ========================================
+-- GLOBAL FEATURES STATE (From PuppyAdmin)
+-- ========================================
+-- This holds the toggle state for your admin features
+local features = {
+	TrinketEsp = false,
+	PlayerEsp = true, -- Enable Player ESP by default
+	NoFall = false, 
+	Configurations = false,
+	ShowObserveGui = true, 
+	ShowChatLogGui = true, 
+	ArtifactNotifier = false, 
+	ShowSpellPercentages = false, 
+	ShowComboCounter = true, 
+	TransTrail = false, 
+	
+	-- NEW UI Features (flags)
+	SanityFilter = false,
+	FogEnd = 100000,
+	FogStart = 99999,
+	Walkspeed = 16,
+	WalkspeedOverride = false, 
+}
+
 
 -- ========================================
 -- MODULE INSTANCES AND CONFIGURATION
@@ -117,18 +180,15 @@ local CONFIG = {
         DEFAULT_STUDS_BEHIND = {min = 20, max = 30}
     },
     FOV_CIRCLE = {
-        DEFAULT_COLOR = Color3.fromRGB(0, 255, 128),
+        DEFAULT_COLOR = Color3.fromRGB(255, 182, 193), -- Puppy Pink
         STROKE_THICKNESS = 2,
         TRANSPARENCY = 0.3
     },
     PLAYER_ESP = {
         DEFAULT_TEXT_SIZE = 14,
-        DEFAULT_TEXT_COLOR = Color3.new(1, 1, 1)
+        DEFAULT_TEXT_COLOR = Color3.new(1, 1, 1) -- White (colors applied via RichText)
     },
-    FF_DETECTOR = {
-        DEFAULT_BILLBOARD_DISTANCE = 125,
-        DEFAULT_BILLBOARD_TEXT_SIZE = 18
-    }
+    -- FF_DETECTOR config removed
 }
 
 -- Function to update PlayerESPHandler with current config
@@ -144,7 +204,7 @@ end
 
 local function createMainWindow()
     return Library:CreateWindow({
-        Title = '[Brazil Hub]',
+        Title = '[Puppy Hub] 🐾', -- Updated Title
     Center = true,
     AutoShow = true,
     TabPadding = 8,
@@ -154,12 +214,16 @@ end
 
 local function setupTabs(window)
     return {
-        Main = window:AddTab('Main'),
+        -- Main = window:AddTab('Main'),
+        Lighting = window:AddTab('Lighting'), -- New Tab
+        Visuals = window:AddTab('Visuals'), -- New Tab
+        Combat = window:AddTab('Combat'), -- New Tab
+        Movement = window:AddTab('Movement'), -- New Tab
+        Misc = window:AddTab('Misc'), -- New Tab for extras
         UISettings = window:AddTab('UI Settings'),
     }
 end
 
--- Load FOV Circle Manager module
 
 -- Initialize Trigger Monitor
 local triggerMonitor = TriggerMonitor and TriggerMonitor.new(connMgr) or nil
@@ -170,404 +234,322 @@ local triggerMonitor = TriggerMonitor and TriggerMonitor.new(connMgr) or nil
 
 local UICallbacks = {}
 
--- FF Detector callbacks
---[[
-function UICallbacks.onToggleFFDetector(enabled)
-    if enabled then
-        ModuleInstances.ffDetector:enable()
-        print("[FF Detector] Enabled")
-    else
-        ModuleInstances.ffDetector:disable()
-        print("[FF Detector] Disabled")
-    end
-end
-]]
-
-function UICallbacks.onBillboardDistanceChanged(value)
-    ModuleInstances.ffDetector:setBillboardMaxDistance(value)
-end
-
-function UICallbacks.onBillboardTextSizeChanged(value)
-    ModuleInstances.ffDetector:setBillboardTextSize(value)
-end
+-- FF Detector callbacks removed
 
 -- Player ESP callbacks
 function UICallbacks.onTogglePlayerESP(enabled)
-    if enabled then
-        ModuleInstances.playerEsp:enable()
-        print("[Player ESP] Enabled")
-    else
-        ModuleInstances.playerEsp:disable()
-        print("[Player ESP] Disabled")
+    features.PlayerEsp = enabled -- Update global state
+    if ModuleInstances.playerEsp then
+        if enabled then
+            ModuleInstances.playerEsp:enable()
+            print("[Player ESP] Enabled")
+        else
+            ModuleInstances.playerEsp:disable()
+            print("[Player ESP] Disabled")
+        end
     end
 end
 
 function UICallbacks.onPlayerESPTextSizeChanged(value)
-    ModuleInstances.playerEsp:setTextSize(value)
+    if ModuleInstances.playerEsp then ModuleInstances.playerEsp:setTextSize(value) end
 end
 
 function UICallbacks.onPlayerESPTextColorChanged(value)
-    ModuleInstances.playerEsp:setTextColor(value)
+     if ModuleInstances.playerEsp then ModuleInstances.playerEsp:setTextColor(value) end
 end
 
 -- Auto-Aim callbacks
 function UICallbacks.onToggleAutoAim(enabled)
-    if enabled then
-        ModuleInstances.autoAim:enable()
-        print("[Auto-Aim] Enabled")
-    else
-        ModuleInstances.autoAim:disable()
-        print("[Auto-Aim] Disabled")
+    if ModuleInstances.autoAim then
+        if enabled then
+            ModuleInstances.autoAim:enable()
+            print("[Auto-Aim] Enabled")
+        else
+            ModuleInstances.autoAim:disable()
+            print("[Auto-Aim] Disabled")
+        end
     end
 end
 
 function UICallbacks.onAutoAimFOVChanged(value)
-    ModuleInstances.autoAim:setFOV(value)
+    if ModuleInstances.autoAim then ModuleInstances.autoAim:setFOV(value) end
 end
 
 function UICallbacks.onAutoAimToolsChanged(selectedTools)
-    ModuleInstances.autoAim:setTools(selectedTools)
+     if ModuleInstances.autoAim then ModuleInstances.autoAim:setTools(selectedTools) end
 end
 
 function UICallbacks.onStudsBehindMinChanged(value)
     CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min = value
-    ModuleInstances.autoAim:setStudsBehindRange(
-        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, 
-        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
-    )
+    if ModuleInstances.autoAim then
+        ModuleInstances.autoAim:setStudsBehindRange(
+            CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, 
+            CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
+        )
+    end
 end
 
 function UICallbacks.onStudsBehindMaxChanged(value)
     CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max = value
-    ModuleInstances.autoAim:setStudsBehindRange(
-        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, 
-        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
-    )
+     if ModuleInstances.autoAim then
+        ModuleInstances.autoAim:setStudsBehindRange(
+            CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, 
+            CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
+        )
+    end
 end
 
 -- Better Leaderboard callbacks
 function UICallbacks.onToggleBetterLeaderboard(enabled)
-    if enabled then
-        ModuleInstances.betterLeaderboard:enable()
-        print("[Better Leaderboard] Enabled")
-    else
-        ModuleInstances.betterLeaderboard:disable()
-        print("[Better Leaderboard] Disabled")
+    if ModuleInstances.betterLeaderboard then
+        if enabled then
+            ModuleInstances.betterLeaderboard:enable()
+            print("[Better Leaderboard] Enabled")
+        else
+            ModuleInstances.betterLeaderboard:disable()
+            print("[Better Leaderboard] Disabled")
+        end
     end
 end
 
 -- Trinket ESP callbacks
 function UICallbacks.onToggleTrinketESP(enabled)
-    if enabled then
-        ModuleInstances.trinketEsp:enable()
-        print("[Trinket ESP] Enabled")
-    else
-        ModuleInstances.trinketEsp:disable()
-        print("[Trinket ESP] Disabled")
+    features.TrinketEsp = enabled -- Update global state
+     if ModuleInstances.trinketEsp then
+        if enabled then
+            ModuleInstances.trinketEsp:enable()
+            print("[Trinket ESP] Enabled")
+        else
+            ModuleInstances.trinketEsp:disable()
+            print("[Trinket ESP] Disabled")
+        end
     end
 end
 
--- NoFog callbacks
-function UICallbacks.onToggleNoFog(enabled)
-    if enabled then
-        NoFog:enable()
-        print("[NoFog] Enabled")
-    else
-        NoFog:disable()
-        print("[NoFog] Disabled")
-    end
-end
 
 -- Intent Billboard toggle
 function UICallbacks.onToggleIntentBillboard(enabled)
-    if enabled then
-        Intent.enable()
-    else
-        Intent.disable()
+    if Intent then
+        if enabled then
+            Intent.enable()
+        else
+            Intent.disable()
+        end
     end
 end
 
 -- AutoBlock callbacks
-function UICallbacks.onToggleAutoBlockGrapple(enabled)
-    if enabled then
-        ModuleInstances.autoBlock:enable()
-        print("[AutoBlock Grapple] Enabled")
-    else
-        ModuleInstances.autoBlock:disable()
-        print("[AutoBlock Grapple] Disabled")
+function UICallbacks.onToggleAutoBlock(enabled)
+    if ModuleInstances.autoBlock then
+        if enabled then
+            ModuleInstances.autoBlock:enable()
+            print("[AutoBlock] Enabled")
+        else
+            ModuleInstances.autoBlock:disable()
+            print("[AutoBlock] Disabled")
+        end
     end
 end
+
+
+-- Observe UI Callback
+function UICallbacks.onToggleObserveUI(enabled)
+    features.ShowObserveGui = enabled -- Update global state
+    if ModuleInstances.observeUI then
+        if enabled then ModuleInstances.observeUI:enable() else ModuleInstances.observeUI:disable() end
+    end
+end
+
+-- Chat Log Callback
+function UICallbacks.onToggleChatLogUI(enabled)
+    features.ShowChatLogGui = enabled -- Update global state
+     if ModuleInstances.chatLog then
+        if enabled then ModuleInstances.chatLog:enable() else ModuleInstances.chatLog:disable() end
+    end
+end
+
+-- Spell Percentage Callback
+function UICallbacks.onToggleSpellPercentage(enabled)
+    features.ShowSpellPercentages = enabled -- Update global state
+     if ModuleInstances.spellPercentage then
+        if enabled then ModuleInstances.spellPercentage:enable() else ModuleInstances.spellPercentage:disable() end
+    end
+end
+
+-- Walkspeed Callbacks
+local walkspeedConnection = nil
+function UICallbacks.onToggleWalkspeedOverride(enabled)
+    features.WalkspeedOverride = enabled -- Update global state
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if enabled then
+        if humanoid then
+            humanoid.WalkSpeed = features.Walkspeed -- Set initial speed
+            -- Connect if not already connected
+            if not walkspeedConnection then
+                 walkspeedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
+                    if features.WalkspeedOverride and humanoid then -- Double check flag and humanoid
+                        humanoid.WalkSpeed = features.Walkspeed
+                    end
+                 end)
+                 connMgr:add(walkspeedConnection) -- Manage connection
+            end
+        end
+        print("[Walkspeed] Override Enabled: " .. features.Walkspeed)
+    else
+        -- Disconnect
+        if walkspeedConnection then
+            walkspeedConnection:Disconnect()
+            walkspeedConnection = nil
+        end
+        if humanoid then humanoid.WalkSpeed = 16 end -- Reset to default
+        print("[Walkspeed] Override Disabled")
+    end
+end
+
+function UICallbacks.onWalkspeedChanged(value)
+    features.Walkspeed = value -- Update global state
+    local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if features.WalkspeedOverride and humanoid then
+        humanoid.WalkSpeed = value -- Update speed immediately if override is on
+    end
+end
+
+-- Fog Callbacks
+function UICallbacks.onFogEndChanged(value)
+    features.FogEnd = value -- Update global state
+    Lighting.FogEnd = value
+end
+function UICallbacks.onFogStartChanged(value)
+    features.FogStart = value -- Update global state
+    Lighting.FogStart = value
+end
+
+-- TransTrail Callback
+function UICallbacks.onToggleTransTrail(enabled)
+    features.TransTrail = enabled -- Update global state
+     if ModuleInstances.transTrail then
+        if enabled then ModuleInstances.transTrail:enable() else ModuleInstances.transTrail:disable() end
+    end
+end
+
+-- Sanity Filter Callback
+function UICallbacks.onToggleSanityFilter(enabled)
+    features.SanityFilter = enabled -- Update global state
+    local sanityEffect = Lighting:FindFirstChild("Sanity")
+    if sanityEffect then sanityEffect.Enabled = enabled end
+    print("[Sanity Filter] " .. (enabled and "Enabled" or "Disabled"))
+end
+
+-- Combo Counter Callback
+function UICallbacks.onToggleComboCounter(enabled)
+    features.ShowComboCounter = enabled -- Update global state
+     if ModuleInstances.comboCounter then
+        if enabled then ModuleInstances.comboCounter:enable() else ModuleInstances.comboCounter:disable() end
+    end
+end
+
 
 -- ========================================
 -- UI COMPONENT CREATION
 -- ========================================
 
-local function createMainTabComponents(mainTab, fovManager)
-    
-    -- Utils group: FF Detector controls
-    local utilsGroup = mainTab:AddLeftGroupbox('Utils')
-    -- Player ESP group: Player ESP controls
-    local playerESPGroup = mainTab:AddLeftGroupbox('Player ESP')
-    -- Triggers group: Triggers label
-    local triggersGroup = mainTab:AddLeftGroupbox('Triggers')
-    -- AutoAim group: Auto-Aim controls
-    local autoAimGroup = mainTab:AddRightGroupbox('AutoAim')
-    -- Edicts group: Intent and related features
-    local edictsGroup = mainTab:AddRightGroupbox('Edicts')
-    -- Connections Info group
-    local connectionsGroup = mainTab:AddRightGroupbox('Connections Info')
-    local ffLabel = connectionsGroup:AddLabel('FFDetector: ...')
-    local espLabel = connectionsGroup:AddLabel('PlayerESP: ...')
-    local trinketLabel = connectionsGroup:AddLabel('TrinketESP: ...')
-    local leaderboardLabel = connectionsGroup:AddLabel('BetterLeaderboard: ...')
-    local nofogLabel = connectionsGroup:AddLabel('NoFog: ...')
-    local intentLabel = connectionsGroup:AddLabel('Intent: ...')
-    local scriptLabel = connectionsGroup:AddLabel('Script: ...')
-    
-    -- Performance Monitor
-    local performanceLabel = connectionsGroup:AddLabel('Performance: ...')
-    if PerformanceMonitor then
-        local perfMonitor = PerformanceMonitor.new()
-        perfMonitor:setLabel(performanceLabel)
-        perfMonitor:start()
-        
-        -- Add toggle for performance monitoring
-        connectionsGroup:AddToggle('EnablePerformanceMonitor', {
-            Text = 'Performance Monitor',
-            Default = false,
-            Tooltip = 'Monitor FPS and performance metrics',
-            Callback = function(enabled)
-                if enabled then
-                    perfMonitor:start()
-                else
-                    perfMonitor:stop()
-                end
-            end
-        })
-    end
-    
-    -- Função para atualizar os labels (otimizada para performance)
-    local lastConnectionUpdate = 0
-    local connectionUpdateInterval = 2 -- Atualizar a cada 2 segundos em vez de a cada frame
-    local function updateConnectionsLabel()
-        local now = tick()
-        if now - lastConnectionUpdate < connectionUpdateInterval then return end
-        lastConnectionUpdate = now
-        
-        ffLabel:SetText('FFDetector: ' .. (ModuleInstances.ffDetector._connMgr and ModuleInstances.ffDetector._connMgr:count() or 0))
-        espLabel:SetText('PlayerESP: ' .. (ModuleInstances.playerEsp._connMgr and ModuleInstances.playerEsp._connMgr:count() or 0))
-        trinketLabel:SetText('TrinketESP: ' .. (ModuleInstances.trinketEsp._connMgr and ModuleInstances.trinketEsp._connMgr:count() or 0))
-        leaderboardLabel:SetText('BetterLeaderboard: ' .. (ModuleInstances.betterLeaderboard._connMgr and ModuleInstances.betterLeaderboard._connMgr:count() or 0))
-        nofogLabel:SetText('NoFog: ' .. (NoFog._connMgr and NoFog._connMgr:count() or 0))
-        intentLabel:SetText('Intent: ' .. (Intent.connectionMgr and Intent.connectionMgr:count() or 0))
-        scriptLabel:SetText('Script: ' .. (connMgr and connMgr:count() or 0))
-    end
-    
-    -- Atualizar apenas quando a UI estiver visível e com intervalo maior
-    local UserInputService = game:GetService('UserInputService')
-    local isUIVisible = true
-    
-    -- Detectar quando a UI é fechada/aberta
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if input.KeyCode == Enum.KeyCode.Insert then
-            isUIVisible = not isUIVisible
-        end
-    end)
-    
-    -- Loop otimizado que só roda quando necessário
-    connMgr:add(game:GetService('RunService').Heartbeat:Connect(function()
-        if isUIVisible then
-            updateConnectionsLabel()
-        end
-    end))
-    
-    -- FF Detector controls (moved to Utils group)
-    local ffToggle = utilsGroup:AddToggle('FFDetectorToggle', {
-    Text = 'FF Detector',
-    Default = true,
-    Tooltip = 'Detect and show countdown for player ForceField',
-        Callback = UICallbacks.onToggleFFDetector
-})
---[[
-if ffToggle.Value then
-        UICallbacks.onToggleFFDetector(true)
-end
-]]
-    utilsGroup:AddSlider('Billboard Max Distance', {
-    Text = 'Billboard Max Distance',
-        Default = CONFIG.FF_DETECTOR.DEFAULT_BILLBOARD_DISTANCE,
-    Min = 10,
-    Max = 300,
-    Rounding = 0,
-        Callback = UICallbacks.onBillboardDistanceChanged
-})
-    utilsGroup:AddSlider('Billboard Text Size', {
-    Text = 'Billboard Text Size',
-        Default = CONFIG.FF_DETECTOR.DEFAULT_BILLBOARD_TEXT_SIZE,
-    Min = 7,
-    Max = 40,
-    Rounding = 0,
-        Callback = UICallbacks.onBillboardTextSizeChanged
-})
+-- New function to create components based on PuppyAdmin structure
+local function createPuppyHubTabs(tabs, fovManager)
 
-    local Indicator = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. "Indicator"))()
-    local indicator = Indicator.new()
-    utilsGroup:AddToggle('EnableDamageRegenIndicators', {
-        Text = 'Enable Damage/Regen Indicators',
-        Default = false,
-        Tooltip = 'Ativa/desativa a exibição automática de indicadores de dano e cura em todos os personagens',
-        Callback = function(val)
-            if val then
-                indicator:enable()
-            else
-                indicator:disable()
-            end
-        end
+    -- Lighting Tab
+    local lightingGroup = tabs.Lighting:AddLeftGroupbox('Fog & Effects')
+    lightingGroup:AddToggle('SanityFilterToggle', {
+        Text = 'Sanity Filter', Default = features.SanityFilter, Tooltip = 'Toggle the sanity visual effect',
+        Callback = UICallbacks.onToggleSanityFilter
     })
+    lightingGroup:AddSlider('FogEndSlider', {
+        Text = 'Fog End', Default = features.FogEnd, Min = 0, Max = 100000, Rounding = 0,
+        Callback = UICallbacks.onFogEndChanged
+    })
+     lightingGroup:AddSlider('FogStartSlider', {
+        Text = 'Fog Start', Default = features.FogStart, Min = 0, Max = 100000, Rounding = 0,
+        Callback = UICallbacks.onFogStartChanged
+    })
+    -- Add more lighting controls if needed
 
-    -- NoFog toggle
-    --[[
-    utilsGroup:AddToggle('NoFog', {
-        Text = 'NoFog',
-        Default = false,
-        Tooltip = 'Remove fog and post-processing effects',
-        Callback = UICallbacks.onToggleNoFog
-    })
-    ]]
-    -- Trinket ESP toggle
-    utilsGroup:AddToggle('TrinketESP', {
-        Text = 'Trinket ESP',
-        Default = false,
-        Tooltip = 'Exibe ESP para trinkets (itens) no mapa',
-        Callback = UICallbacks.onToggleTrinketESP
-    })
+    -- Visuals Tab
+    local playerESPGroup = tabs.Visuals:AddLeftGroupbox('Player ESP')
+    local trinketESPGroup = tabs.Visuals:AddRightGroupbox('Trinket ESP')
+    local otherVisualsGroup = tabs.Visuals:AddLeftGroupbox('Other Visuals')
 
-    -- Player ESP controls (moved to Player ESP group)
     local playerESPToggle = playerESPGroup:AddToggle('PlayerESP', {
-    Text = 'Player ESP',
-    Default = true,
-        Tooltip = 'Display player information (name, rogue, edict, HP)',
+        Text = 'Enable Player ESP', Default = features.PlayerEsp, Tooltip = 'Display player information',
         Callback = UICallbacks.onTogglePlayerESP
     })
-    if playerESPToggle.Value then
-        UICallbacks.onTogglePlayerESP(true)
-    end
-    -- Add toggles for each ESP element (generated automatically from PlayerESP config)
+    -- Automatically add toggles for Player ESP components
     if ModuleInstances.playerEsp and ModuleInstances.playerEsp.displayConfig then
         for configKey, defaultValue in pairs(ModuleInstances.playerEsp.displayConfig) do
             local labelText = configKey:gsub("show", ""):gsub("^%l", string.upper)
-            local toggleName = configKey:gsub("show", "Show")
+            local toggleName = configKey:gsub("show", "Show") .. "ESP" -- Add suffix to avoid conflicts
             
             playerESPGroup:AddToggle(toggleName, {
-                Text = labelText,
-                Default = defaultValue,
+                Text = "Show " .. labelText, Default = defaultValue,
                 Callback = function(val)
-                    ModuleInstances.playerEsp.displayConfig[configKey] = val
-                    applyPlayerESPConfig()
+                    if ModuleInstances.playerEsp then
+                        ModuleInstances.playerEsp.displayConfig[configKey] = val
+                        applyPlayerESPConfig()
+                    end
                 end
             })
         end
     end
-    playerESPGroup:AddSlider('PlayerESPTextSize', {
-    Text = 'Player ESP Text Size',
-        Default = CONFIG.PLAYER_ESP.DEFAULT_TEXT_SIZE,
-    Min = 7,
-    Max = 40,
-    Rounding = 0,
+     playerESPGroup:AddSlider('PlayerESPTextSize', {
+        Text = 'Text Size', Default = CONFIG.PLAYER_ESP.DEFAULT_TEXT_SIZE, Min = 7, Max = 40, Rounding = 0,
         Callback = UICallbacks.onPlayerESPTextSizeChanged
     })
-    playerESPGroup:AddLabel('Player ESP Text Color'):AddColorPicker('PlayerESPTextColor', {
-        Default = CONFIG.PLAYER_ESP.DEFAULT_TEXT_COLOR,
-        Title = 'Player ESP Text Color',
-        Callback = UICallbacks.onPlayerESPTextColorChanged
+    -- Color picker removed as colors are now class-based
+
+    trinketESPGroup:AddToggle('TrinketESP', {
+        Text = 'Enable Trinket ESP', Default = features.TrinketEsp, Tooltip = 'Show names for trinkets',
+        Callback = UICallbacks.onToggleTrinketESP
     })
-    -- Apply default values for Player ESP
-    ModuleInstances.playerEsp:setTextSize(CONFIG.PLAYER_ESP.DEFAULT_TEXT_SIZE)
-    ModuleInstances.playerEsp:setTextColor(CONFIG.PLAYER_ESP.DEFAULT_TEXT_COLOR)
-    applyPlayerESPConfig()
-    
-    -- Triggers label (remains in Triggers group)
-    if triggerMonitor then
-        local triggersLabel = triggersGroup:AddLabel(triggerMonitor:getTriggersLabelText(), true)
-        triggerMonitor:setLabel(triggersLabel)
-        triggerMonitor:connectTriggerListeners()
-        
-        -- Add toggle to enable/disable trigger monitoring for performance
-        triggersGroup:AddToggle('EnableTriggerMonitor', {
-            Text = 'Enable Trigger Monitor',
-            Default = true,
-            Tooltip = 'Enable or disable trigger monitoring (affects performance)',
-            Callback = function(enabled)
-                triggerMonitor:setEnabled(enabled)
-            end
-        })
-        
-        -- Start enabled by default
-        triggerMonitor:setEnabled(true)
-    else
-        triggersGroup:AddLabel("Trigger Monitor not available", true)
-    end
-    
-    -- Auto-Aim controls (remains in AutoAim group)
-    autoAimGroup:AddToggle('AutoAimToggle', {
-        Text = 'Auto-Aim',
-        Default = false,
-        Tooltip = 'Enable or disable Auto-Aim functionality',
+
+    otherVisualsGroup:AddToggle('IntentBillboard', {
+        Text = 'Intent Billboard', Default = false, Tooltip = 'Show equipped tool above players',
+        Callback = UICallbacks.onToggleIntentBillboard
+    })
+     otherVisualsGroup:AddToggle('TransTrailToggle', {
+        Text = 'Trans Flag Trail', Default = features.TransTrail, Tooltip = 'Adds a trans flag trail effect',
+        Callback = UICallbacks.onToggleTransTrail
+    })
+
+
+    -- Combat Tab
+    local autoAimGroup = tabs.Combat:AddLeftGroupbox('AutoAim')
+    local autoBlockGroup = tabs.Combat:AddRightGroupbox('Auto Block')
+    local combatVisualsGroup = tabs.Combat:AddLeftGroupbox('Combat Visuals')
+
+     autoAimGroup:AddToggle('AutoAimToggle', {
+        Text = 'Enable Auto-Aim', Default = false, Tooltip = 'Enable or disable Auto-Aim',
         Callback = UICallbacks.onToggleAutoAim
     })
     autoAimGroup:AddSlider('AutoAimFOV', {
-        Text = 'Auto-Aim FOV (degrees)',
-        Default = CONFIG.AUTO_AIM.DEFAULT_FOV,
-        Min = 5,
-        Max = 90,
-        Rounding = 0,
-        Tooltip = 'Field of view for auto-aim (larger = wider range)',
+        Text = 'FOV (degrees)', Default = CONFIG.AUTO_AIM.DEFAULT_FOV, Min = 5, Max = 90, Rounding = 0, Tooltip = 'Field of view for auto-aim',
         Callback = UICallbacks.onAutoAimFOVChanged
     })
     autoAimGroup:AddLabel('FOV Circle Color'):AddColorPicker('FOVCircleColor', {
-        Default = CONFIG.FOV_CIRCLE.DEFAULT_COLOR,
-        Title = 'FOV Circle Color',
-        Callback = function(color)
-            if fovManager then
-                fovManager:setColor(color)
-            end
-    end
-})
+        Default = CONFIG.FOV_CIRCLE.DEFAULT_COLOR, Title = 'FOV Circle Color',
+        Callback = function(color) if fovManager then fovManager:setColor(color) end end
+    })
     autoAimGroup:AddToggle('ShowFOVCircle', {
-        Text = 'Show FOV Circle',
-        Default = false,
-        Tooltip = 'Display or hide the auto-aim FOV circle',
-        Callback = function(visible)
-            if fovManager then
-                fovManager:setVisible(visible)
-            end
-    end
-})
+        Text = 'Show FOV Circle', Default = false, Tooltip = 'Display the auto-aim FOV circle',
+        Callback = function(visible) if fovManager then fovManager:setVisible(visible) end end
+    })
     autoAimGroup:AddSlider('StudsBehindMin', {
-        Text = 'Studs Behind Minimum',
-        Default = CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min,
-        Min = 5,
-        Max = 50,
-        Rounding = 0,
+        Text = 'Studs Behind Min', Default = CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min, Min = 5, Max = 50, Rounding = 0,
         Callback = UICallbacks.onStudsBehindMinChanged
     })
     autoAimGroup:AddSlider('StudsBehindMax', {
-        Text = 'Studs Behind Maximum',
-        Default = CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max,
-        Min = 5,
-        Max = 50,
-        Rounding = 0,
+        Text = 'Studs Behind Max', Default = CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max, Min = 5, Max = 50, Rounding = 0,
         Callback = UICallbacks.onStudsBehindMaxChanged
     })
-    -- Function to get available tools from player's backpack using UtilsService
-    local function getAvailableToolsFromBackpack()
-        return CONFIG.AUTO_AIM.AVAILABLE_TOOLS -- Fallback if UtilsService not available
-    end
-    
-    -- Get available tools for dropdown
-    local availableTools = getAvailableToolsFromBackpack()
-    
-    -- Substituir uso de extractToolNamesFromDisplay por função local
+    -- Auto Aim Tools Dropdown
+    local function getAvailableToolsFromBackpack() return CONFIG.AUTO_AIM.AVAILABLE_TOOLS end -- Placeholder
     local function extractToolNamesFromDisplay(displayNames)
         local cleanNames = {}
         for _, displayName in ipairs(displayNames) do
@@ -576,124 +558,239 @@ end
         end
         return cleanNames
     end
-    
-    -- Get available tools for dropdown
     local availableTools = getAvailableToolsFromBackpack()
-    
-    -- Create dropdown with dynamic tool list
-    local autoAimToolsDropdown = autoAimGroup:AddDropdown('AutoAimTools', {
-        Values = availableTools,
-        Default = 1, -- Select first available tool by default
-        Multi = true,
-        Text = 'Auto-Aim Tools',
-        Tooltip = 'Select which tools activate auto-aim (based on your backpack)',
+    autoAimGroup:AddDropdown('AutoAimTools', {
+        Values = availableTools, Default = {}, Multi = true, Text = 'Auto-Aim Tools', Tooltip = 'Select tools for auto-aim',
         Callback = function(selected)
-            -- Extract tool names from display names using UtilsService
             local cleanSelected = extractToolNamesFromDisplay(selected)
             UICallbacks.onAutoAimToolsChanged(cleanSelected)
         end
     })
-    
-    -- Better Leaderboard toggle (moved to Utils group)
-    utilsGroup:AddToggle('BetterLeaderboard', {
-        Text = 'Better Leaderboard',
-        Default = false,
-        Tooltip = 'Improve the leaderboard interface',
-        Callback = UICallbacks.onToggleBetterLeaderboard
-    })
-    -- Intent Billboard toggle (agora no grupo Edicts)
-    edictsGroup:AddToggle('IntentBillboard', {
-        Text = 'Intent Billboard',
-        Default = false,
-        Tooltip = 'Show a billboard above all players with the text of their equipped tool.',
-        Callback = UICallbacks.onToggleIntentBillboard
-    })
-    -- AutoBlock toggle (moved to Auto Block group)
-    local autoBlockGroup = mainTab:AddRightGroupbox('Auto Block')
-    autoBlockGroup:AddToggle('AutoBlockGrapple', {
-        Text = 'Auto Block Grapple',
-        Default = false,
-        Tooltip = 'Bloqueia automaticamente Grapple (AIRSLASH)',
-        Callback = UICallbacks.onToggleAutoBlockGrapple
-    })
 
-    -- Dropdown Multi para seleção de block_types (skills e attack_type)
-    local allThreats = ModuleInstances.autoBlock:getAllThreats()
-    local skillOptions, attackTypeOptions = {}, {}
-    local threatIdByName = {}
-    for threatId, config in pairs(allThreats) do
-        threatIdByName[config.name] = threatId
-        if config.category == "skills" then
-            table.insert(skillOptions, config.name)
-        elseif config.category == "attack_type" then
-            table.insert(attackTypeOptions, config.name)
+
+    autoBlockGroup:AddToggle('AutoBlockToggle', {
+        Text = 'Enable Auto Block', Default = false, Tooltip = 'Automatically block specific attacks',
+        Callback = UICallbacks.onToggleAutoBlock
+    })
+    -- Auto Block Threat Selection (Skills/Attack Types)
+    if ModuleInstances.autoBlock then
+        local allThreats = ModuleInstances.autoBlock:getAllThreats()
+        local skillOptions, attackTypeOptions = {}, {}
+        local threatIdByName = {}
+        for threatId, config in pairs(allThreats) do
+            threatIdByName[config.name] = threatId
+            if config.category == "skills" then table.insert(skillOptions, config.name) end
+            if config.category == "attack_type" then table.insert(attackTypeOptions, config.name) end
         end
-    end
-    -- Estado inicial: todos ativos
-    local selectedSkills = {}
-    for _, name in ipairs(skillOptions) do selectedSkills[name] = true end
-    local selectedAttackTypes = {}
-    for _, name in ipairs(attackTypeOptions) do selectedAttackTypes[name] = true end
-
-    autoBlockGroup:AddDropdown('SkillsDropdown', {
-        Values = skillOptions,
-        Default = skillOptions,
-        Multi = true,
-        Text = 'Skills',
-        Tooltip = 'Selecione skills para bloquear',
-        Callback = function(selected)
-            for _, name in ipairs(skillOptions) do
-                local threatId = threatIdByName[name]
-                if selected[name] then
-                    ModuleInstances.autoBlock:addThreat(threatId, allThreats[threatId])
-                else
-                    ModuleInstances.autoBlock:removeThreat(threatId)
+        
+        autoBlockGroup:AddDropdown('BlockSkillsDropdown', {
+            Values = skillOptions, Default = skillOptions, Multi = true, Text = 'Skills to Block', Tooltip = 'Select skills to auto-block',
+            Callback = function(selected)
+                for _, name in ipairs(skillOptions) do
+                    local threatId = threatIdByName[name]
+                    if ModuleInstances.autoBlock then
+                       if selected[name] then ModuleInstances.autoBlock:addThreat(threatId, allThreats[threatId])
+                       else ModuleInstances.autoBlock:removeThreat(threatId) end
+                    end
                 end
-            end
-        end
-    })
-    autoBlockGroup:AddDropdown('AttackTypesDropdown', {
-        Values = attackTypeOptions,
-        Default = attackTypeOptions,
-        Multi = true,
-        Text = 'Attack Types',
-        Tooltip = 'Selecione tipos de ataque para bloquear',
-        Callback = function(selected)
-            for _, name in ipairs(attackTypeOptions) do
-                local threatId = threatIdByName[name]
-                if selected[name] then
-                    ModuleInstances.autoBlock:addThreat(threatId, allThreats[threatId])
-                else
-                    ModuleInstances.autoBlock:removeThreat(threatId)
-                end
-            end
-        end
-    })
-
-    -- Sliders dinâmicos para blockDistance de cada threat
-    for threatId, config in pairs(allThreats) do
-        local sliderLabel = string.format("%s Block Distance", config.name)
-        autoBlockGroup:AddSlider(sliderLabel, {
-            Text = sliderLabel,
-            Default = config.blockDistance or 50,
-            Min = 5,
-            Max = 300,
-            Rounding = 0,
-            Tooltip = string.format("Distância de bloqueio para %s", config.name),
-            Callback = function(val)
-                ModuleInstances.autoBlock:setThreatBlockDistance(threatId, val)
             end
         })
+        autoBlockGroup:AddDropdown('BlockAttackTypesDropdown', {
+            Values = attackTypeOptions, Default = attackTypeOptions, Multi = true, Text = 'Attack Types to Block', Tooltip = 'Select attack types to auto-block',
+            Callback = function(selected)
+                 for _, name in ipairs(attackTypeOptions) do
+                    local threatId = threatIdByName[name]
+                     if ModuleInstances.autoBlock then
+                       if selected[name] then ModuleInstances.autoBlock:addThreat(threatId, allThreats[threatId])
+                       else ModuleInstances.autoBlock:removeThreat(threatId) end
+                    end
+                end
+            end
+        })
+        -- Sliders for block distance (optional, can get crowded)
+        -- for threatId, config in pairs(allThreats) do
+        --    local sliderLabel = string.format("%s Dist", config.name)
+        --    autoBlockGroup:AddSlider(sliderLabel .. "Dist", {
+        --        Text = sliderLabel, Default = config.blockDistance or 50, Min = 5, Max = 300, Rounding = 0,
+        --        Callback = function(val) if ModuleInstances.autoBlock then ModuleInstances.autoBlock:setThreatBlockDistance(threatId, val) end end
+        --    })
+        -- end
     end
 
-    -- Initialize Auto-Aim default values
-    ModuleInstances.autoAim:setRange(CONFIG.AUTO_AIM.DEFAULT_RANGE)
-    ModuleInstances.autoAim:setTimeToHit(CONFIG.AUTO_AIM.DEFAULT_TIME_TO_HIT)
-    ModuleInstances.autoAim:setStudsBehindRange(
-        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min,
-        CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
-    )
+    combatVisualsGroup:AddToggle('SpellPercentageToggle', {
+        Text = 'Spell % Overlay', Default = features.ShowSpellPercentages, Tooltip = 'Show mana cost overlay for spells',
+        Callback = UICallbacks.onToggleSpellPercentage
+    })
+    combatVisualsGroup:AddToggle('ComboCounterToggle', {
+        Text = 'M1 Combo Counter', Default = features.ShowComboCounter, Tooltip = 'Show M1 combo count',
+        Callback = UICallbacks.onToggleComboCounter
+    })
+    combatVisualsGroup:AddToggle('EnableDamageRegenIndicators', {
+        Text = 'Damage/Regen Indicators', Default = false, Tooltip = 'Show floating damage/healing numbers',
+        Callback = function(val) if ModuleInstances.indicator then if val then ModuleInstances.indicator:enable() else ModuleInstances.indicator:disable() end end end
+    })
+
+
+    -- Movement Tab
+    local movementGroup = tabs.Movement:AddLeftGroupbox('Speed & Movement')
+    movementGroup:AddToggle('WalkspeedOverrideToggle', {
+        Text = 'Override Walkspeed', Default = features.WalkspeedOverride, Tooltip = 'Enable custom walkspeed',
+        Callback = UICallbacks.onToggleWalkspeedOverride
+    })
+    movementGroup:AddSlider('WalkspeedSlider', {
+        Text = 'Walkspeed Value', Default = features.Walkspeed, Min = 16, Max = 100, Rounding = 0,
+        Callback = UICallbacks.onWalkspeedChanged
+    })
+    -- NoFall toggle removed as hook is applied unconditionally
+
+    -- Misc Tab
+    local miscGroup = tabs.Misc:AddLeftGroupbox('Miscellaneous')
+    local triggersGroup = tabs.Misc:AddRightGroupbox('Triggers') -- Move triggers here
+    local observeGroup = tabs.Misc:AddLeftGroupbox('Observe & Chat') -- Group Observe/Chat
+    local connectionsGroup = tabs.Misc:AddRightGroupbox('System Info') -- Move connections here
+
+    miscGroup:AddToggle('BetterLeaderboard', {
+        Text = 'Better Leaderboard', Default = false, Tooltip = 'Use enhanced leaderboard',
+        Callback = UICallbacks.onToggleBetterLeaderboard
+    })
+    -- Artifact Notifier toggle could go here if added back
+
+    if triggerMonitor then
+        local triggersLabel = triggersGroup:AddLabel(triggerMonitor:getTriggersLabelText(), true)
+        triggerMonitor:setLabel(triggersLabel)
+        triggerMonitor:connectTriggerListeners()
+        triggersGroup:AddToggle('EnableTriggerMonitor', {
+            Text = 'Enable Trigger Monitor', Default = true, Tooltip = 'Monitor spawn triggers (affects performance)',
+            Callback = function(enabled) triggerMonitor:setEnabled(enabled) end
+        })
+        triggerMonitor:setEnabled(true) -- Start enabled
+    else
+        triggersGroup:AddLabel("Trigger Monitor N/A", true)
+    end
+
+    observeGroup:AddToggle('ObserveUIToggle', {
+        Text = 'Show Observe UI', Default = features.ShowObserveGui, Tooltip = 'Toggle the player observation UI',
+        Callback = UICallbacks.onToggleObserveUI
+    })
+    observeGroup:AddToggle('ChatLogUIToggle', {
+        Text = 'Show Chat Log UI', Default = features.ShowChatLogGui, Tooltip = 'Toggle the chat log UI',
+        Callback = UICallbacks.onToggleChatLogUI
+    })
+
+    -- Connections Info group
+    -- local ffLabel = connectionsGroup:AddLabel('FFDetector: ...') -- Removed
+    local espLabel = connectionsGroup:AddLabel('PlayerESP: ...')
+    local trinketLabel = connectionsGroup:AddLabel('TrinketESP: ...')
+    local leaderboardLabel = connectionsGroup:AddLabel('BetterLeaderboard: ...')
+    -- local nofogLabel = connectionsGroup:AddLabel('NoFog: ...') -- NoFog module removed, only slider exists
+    local intentLabel = connectionsGroup:AddLabel('Intent: ...')
+    local observeLabel = connectionsGroup:AddLabel('ObserveUI: ...')
+    local chatLogLabel = connectionsGroup:AddLabel('ChatLog: ...')
+    local spellPercLabel = connectionsGroup:AddLabel('Spell%: ...')
+    local transTrailLabel = connectionsGroup:AddLabel('TransTrail: ...')
+    local comboCountLabel = connectionsGroup:AddLabel('ComboCount: ...')
+    local scriptLabel = connectionsGroup:AddLabel('Script: ...')
+    
+    -- Performance Monitor
+    local performanceLabel = connectionsGroup:AddLabel('Performance: ...')
+    if PerformanceMonitor then
+        local perfMonitor = PerformanceMonitor.new()
+        perfMonitor:setLabel(performanceLabel)
+        perfMonitor:start() -- Start by default
+        connectionsGroup:AddToggle('EnablePerformanceMonitor', {
+            Text = 'Performance Monitor', Default = true, Tooltip = 'Monitor FPS and performance metrics',
+            Callback = function(enabled) if enabled then perfMonitor:start() else perfMonitor:stop() end end
+        })
+    end
+    
+    -- Function to update connection counts (throttled)
+    local lastConnectionUpdate = 0
+    local connectionUpdateInterval = 2 
+    local function updateConnectionsLabel()
+        local now = tick()
+        if now - lastConnectionUpdate < connectionUpdateInterval then return end
+        lastConnectionUpdate = now
+        
+        if espLabel then espLabel:SetText('PlayerESP: ' .. (ModuleInstances.playerEsp and ModuleInstances.playerEsp._connMgr and ModuleInstances.playerEsp._connMgr:count() or 0)) end
+        if trinketLabel then trinketLabel:SetText('TrinketESP: ' .. (ModuleInstances.trinketEsp and ModuleInstances.trinketEsp._connMgr and ModuleInstances.trinketEsp._connMgr:count() or 0)) end
+        if leaderboardLabel then leaderboardLabel:SetText('BetterLB: ' .. (ModuleInstances.betterLeaderboard and ModuleInstances.betterLeaderboard._connMgr and ModuleInstances.betterLeaderboard._connMgr:count() or 0)) end
+        if intentLabel then intentLabel:SetText('Intent: ' .. (Intent and Intent.connectionMgr and Intent.connectionMgr:count() or 0)) end
+        -- New modules
+        if observeLabel then observeLabel:SetText('ObserveUI: ' .. (ModuleInstances.observeUI and ModuleInstances.observeUI._connections and #ModuleInstances.observeUI._connections or 0)) end -- Approx count
+        if chatLogLabel then chatLogLabel:SetText('ChatLog: ' .. (ModuleInstances.chatLog and ModuleInstances.chatLog._connections and #ModuleInstances.chatLog._connections or 0)) end -- Approx count
+        if spellPercLabel then spellPercLabel:SetText('Spell%: ' .. (ModuleInstances.spellPercentage and ModuleInstances.spellPercentage._connections and #ModuleInstances.spellPercentage._connections or 0)) end -- Approx count
+        if transTrailLabel then transTrailLabel:SetText('TransTrail: ' .. (ModuleInstances.transTrail and ModuleInstances.transTrail._connections and #ModuleInstances.transTrail._connections or 0)) end -- Approx count
+        if comboCountLabel then comboCountLabel:SetText('ComboCount: ' .. (ModuleInstances.comboCounter and ModuleInstances.comboCounter._connections and #ModuleInstances.comboCounter._connections or 0)) end -- Approx count
+
+        if scriptLabel then scriptLabel:SetText('Script: ' .. (connMgr and connMgr:count() or 0)) end
+    end
+    
+    -- Update connections label loop (only when UI visible)
+    local isUIVisible = true -- Assume visible initially
+    connMgr:add(RunService.Heartbeat:Connect(function()
+        if isUIVisible then updateConnectionsLabel() end
+    end))
+    -- Listen for menu toggle to update isUIVisible
+    connMgr:add(UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if type(Library.ToggleKeybind) == 'table' then -- KeyPicker
+            if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == Library.ToggleKeybind.Value then
+                isUIVisible = not isUIVisible
+            end
+        elseif Library.ToggleKeybind then -- Enum
+             if input.KeyCode == Library.ToggleKeybind then
+                isUIVisible = not isUIVisible
+            end
+        else -- Default
+             if input.KeyCode == Enum.KeyCode.Insert then
+                isUIVisible = not isUIVisible
+            end
+        end
+    end))
+
+
+    -- Apply initial default states from 'features' table to UI
+    if playerESPToggle then playerESPToggle:SetValue(features.PlayerEsp) end
+    -- Find and set other toggles based on feature keys...
+    local allToggles = Library.GetObjects and Library:GetObjects("Toggle") or Toggles -- Compatibility
+    if allToggles then
+        if allToggles.TrinketESP then allToggles.TrinketESP:SetValue(features.TrinketEsp) end
+        if allToggles.ObserveUIToggle then allToggles.ObserveUIToggle:SetValue(features.ShowObserveGui) end
+        if allToggles.ChatLogUIToggle then allToggles.ChatLogUIToggle:SetValue(features.ShowChatLogGui) end
+        if allToggles.SpellPercentageToggle then allToggles.SpellPercentageToggle:SetValue(features.ShowSpellPercentages) end
+        if allToggles.TransTrailToggle then allToggles.TransTrailToggle:SetValue(features.TransTrail) end
+        if allToggles.ComboCounterToggle then allToggles.ComboCounterToggle:SetValue(features.ShowComboCounter) end
+        if allToggles.SanityFilterToggle then allToggles.SanityFilterToggle:SetValue(features.SanityFilter) end
+        if allToggles.WalkspeedOverrideToggle then allToggles.WalkspeedOverrideToggle:SetValue(features.WalkspeedOverride) end
+        -- ... and so on for other toggles using their assigned index/key
+    end
+    -- Apply initial slider values
+    local allSliders = Library.GetObjects and Library:GetObjects("Slider") or Options -- Compatibility
+     if allSliders then
+        if allSliders.WalkspeedSlider then allSliders.WalkspeedSlider:SetValue(features.Walkspeed) end
+        if allSliders.FogEndSlider then allSliders.FogEndSlider:SetValue(features.FogEnd) end
+        if allSliders.FogStartSlider then allSliders.FogStartSlider:SetValue(features.FogStart) end
+        -- ... set other sliders
+    end
+
+    -- Initialize Auto-Aim defaults (if module exists)
+    if ModuleInstances.autoAim then
+        ModuleInstances.autoAim:setRange(CONFIG.AUTO_AIM.DEFAULT_RANGE)
+        ModuleInstances.autoAim:setTimeToHit(CONFIG.AUTO_AIM.DEFAULT_TIME_TO_HIT)
+        ModuleInstances.autoAim:setStudsBehindRange(
+            CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.min,
+            CONFIG.AUTO_AIM.DEFAULT_STUDS_BEHIND.max
+        )
+    end
+
+    -- Initial setup for FOV Circle color and visibility (if manager exists)
+    if fovManager then
+        fovManager:setColor(CONFIG.FOV_CIRCLE.DEFAULT_COLOR)
+        -- Set initial visibility based on UI toggle's default state (if ShowFOVCircle toggle exists)
+        local fovToggle = allToggles and allToggles.ShowFOVCircle
+        if fovToggle then fovManager:setVisible(fovToggle.Value) end
+    end
 end
+
 
 local function createUISettingsTab(uiSettingsTab)
     local menuGroup = uiSettingsTab:AddLeftGroupbox('Menu')
@@ -712,53 +809,92 @@ local function createUISettingsTab(uiSettingsTab)
     Library.ToggleKeybind = Options.MenuKeybind
 end
 
+-- Define Puppy Theme Colors
+local puppyThemeColors = {
+    FontColor = Color3.fromRGB(255, 255, 255),       -- White
+    MainColor = Color3.fromRGB(255, 182, 193),       -- Light Pink
+    BackgroundColor = Color3.fromRGB(255, 204, 213), -- Lighter Pink
+    AccentColor = Color3.fromRGB(255, 105, 180),     -- Hot Pink
+    OutlineColor = Color3.fromRGB(221, 160, 221),    -- Plum/Darker Pink
+    RiskColor = Color3.fromRGB(255, 69, 0)           -- OrangeRed for risky options
+}
+
+local function applyPuppyTheme()
+     Library.FontColor = puppyThemeColors.FontColor
+     Library.MainColor = puppyThemeColors.MainColor
+     Library.BackgroundColor = puppyThemeColors.BackgroundColor
+     Library.AccentColor = puppyThemeColors.AccentColor
+     Library.OutlineColor = puppyThemeColors.OutlineColor
+     Library.RiskColor = puppyThemeColors.RiskColor
+     
+     -- Recalculate dark accent color
+     Library.AccentColorDark = Library:GetDarkerColor(Library.AccentColor)
+     
+     -- Update UI elements immediately
+     Library:UpdateColorsUsingRegistry()
+     
+     -- Update theme manager options if they exist
+     if Options.FontColor then Options.FontColor:SetValueRGB(Library.FontColor) end
+     if Options.MainColor then Options.MainColor:SetValueRGB(Library.MainColor) end
+     if Options.BackgroundColor then Options.BackgroundColor:SetValueRGB(Library.BackgroundColor) end
+     if Options.AccentColor then Options.AccentColor:SetValueRGB(Library.AccentColor) end
+     if Options.OutlineColor then Options.OutlineColor:SetValueRGB(Library.OutlineColor) end
+end
+
+
 local function setupManagers(uiSettingsTab, fovManager)
     -- Configure ThemeManager and SaveManager
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
+    ThemeManager:SetLibrary(Library)
+    SaveManager:SetLibrary(Library)
+
+    -- Apply Puppy Theme *before* ThemeManager applies its own saved/default theme
+    applyPuppyTheme() 
 
     -- Configure save settings
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
+    SaveManager:IgnoreThemeSettings() -- Keep ignoring theme settings in saves
+    SaveManager:SetIgnoreIndexes({ 'MenuKeybind' })
 
     -- Set folders for themes and configs
-ThemeManager:SetFolder('BrazilHub')
-SaveManager:SetFolder('BrazilHub/Rogue-Lineage')
+    ThemeManager:SetFolder('PuppyHub') -- Updated folder name
+    SaveManager:SetFolder('PuppyHub/Rogue-Lineage') -- Updated folder name
 
     -- Build configuration and theme sections
     SaveManager:BuildConfigSection(uiSettingsTab)
-    ThemeManager:ApplyToTab(uiSettingsTab)
+    ThemeManager:ApplyToTab(uiSettingsTab) -- ThemeManager will now potentially override puppy theme if a saved theme exists
     
-    -- Load auto-load configuration
-SaveManager:LoadAutoloadConfig()
+    -- Load auto-load configuration (might override puppy theme)
+    SaveManager:LoadAutoloadConfig()
     
     -- Setup cleanup when script is unloaded
     Library.OnUnload = function()
-        if connMgr then
-            connMgr:clear()
+        print("[Puppy Hub] Unloading...")
+        if walkspeedConnection then walkspeedConnection:Disconnect() end -- Disconnect walkspeed listener
+        if connMgr then connMgr:disconnectAll() end -- Use disconnectAll for safety
+        
+        -- Destroy modules
+        if triggerMonitor then triggerMonitor:destroy() end
+        if fovManager then fovManager:destroy() end
+        for name, instance in pairs(ModuleInstances) do
+            if instance and instance.destroy then
+                pcall(instance.destroy, instance) -- Safely call destroy
+            elseif instance and instance.disable then
+                 pcall(instance.disable, instance) -- Fallback to disable
+            end
         end
-        if triggerMonitor then
-            triggerMonitor:destroy()
-        end
-        if fovManager then
-            fovManager:destroy()
-        end
+        ModuleInstances = {} -- Clear table
+
+        -- Restore lighting settings altered by sliders/toggles if needed (optional)
+        -- pcall(function() Lighting.FogEnd = 100000; Lighting.FogStart = 99999; end) 
+        -- pcall(function() local se = Lighting:FindFirstChild("Sanity"); if se then se.Enabled = false end end)
+
+        print("[Puppy Hub] Unload complete.")
     end
 end
+
 
 -- ========================================
 -- MAIN INITIALIZATION
 -- ========================================
-
-local function safeEnable(module, name)
-    if module and type(module.enable) == "function" then
-        local ok, err = pcall(function() module:enable() end)
-        if not ok then
-            warn("[BrazilHub] Module enable error:", name)
-            warn(tostring(err))
-        end
-    end
-end
 
 local function main()
     -- Create main UI components
@@ -770,19 +906,25 @@ local function main()
     if fovManager then
         -- Set up the update callback to pass the autoAim instance
         fovManager:setUpdateCallback(function()
-            fovManager:updateCircle(ModuleInstances.autoAim, connMgr)
+            if ModuleInstances.autoAim then -- Check if autoAim exists
+                 fovManager:updateCircle(ModuleInstances.autoAim, connMgr)
+            end
         end)
     end
     
     -- Setup UI components
-    createMainTabComponents(tabs.Main, fovManager)
+    createPuppyHubTabs(tabs, fovManager) -- Use the new function
     createUISettingsTab(tabs.UISettings)
-    setupManagers(tabs.UISettings, fovManager)
+    setupManagers(tabs.UISettings, fovManager) -- This now applies the theme
 end
 
 -- Start the script
 main()
 
+-- Ensure execution on teleport if supported
 if queue_on_teleport and typeof(queue_on_teleport) == "function" then
     queue_on_teleport('loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CoreManager"))()')
 end
+
+print("[Puppy Hub] Loaded!")
+

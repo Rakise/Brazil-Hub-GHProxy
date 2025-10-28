@@ -20,6 +20,63 @@ local newInstance = Instance.new
 -- Constantes para otimização
 local UPDATE_INTERVAL = 0.5 -- Intervalo de atualização dos billboards
 
+-- ADDED: Class Tools mapping from PuppyAdmin
+local class_tools = {
+	["DRUID"] = "Fons Vitae",
+	["SPY"] = "Rapier",
+	["WRAITH"] = "Dark Eruption",
+	["SHIN"] = "Grapple",
+	["FACE"] = "Shadow Fan",
+	["NECRO"] = "Secare",
+	["DEEP"] = "Chain Pull",
+	["ABYSS"] = "Wrathful Leap",
+	["ONI"] = "Demon Step",
+	["SMITH"] = "Ruby Shard",
+	["BARD"] = "Joyous Dance",
+	["ILLU"] = "Observe",
+	["SIGIL"] = "Flame Charge",
+	["DSAGE"] = "Lightning Drop",
+	["SLAYER"] = "Thunder Spear Crash"
+}
+
+-- ADDED: Class colors from PuppyAdmin
+local class_colors = {
+	["DRUID"] = "#55FF55", -- Green
+	["SPY"] = "#AAAAAA",   -- Gray
+	["WRAITH"] = "#55557F", -- Dark Purple
+	["SHIN"] = "#FFAA00", -- Orange
+	["FACE"] = "#FF55FF", -- Magenta
+	["NECRO"] = "#AA0000", -- Dark Red
+	["DEEP"] = "#0055AA", -- Dark Blue
+	["ABYSS"] = "#2A0055", -- Very Dark Purple
+	["ONI"] = "#FF5555",   -- Red
+	["SMITH"] = "#FFAA7F", -- Light Orange/Brown
+	["BARD"] = "#FFFF55", -- Yellow
+	["ILLU"] = "#AA55FF", -- Purple
+	["SIGIL"] = "#FF7F00", -- Dark Orange
+	["DSAGE"] = "#55FFFF", -- Cyan
+	["SLAYER"] = "#FF0000", -- Bright Red
+	["FRESH"] = "#FFFFFF"  -- White (Default)
+}
+
+-- ADDED: Function to get player class based on backpack tools OR character (from PuppyAdmin)
+local function getPlayerClass(targetPlayer)
+	local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+	local characterModel = targetPlayer.Character -- Get character model
+	
+	-- Check both backpack and character for class tools
+	for classAbbr, toolName in pairs(class_tools) do
+		local foundInBackpack = backpack and backpack:FindFirstChild(toolName)
+		local foundInCharacter = characterModel and characterModel:FindFirstChild(toolName)
+		
+		if foundInBackpack or foundInCharacter then
+			return classAbbr
+		end
+	end
+	
+	return "FRESH" -- Default if no class tool found in either location
+end
+
 -- Função otimizada para encontrar adornee
 local function getBestAdornee(character)
     return character:FindFirstChild("Head") or 
@@ -28,7 +85,7 @@ local function getBestAdornee(character)
            character:FindFirstChildWhichIsA("BasePart")
 end
 
--- Configuração dos frames e labels por tabela
+-- Configuração dos frames e labels por tabela (ADDED Held Item)
 local FRAME_CONFIG = {
     {
         name = "nameFrame",
@@ -41,7 +98,7 @@ local FRAME_CONFIG = {
             {
                 name = "nameLabel",
                 key = "playerName",
-                format = "[%s]",
+                format = "%s", -- Use RichText for color now
                 dataKey = "name",
                 showByDefault = true,
                 getData = function(player, cache)
@@ -130,6 +187,31 @@ local FRAME_CONFIG = {
                 end
             }
         }
+    },
+     -- ADDED: Frame for Held Item
+    {
+        name = "heldItemFrame",
+        layout = {
+            fillDirection = Enum.FillDirection.Horizontal,
+            horizontalAlignment = Enum.HorizontalAlignment.Center,
+            verticalAlignment = Enum.VerticalAlignment.Center
+        },
+        labels = {
+            {
+                name = "heldItemLabel",
+                key = "heldItem",
+                format = "[Holding: %s]",
+                dataKey = "heldItem",
+                showByDefault = true, -- Show held item by default
+                getData = function(player, cache, localChar, targetChar)
+                    if targetChar then
+                         local equippedTool = targetChar:FindFirstChildWhichIsA("Tool")
+                         return equippedTool and equippedTool.Name or "Nothing"
+                    end
+                    return "Nothing"
+                end
+            }
+        }
     }
 }
 
@@ -186,6 +268,7 @@ local function createLabel(text, parent)
     label.Size = UDim2.new(0, 0, 0.1, 0)
     label.AutomaticSize = Enum.AutomaticSize.X
     label.TextXAlignment = Enum.TextXAlignment.Center
+    label.RichText = true -- Enable RichText for colors
     label.Parent = parent
     return label
 end
@@ -260,8 +343,8 @@ function PlayerESP:createBillboard(player)
         lastUpdate = 0
     }
     
-    self:setDisplayConfig(self.displayConfig)
-    self:updatePlayerData(player)
+    self:setDisplayConfig(self.displayConfig) -- Apply initial visibility
+    self:updatePlayerData(player) -- Update initial data
 end
 
 function PlayerESP:removeBillboard(player)
@@ -287,13 +370,23 @@ function PlayerESP:updatePlayerData(player)
     local localChar = self:getLocalCharacter()
     local targetChar = player.Character
     
+    -- Get player class and color
+    local playerClass = getPlayerClass(player)
+    local classColor = class_colors[playerClass] or "#FFFFFF"
+    
     -- Atualização dos textos usando as funções getData da tabela
     for i, frameConfig in ipairs(FRAME_CONFIG) do
         for j, labelConfig in ipairs(frameConfig.labels) do
             local label = data.labels[labelConfig.key]
             if label and labelConfig.getData then
                 local value = labelConfig.getData(player, cache, localChar, targetChar)
-                label.Text = labelConfig.format:format(value)
+                
+                -- Special handling for player name to add class color
+                if labelConfig.key == "playerName" then
+                    label.Text = format("<font color='%s'>[%s]</font> %s", classColor, playerClass, value)
+                else
+                    label.Text = labelConfig.format:format(value)
+                end
             end
         end
     end
@@ -408,8 +501,11 @@ end
 
 function PlayerESP:setTextColor(color)
     for _, data in pairs(self.espBillboards) do
-        for _, label in pairs(data.labels) do
-            label.TextColor3 = color
+        for key, label in pairs(data.labels) do
+             -- Don't override player name color which uses RichText now
+            if key ~= "playerName" then
+                label.TextColor3 = color
+            end
         end
     end
 end
@@ -422,39 +518,37 @@ function PlayerESP:setDisplayConfig(config)
         end
     end
     
-    for _, data in pairs(self.espBillboards) do
-        -- Configuração baseada na tabela FRAME_CONFIG
-        for i, frameConfig in ipairs(FRAME_CONFIG) do
-            local frame = data.frames[frameConfig.name]
-            if frame then
-                local hasContent = false
-                
-                -- Remove apenas elementos não-layout
-                local children = frame:GetChildren()
-                for j = 1, #children do
-                    local child = children[j]
-                    if not child:IsA("UIListLayout") then
-                        child.Parent = nil
+    -- Iterate through all existing billboards
+    for player, billboardData in pairs(self.espBillboards) do
+        if billboardData and billboardData.billboard then
+            local mainBillboard = billboardData.billboard
+            local anyFrameVisible = false -- Track if any frame should be shown for this player
+
+            -- Iterate through the FRAME_CONFIG to control frame visibility
+            for i, frameConfig in ipairs(FRAME_CONFIG) do
+                local frame = billboardData.frames[frameConfig.name]
+                if frame then
+                    local frameShouldBeVisible = false
+                    -- Check if *any* label within this frame should be visible
+                    for j, labelConfig in ipairs(frameConfig.labels) do
+                        local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
+                        if self.displayConfig[configKey] ~= false then -- Visible if true or nil
+                            frameShouldBeVisible = true
+                            break -- No need to check other labels in this frame
+                        end
                     end
-                end
-                
-                -- Adiciona labels visíveis baseado na configuração
-                for j, labelConfig in ipairs(frameConfig.labels) do
-                    local label = data.labels[labelConfig.key]
-                    local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
-                    local shouldShow = self.displayConfig[configKey]
                     
-                    if shouldShow ~= false and label then
-                        label.Parent = frame
-                        hasContent = true
+                    frame.Parent = frameShouldBeVisible and mainBillboard or nil -- Set parent based on visibility
+                    if frameShouldBeVisible then
+                        anyFrameVisible = true -- Mark that at least one frame is visible
                     end
                 end
-                
-                frame.LayoutOrder = i
-                frame.Parent = hasContent and data.billboard or nil
             end
+             -- Optional: Hide the entire billboard if NO frames are visible
+            -- mainBillboard.Enabled = anyFrameVisible 
         end
     end
 end
+
 
 return PlayerESP

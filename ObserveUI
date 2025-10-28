@@ -1,0 +1,396 @@
+-- ObserveUI Module based on PuppyAdmin logic
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local ObserveUI = {}
+ObserveUI.__index = ObserveUI
+
+function ObserveUI.new(playerGui)
+    local self = setmetatable({}, ObserveUI)
+    self.playerGui = playerGui
+    self.enabled = false
+    self.observeGui = nil
+    self.playerListFrame = nil
+    self.playerListLayout = nil
+    self.stopObserveButton = nil
+    self.observePlayerButtons = {}
+    self.currentlyObserving = nil
+    
+    -- Player Items GUI references
+    self.playerItemsGui = nil
+    self.playerItemsFrame = nil
+    self.playerItemsLayout = nil
+    
+    self._connections = {} -- Store connections for cleanup
+
+    -- Create GUIs immediately but keep them disabled
+    self:_createObserveGui()
+    self:_createPlayerItemsGui()
+
+    return self
+end
+
+-- Helper: Safecall wrapper
+local function safeCall(func, ...)
+	local success, result = pcall(func, ...)
+	if not success then
+		local trace = debug.traceback()
+		warn("ObserveUI Error:", result, "\nStack Trace:\n" .. trace)
+	end
+	return success, result
+end
+
+-- Update Player Items GUI Logic
+function ObserveUI:_updatePlayerItemsGui(targetPlayer)
+	safeCall(function()
+		if not self.playerItemsGui or not self.playerItemsFrame or not self.playerItemsLayout then return end
+
+		-- Clear existing items
+		for _, child in ipairs(self.playerItemsFrame:GetChildren()) do
+			if child:IsA("TextLabel") or child:IsA("UIListLayout") then -- Keep layout
+                if child:IsA("TextLabel") then child:Destroy() end
+			end
+		end
+
+		if not targetPlayer then
+			self.playerItemsGui.Enabled = false -- Hide if no target
+			return
+		end
+
+		local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+		if not backpack then
+			self.playerItemsGui.Enabled = false
+			return
+		end
+
+		local items = {}
+		for _, item in ipairs(backpack:GetChildren()) do
+			if item:IsA("Tool") then
+				local quantityValue = item:FindFirstChild("Quantity")
+				local quantity = quantityValue and quantityValue.Value or 1
+				items[item.Name] = (items[item.Name] or 0) + quantity
+			end
+		end
+
+		if next(items) == nil then -- Check if items table is empty
+			local noItemsLabel = Instance.new("TextLabel", self.playerItemsFrame)
+			noItemsLabel.Name = "NoItemsLabel"
+			noItemsLabel.Size = UDim2.new(1, 0, 0, 20)
+			noItemsLabel.Text = "Backpack is empty"
+			noItemsLabel.Font = Enum.Font.SourceSansItalic
+			noItemsLabel.TextSize = 12
+			noItemsLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+			noItemsLabel.BackgroundTransparency = 1
+		else
+			for name, count in pairs(items) do
+				local itemLabel = Instance.new("TextLabel", self.playerItemsFrame)
+				itemLabel.Name = name
+				itemLabel.Size = UDim2.new(1, 0, 0, 20)
+				itemLabel.Text = string.format("%s (x%d)", name, count)
+				itemLabel.Font = Enum.Font.SourceSans
+				itemLabel.TextSize = 12
+				itemLabel.TextColor3 = Color3.new(1, 1, 1)
+				itemLabel.BackgroundTransparency = 1
+				itemLabel.TextXAlignment = Enum.TextXAlignment.Left
+			end
+		end
+
+		-- Show Items GUI only if Observe GUI itself is enabled
+		self.playerItemsGui.Enabled = self.enabled 
+
+		-- Update scroll frame size
+		task.wait()
+		self.playerItemsFrame.CanvasSize = UDim2.new(0, 0, 0, self.playerItemsLayout.AbsoluteContentSize.Y)
+	end)
+end
+
+-- Create Player Items GUI Logic
+function ObserveUI:_createPlayerItemsGui()
+	safeCall(function()
+		if self.playerItemsGui and self.playerItemsGui.Parent then return end
+
+		local screenGui = Instance.new("ScreenGui", self.playerGui)
+		screenGui.Name = "PlayerItemsGui"
+		screenGui.ResetOnSpawn = false
+		screenGui.Enabled = false -- Hidden by default, enabled when observing AND module enabled
+		screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+		local mainFrame = Instance.new("Frame", screenGui)
+		mainFrame.Name = "ItemsFrame"
+		mainFrame.AnchorPoint = Vector2.new(1, 1)
+		mainFrame.Position = UDim2.new(1, -170, 1, -10) -- Position left of Observe GUI
+		mainFrame.Size = UDim2.new(0, 150, 0, 200)
+		mainFrame.BackgroundColor3 = Color3.fromRGB(255, 182, 193) -- Match Observe UI
+		mainFrame.BackgroundTransparency = 0.3
+		mainFrame.BorderColor3 = Color3.fromRGB(255, 105, 180) -- Match Observe UI
+		mainFrame.Draggable = true
+		mainFrame.Active = true
+		mainFrame.Selectable = true
+
+		local corner = Instance.new("UICorner", mainFrame)
+		corner.CornerRadius = UDim.new(0, 8)
+
+		local title = Instance.new("TextLabel", mainFrame)
+		title.Name = "Title"
+		title.Size = UDim2.new(1, 0, 0, 20)
+		title.BackgroundTransparency = 1
+		title.Text = "Observed Items"
+		title.Font = Enum.Font.SourceSansBold -- Consistent font
+		title.TextSize = 14
+		title.TextColor3 = Color3.fromRGB(255, 255, 255) -- White
+
+		local itemsListFrame = Instance.new("ScrollingFrame", mainFrame)
+		itemsListFrame.Name = "ItemsListFrame"
+		itemsListFrame.Position = UDim2.new(0, 5, 0, 25)
+		itemsListFrame.Size = UDim2.new(1, -10, 1, -30)
+		itemsListFrame.BackgroundTransparency = 0.7
+		itemsListFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		itemsListFrame.BorderSizePixel = 0
+		itemsListFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+		itemsListFrame.ScrollBarThickness = 6
+		itemsListFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 105, 180) -- Match Observe UI
+		self.playerItemsFrame = itemsListFrame -- Store reference
+
+		local uiList = Instance.new("UIListLayout", itemsListFrame)
+		uiList.Padding = UDim.new(0, 2)
+		uiList.SortOrder = Enum.SortOrder.Name
+		self.playerItemsLayout = uiList -- Store reference
+
+		self.playerItemsGui = screenGui
+	end)
+end
+
+-- Update Observe List Canvas Size Logic
+function ObserveUI:_updateObserveListCanvasSize()
+	if self.playerListFrame and self.playerListLayout then
+		-- Use AbsoluteContentSize from the layout element
+		self.playerListFrame.CanvasSize = UDim2.new(0, 0, 0, self.playerListLayout.AbsoluteContentSize.Y)
+	end
+end
+
+-- Create Observe GUI Logic
+function ObserveUI:_createObserveGui()
+	safeCall(function() -- Wrap GUI creation
+		if self.observeGui and self.observeGui.Parent then return end
+
+		local screenGui = Instance.new("ScreenGui", self.playerGui)
+		screenGui.Name = "ObserveGui"
+		screenGui.ResetOnSpawn = false
+		screenGui.Enabled = false -- Start disabled, controlled by enable/disable
+		screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+		local mainFrame = Instance.new("Frame", screenGui)
+		mainFrame.Name = "MainFrame"
+		mainFrame.AnchorPoint = Vector2.new(1, 1)
+		mainFrame.Position = UDim2.new(1, -10, 1, -10) -- Bottom right corner
+		mainFrame.Size = UDim2.new(0, 150, 0, 200)
+		mainFrame.BackgroundColor3 = Color3.fromRGB(255, 182, 193) -- Light Pink
+		mainFrame.BackgroundTransparency = 0.3
+		mainFrame.BorderColor3 = Color3.fromRGB(255, 105, 180) -- Hot Pink
+		mainFrame.Draggable = true
+		mainFrame.Active = true
+		mainFrame.Selectable = true
+
+		local corner = Instance.new("UICorner", mainFrame)
+		corner.CornerRadius = UDim.new(0, 8)
+
+		local title = Instance.new("TextLabel", mainFrame)
+		title.Name = "Title"
+		title.Size = UDim2.new(1, 0, 0, 20)
+		title.BackgroundTransparency = 1
+		title.Text = "Players"
+		title.Font = Enum.Font.SourceSansBold -- Consistent font
+		title.TextSize = 16
+		title.TextColor3 = Color3.fromRGB(255, 255, 255) -- White
+
+		local listFrame = Instance.new("ScrollingFrame", mainFrame)
+		listFrame.Name = "PlayerListFrame"
+		listFrame.Position = UDim2.new(0, 5, 0, 25)
+		listFrame.Size = UDim2.new(1, -10, 1, -50)
+		listFrame.BackgroundTransparency = 1
+		listFrame.BorderSizePixel = 0
+		listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+		listFrame.ScrollBarThickness = 6
+		listFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 105, 180) -- Hot Pink scrollbar
+		self.playerListFrame = listFrame -- Store reference
+
+		local uiList = Instance.new("UIListLayout", listFrame)
+		uiList.SortOrder = Enum.SortOrder.Name
+		uiList.Padding = UDim.new(0, 5)
+		self.playerListLayout = uiList -- Store reference to the layout
+
+		local stopButton = Instance.new("TextButton", mainFrame)
+		stopButton.Name = "StopObserveButton"
+		stopButton.AnchorPoint = Vector2.new(0.5, 1)
+		stopButton.Position = UDim2.new(0.5, 0, 1, -5)
+		stopButton.Size = UDim2.new(1, -10, 0, 20)
+		stopButton.BackgroundColor3 = Color3.fromRGB(255, 105, 180) -- Hot Pink
+		stopButton.Font = Enum.Font.SourceSansBold -- Consistent font
+		stopButton.Text = "Stop Observing"
+		stopButton.TextColor3 = Color3.new(1, 1, 1) -- White text
+		stopButton.TextSize = 14
+		stopButton.Visible = false -- Hide by default
+		self.stopObserveButton = stopButton -- Store reference
+		
+		local btnCorner = Instance.new("UICorner", stopButton)
+		btnCorner.CornerRadius = UDim.new(0, 5)
+
+		stopButton.MouseButton1Click:Connect(function()
+			safeCall(function() -- Wrap event callback
+				local localPlayer = Players.LocalPlayer
+                local character = localPlayer and localPlayer.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if humanoid then 
+					Workspace.CurrentCamera.CameraSubject = humanoid
+				end
+				stopButton.Visible = false
+				self.currentlyObserving = nil -- Clear observing target
+				self:_updatePlayerItemsGui(nil) -- Clear items GUI
+			end)
+		end)
+		
+		self.observeGui = screenGui
+	end)
+end
+
+-- Add Player to Observe List Logic
+function ObserveUI:_addPlayerToObserveList(targetPlayer)
+	safeCall(function() -- Wrap function logic
+		if self.observePlayerButtons[targetPlayer] or not self.playerListFrame then return end
+		
+		local playerButton = Instance.new("TextButton", self.playerListFrame)
+		playerButton.Name = targetPlayer.Name
+		playerButton.Size = UDim2.new(1, 0, 0, 25)
+		playerButton.BackgroundColor3 = Color3.fromRGB(255, 192, 203) -- Light Pink
+		playerButton.Font = Enum.Font.SourceSans -- Consistent font
+		playerButton.Text = targetPlayer.Name
+		playerButton.TextColor3 = Color3.fromRGB(255, 255, 255) -- White Text
+		playerButton.TextSize = 14
+		
+		local corner = Instance.new("UICorner", playerButton)
+		corner.CornerRadius = UDim.new(0, 5)
+		
+		playerButton.MouseButton1Click:Connect(function()
+			safeCall(function() -- Wrap event callback
+				local targetCharacter = targetPlayer.Character
+				if targetCharacter then
+					local targetHead = targetCharacter:FindFirstChild("Head")
+					local targetRootPart = targetCharacter:FindFirstChild("HumanoidRootPart")
+					local cameraSubject = targetHead or targetRootPart -- Prioritize Head
+
+					if cameraSubject then
+						Workspace.CurrentCamera.CameraSubject = cameraSubject
+						self.stopObserveButton.Visible = true
+						self.currentlyObserving = targetPlayer -- Set observing target
+						self:_updatePlayerItemsGui(targetPlayer) -- Update items GUI
+					else
+						warn("Could not find Head or HumanoidRootPart to observe on", targetPlayer.Name)
+						self.currentlyObserving = nil
+						self:_updatePlayerItemsGui(nil)
+					end
+				else
+					warn("Character not found for", targetPlayer.Name)
+					self.currentlyObserving = nil
+					self:_updatePlayerItemsGui(nil)
+				end
+			end)
+		end)
+		
+		self.observePlayerButtons[targetPlayer] = playerButton
+		
+		task.wait() -- Wait a frame for layout to update
+		self:_updateObserveListCanvasSize()
+	end)
+end
+
+-- Remove Player from Observe List Logic
+function ObserveUI:_removePlayerFromObserveList(targetPlayer)
+	safeCall(function() -- Wrap function logic
+		if self.observePlayerButtons[targetPlayer] then
+			self.observePlayerButtons[targetPlayer]:Destroy()
+			self.observePlayerButtons[targetPlayer] = nil
+
+			-- If removing the currently observed player, stop observing
+			if self.currentlyObserving == targetPlayer then
+				local localPlayer = Players.LocalPlayer
+                local character = localPlayer and localPlayer.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+				if humanoid then
+					Workspace.CurrentCamera.CameraSubject = humanoid
+				end
+				if self.stopObserveButton then self.stopObserveButton.Visible = false end
+				self.currentlyObserving = nil
+				self:_updatePlayerItemsGui(nil)
+			end
+
+			task.wait() -- Wait a frame for layout to update
+			self:_updateObserveListCanvasSize()
+		end
+	end)
+end
+
+-- Enable/Disable Logic
+function ObserveUI:enable()
+    if self.enabled then return end
+    self.enabled = true
+    if self.observeGui then self.observeGui.Enabled = true end
+    -- Items GUI is enabled/disabled by _updatePlayerItemsGui based on observing state
+
+    -- Connect PlayerAdded/Removing listeners
+    self._connections.PlayerAdded = Players.PlayerAdded:Connect(function(p) self:_addPlayerToObserveList(p) end)
+    self._connections.PlayerRemoving = Players.PlayerRemoving:Connect(function(p) self:_removePlayerFromObserveList(p) end)
+
+    -- Populate list for existing players
+    for _, p in ipairs(Players:GetPlayers()) do
+        self:_addPlayerToObserveList(p)
+    end
+end
+
+function ObserveUI:disable()
+    if not self.enabled then return end
+    self.enabled = false
+    if self.observeGui then self.observeGui.Enabled = false end
+    if self.playerItemsGui then self.playerItemsGui.Enabled = false end -- Hide items GUI when disabled
+
+    -- Disconnect listeners
+    if self._connections.PlayerAdded then self._connections.PlayerAdded:Disconnect(); self._connections.PlayerAdded = nil end
+    if self._connections.PlayerRemoving then self._connections.PlayerRemoving:Disconnect(); self._connections.PlayerRemoving = nil end
+
+    -- Clear player buttons (but keep GUI instances)
+    for p, btn in pairs(self.observePlayerButtons) do
+        btn:Destroy()
+    end
+    self.observePlayerButtons = {}
+    
+    -- Stop observing if currently observing
+    if self.currentlyObserving then
+        local localPlayer = Players.LocalPlayer
+        local character = localPlayer and localPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			Workspace.CurrentCamera.CameraSubject = humanoid
+		end
+        if self.stopObserveButton then self.stopObserveButton.Visible = false end
+		self.currentlyObserving = nil
+        self:_updatePlayerItemsGui(nil)
+    end
+end
+
+-- Cleanup function for unloading
+function ObserveUI:destroy()
+    self:disable() -- Ensure everything is disabled and disconnected
+    if self.observeGui then self.observeGui:Destroy() end
+    if self.playerItemsGui then self.playerItemsGui:Destroy() end
+    -- Clear references
+    self.observeGui = nil
+    self.playerListFrame = nil
+    self.playerListLayout = nil
+    self.stopObserveButton = nil
+    self.playerItemsGui = nil
+    self.playerItemsFrame = nil
+    self.playerItemsLayout = nil
+    self.observePlayerButtons = {}
+    self._connections = {}
+end
+
+return ObserveUI
