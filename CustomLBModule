@@ -13,7 +13,7 @@ local IMAGE_ASSET = "rbxassetid://1327087642"
 local SCROLLING_FRAME_SIZE = UDim2.new(1, -30, 1, -30)
 local SCROLLING_FRAME_POSITION = UDim2.new(0, 15, 0, 15)
 
-local SOUND_MANAGER_URL = "https://raw.githubusercontent.com/Kaic-dev/PocoyoHub/refs/heads/main/soundModule"
+local SOUND_MANAGER_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Kaic-dev/PocoyoHub/refs/heads/main/soundModule"
 local OBSERVE_SOUND_ID = "rbxassetid://138081500"
 local MOD_SOUND_ID = "rbxassetid://9113085764"
 
