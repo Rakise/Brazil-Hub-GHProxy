@@ -938,6 +938,8 @@ local function main()
     createPuppyHubTabs(tabs, fovManager) -- Use the new function
     createUISettingsTab(tabs.UISettings)
     setupManagers(tabs.UISettings, fovManager) -- This now applies the theme correctly
+    wait(3)
+    applyPuppyTheme() 
 end
 
 -- Start the script
