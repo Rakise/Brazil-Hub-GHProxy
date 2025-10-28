@@ -138,10 +138,7 @@ function ChatLog:enable()
     self.enabled = true
     if self.chatLogGui then self.chatLogGui.Enabled = true end
 
-    -- Connect to TextChatService
-    -- Assign directly to the callback property
-    -- **FIX:** Do not attempt to read/store the existing value
-    TextChatService.OnIncomingMessage = function(message)
+    TextChatService.OnIncomingMessage = function(message: TextChatMessage)
         -- Keep 'self' context by wrapping
         safeCall(function()
             if message.TextSource then
