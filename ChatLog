@@ -5,7 +5,7 @@ local TextChatService = game:GetService("TextChatService")
 local ChatLog = {}
 ChatLog.__index = ChatLog
 
-local MAX_CHAT_MESSAGES = 300 -- Limit messages displayed
+local MAX_CHAT_MESSAGES = 100 -- Limit messages displayed
 
 function ChatLog.new(playerGui)
     local self = setmetatable({}, ChatLog)
@@ -14,7 +14,7 @@ function ChatLog.new(playerGui)
     self.chatLogGui = nil
     self.chatLogFrame = nil
     self.chatLogLayout = nil
-    self._connections = {}
+    -- Removed self._connections table as storing the callback directly is problematic
 
     -- Create GUI immediately but keep disabled
     self:_createChatLogGui()
@@ -56,7 +56,9 @@ function ChatLog:_addChatMessageToLog(playerName, message)
         local toDestroy = {}
         -- Count valid message labels first
 		for i = #messages, 1, -1 do
-            if messages[i]:IsA("TextLabel") and messages[i].Name == "ChatMessage" then
+            local child = messages[i]
+            -- Make sure it's the correct type before checking name
+            if child:IsA("TextLabel") and child.Name == "ChatMessage" then
                 messageCount = messageCount + 1
             end
         end
@@ -65,8 +67,9 @@ function ChatLog:_addChatMessageToLog(playerName, message)
         if excess > 0 then
             local destroyedCount = 0
             for i=1, #messages do
-                if messages[i]:IsA("TextLabel") and messages[i].Name == "ChatMessage" then
-                    table.insert(toDestroy, messages[i])
+                local child = messages[i]
+                if child:IsA("TextLabel") and child.Name == "ChatMessage" then
+                    table.insert(toDestroy, child)
                     destroyedCount = destroyedCount + 1
                     if destroyedCount >= excess then break end
                 end
@@ -137,8 +140,9 @@ function ChatLog:enable()
 
     -- Connect to TextChatService
     -- Assign directly to the callback property
-    self._connections.OnIncomingMessage = TextChatService.OnIncomingMessage
+    -- **FIX:** Do not attempt to read/store the existing value
     TextChatService.OnIncomingMessage = function(message)
+        -- Keep 'self' context by wrapping
         safeCall(function()
             if message.TextSource then
                 local sourcePlayer = Players:GetPlayerByUserId(message.TextSource.UserId)
@@ -159,24 +163,22 @@ function ChatLog:disable()
     self.enabled = false
     if self.chatLogGui then self.chatLogGui.Enabled = false end
 
-    -- Disconnect by restoring the original (or setting to nil)
-    if TextChatService and self._connections.OnIncomingMessage then
-        TextChatService.OnIncomingMessage = self._connections.OnIncomingMessage
-        self._connections.OnIncomingMessage = nil
-    elseif TextChatService then
-         TextChatService.OnIncomingMessage = nil -- Fallback if original wasn't stored
+    -- Disconnect by setting the callback to nil
+    if TextChatService then
+        TextChatService.OnIncomingMessage = nil
     end
 end
 
 -- Cleanup
 function ChatLog:destroy()
-    self:disable()
+    self:disable() -- Ensure callback is set to nil
     if self.chatLogGui then self.chatLogGui:Destroy() end
     -- Clear references
     self.chatLogGui = nil
     self.chatLogFrame = nil
     self.chatLogLayout = nil
-    self._connections = {}
+    -- self._connections table removed
 end
 
 return ChatLog
+
