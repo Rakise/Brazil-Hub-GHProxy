@@ -52,7 +52,7 @@ end
 
 waitForLoaded()
 
-local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
 local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
 
 -- Carrega LinoriaLib
@@ -61,7 +61,6 @@ local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))()
 -- Carrega e executa o sistema de key
 local KeyHandler = loadstring(game:HttpGet(BRAZIL_HUB_BASE_URL .. 'KeyHandler'))()
 local keyHandler = KeyHandler.new(Library)
-keyHandler:requireValidKey()
 
 -- Load LinoriaLib components
 local ThemeManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/ThemeManager.lua'))()
