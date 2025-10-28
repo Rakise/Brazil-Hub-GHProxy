@@ -22,197 +22,85 @@ local UPDATE_INTERVAL = 0.5 -- Intervalo de atualização dos billboards
 
 -- ADDED: Class Tools mapping from PuppyAdmin
 local class_tools = {
-	["DRUID"] = "Fons Vitae",
-	["SPY"] = "Rapier",
-	["WRAITH"] = "Dark Eruption",
-	["SHIN"] = "Grapple",
-	["FACE"] = "Shadow Fan",
-	["NECRO"] = "Secare",
-	["DEEP"] = "Chain Pull",
-	["ABYSS"] = "Wrathful Leap",
-	["ONI"] = "Demon Step",
-	["SMITH"] = "Ruby Shard",
-	["BARD"] = "Joyous Dance",
-	["ILLU"] = "Observe",
-	["SIGIL"] = "Flame Charge",
-	["DSAGE"] = "Lightning Drop",
-	["SLAYER"] = "Thunder Spear Crash"
+	["DRUID"] = "Fons Vitae", ["SPY"] = "Rapier", ["WRAITH"] = "Dark Eruption",
+	["SHIN"] = "Grapple", ["FACE"] = "Shadow Fan", ["NECRO"] = "Secare",
+	["DEEP"] = "Chain Pull", ["ABYSS"] = "Wrathful Leap", ["ONI"] = "Demon Step",
+	["SMITH"] = "Ruby Shard", ["BARD"] = "Joyous Dance", ["ILLU"] = "Observe",
+	["SIGIL"] = "Flame Charge", ["DSAGE"] = "Lightning Drop", ["SLAYER"] = "Thunder Spear Crash"
 }
 
 -- ADDED: Class colors from PuppyAdmin
 local class_colors = {
-	["DRUID"] = "#55FF55", -- Green
-	["SPY"] = "#AAAAAA",   -- Gray
-	["WRAITH"] = "#55557F", -- Dark Purple
-	["SHIN"] = "#FFAA00", -- Orange
-	["FACE"] = "#FF55FF", -- Magenta
-	["NECRO"] = "#AA0000", -- Dark Red
-	["DEEP"] = "#0055AA", -- Dark Blue
-	["ABYSS"] = "#2A0055", -- Very Dark Purple
-	["ONI"] = "#FF5555",   -- Red
-	["SMITH"] = "#FFAA7F", -- Light Orange/Brown
-	["BARD"] = "#FFFF55", -- Yellow
-	["ILLU"] = "#AA55FF", -- Purple
-	["SIGIL"] = "#FF7F00", -- Dark Orange
-	["DSAGE"] = "#55FFFF", -- Cyan
-	["SLAYER"] = "#FF0000", -- Bright Red
-	["FRESH"] = "#FFFFFF"  -- White (Default)
+	["DRUID"] = "#55FF55", ["SPY"] = "#AAAAAA", ["WRAITH"] = "#55557F", ["SHIN"] = "#FFAA00",
+	["FACE"] = "#FF55FF", ["NECRO"] = "#AA0000", ["DEEP"] = "#0055AA", ["ABYSS"] = "#2A0055",
+	["ONI"] = "#FF5555", ["SMITH"] = "#FFAA7F", ["BARD"] = "#FFFF55", ["ILLU"] = "#AA55FF",
+	["SIGIL"] = "#FF7F00", ["DSAGE"] = "#55FFFF", ["SLAYER"] = "#FF0000", ["FRESH"] = "#FFFFFF"
 }
+-- ADDED: Observe color
+local OBSERVE_COLOR_HEX = "#55FFFF" -- Light Blue/Cyan
 
 -- ADDED: Function to get player class based on backpack tools OR character (from PuppyAdmin)
 local function getPlayerClass(targetPlayer)
 	local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
-	local characterModel = targetPlayer.Character -- Get character model
-	
-	-- Check both backpack and character for class tools
+	local characterModel = targetPlayer.Character
 	for classAbbr, toolName in pairs(class_tools) do
 		local foundInBackpack = backpack and backpack:FindFirstChild(toolName)
 		local foundInCharacter = characterModel and characterModel:FindFirstChild(toolName)
-		
-		if foundInBackpack or foundInCharacter then
-			return classAbbr
-		end
+		if foundInBackpack or foundInCharacter then return classAbbr end
 	end
-	
-	return "FRESH" -- Default if no class tool found in either location
+	return "FRESH"
 end
+
+-- ADDED: Function to check if a player has the Observe tool
+local function hasObserveTool(targetPlayer)
+    local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+    local characterModel = targetPlayer.Character
+    local hasInBackpack = backpack and backpack:FindFirstChild("Observe")
+    local hasEquipped = characterModel and characterModel:FindFirstChild("Observe")
+    return hasInBackpack or hasEquipped
+end
+
 
 -- Função otimizada para encontrar adornee
 local function getBestAdornee(character)
-    return character:FindFirstChild("Head") or 
-           character:FindFirstChild("UpperTorso") or 
-           character:FindFirstChild("Torso") or 
-           character:FindFirstChildWhichIsA("BasePart")
+    return character:FindFirstChild("Head") or character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso") or character:FindFirstChildWhichIsA("BasePart")
 end
 
 -- Configuração dos frames e labels por tabela (ADDED Held Item)
 local FRAME_CONFIG = {
     {
         name = "nameFrame",
-        layout = {
-            fillDirection = Enum.FillDirection.Horizontal,
-            horizontalAlignment = Enum.HorizontalAlignment.Center,
-            verticalAlignment = Enum.VerticalAlignment.Center
-        },
+        layout = { fillDirection = Enum.FillDirection.Horizontal, horizontalAlignment = Enum.HorizontalAlignment.Center, verticalAlignment = Enum.VerticalAlignment.Center },
         labels = {
-            {
-                name = "nameLabel",
-                key = "playerName",
-                format = "%s", -- Use RichText for color now
-                dataKey = "name",
-                showByDefault = true,
-                getData = function(player, cache)
-                    return player.Name
-                end
-            },
-            {
-                name = "distanceLabel",
-                key = "distance",
-                format = "[%s]",
-                dataKey = "distance",
-                showByDefault = true,
-                getData = function(player, cache, localChar, targetChar)
+            { name = "nameLabel", key = "playerName", format = "%s", dataKey = "name", showByDefault = true, getData = function(player, cache) return player.Name end },
+            { name = "distanceLabel", key = "distance", format = "[%s]", dataKey = "distance", showByDefault = true, getData = function(player, cache, localChar, targetChar)
                     if localChar and targetChar then
                         local localRoot = localChar:FindFirstChild("HumanoidRootPart")
                         local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
-                        
-                        if localRoot and targetRoot then
-                            local dist = (localRoot.Position - targetRoot.Position).Magnitude
-                            return floor(dist) .. "m"
-                        end
+                        if localRoot and targetRoot then return floor((localRoot.Position - targetRoot.Position).Magnitude) .. "m" end
                     end
                     return "0m"
-                end
-            }
-        }
-    },
+                end } } },
     {
         name = "infoFrame",
-        layout = {
-            fillDirection = Enum.FillDirection.Horizontal,
-            horizontalAlignment = Enum.HorizontalAlignment.Center,
-            verticalAlignment = Enum.VerticalAlignment.Center
-        },
+        layout = { fillDirection = Enum.FillDirection.Horizontal, horizontalAlignment = Enum.HorizontalAlignment.Center, verticalAlignment = Enum.VerticalAlignment.Center },
         labels = {
-            {
-                name = "rogueLabel",
-                key = "rogueName",
-                format = "[%s]",
-                dataKey = "rogueName",
-                showByDefault = true,
-                getData = function(player, cache)
-                    return utils:getPlayerRogueDisplay(player)
-                end
-            },
-            {
-                name = "edictLabel",
-                key = "edict",
-                format = "[%s]",
-                dataKey = "edict",
-                showByDefault = true,
-                getData = function(player, cache)
-                    return utils:getPlayerEdictDisplay(player)
-                end
-            }
-        }
-    },
+            { name = "rogueLabel", key = "rogueName", format = "[%s]", dataKey = "rogueName", showByDefault = true, getData = function(player, cache) return utils:getPlayerRogueDisplay(player) end },
+            { name = "edictLabel", key = "edict", format = "[%s]", dataKey = "edict", showByDefault = true, getData = function(player, cache) return utils:getPlayerEdictDisplay(player) end } } },
     {
         name = "hpFrame",
-        layout = {
-            fillDirection = Enum.FillDirection.Horizontal,
-            horizontalAlignment = Enum.HorizontalAlignment.Center,
-            verticalAlignment = Enum.VerticalAlignment.Center
-        },
+        layout = { fillDirection = Enum.FillDirection.Horizontal, horizontalAlignment = Enum.HorizontalAlignment.Center, verticalAlignment = Enum.VerticalAlignment.Center },
         labels = {
-            {
-                name = "hpLabel",
-                key = "health",
-                format = "[%s]",
-                dataKey = "healthDisplay",
-                showByDefault = true,
-                getData = function(player, cache)
-                    local healthDisplay, _ = utils:getPlayerHealthDisplay(player)
-                    return healthDisplay
-                end
-            },
-            {
-                name = "hpPercLabel",
-                key = "healthPercent",
-                format = "[%s]",
-                dataKey = "healthPercentDisplay",
-                showByDefault = true,
-                getData = function(player, cache)
-                    local _, healthPercentDisplay = utils:getPlayerHealthDisplay(player)
-                    return healthPercentDisplay
-                end
-            }
-        }
-    },
-     -- ADDED: Frame for Held Item
+            { name = "hpLabel", key = "health", format = "[%s]", dataKey = "healthDisplay", showByDefault = true, getData = function(player, cache) local healthDisplay, _ = utils:getPlayerHealthDisplay(player); return healthDisplay end },
+            { name = "hpPercLabel", key = "healthPercent", format = "[%s]", dataKey = "healthPercentDisplay", showByDefault = true, getData = function(player, cache) local _, healthPercentDisplay = utils:getPlayerHealthDisplay(player); return healthPercentDisplay end } } },
     {
         name = "heldItemFrame",
-        layout = {
-            fillDirection = Enum.FillDirection.Horizontal,
-            horizontalAlignment = Enum.HorizontalAlignment.Center,
-            verticalAlignment = Enum.VerticalAlignment.Center
-        },
+        layout = { fillDirection = Enum.FillDirection.Horizontal, horizontalAlignment = Enum.HorizontalAlignment.Center, verticalAlignment = Enum.VerticalAlignment.Center },
         labels = {
-            {
-                name = "heldItemLabel",
-                key = "heldItem",
-                format = "[Holding: %s]",
-                dataKey = "heldItem",
-                showByDefault = true, -- Show held item by default
-                getData = function(player, cache, localChar, targetChar)
-                    if targetChar then
-                         local equippedTool = targetChar:FindFirstChildWhichIsA("Tool")
-                         return equippedTool and equippedTool.Name or "Nothing"
-                    end
+            { name = "heldItemLabel", key = "heldItem", format = "[Holding: %s]", dataKey = "heldItem", showByDefault = true, getData = function(player, cache, localChar, targetChar)
+                    if targetChar then local equippedTool = targetChar:FindFirstChildWhichIsA("Tool"); return equippedTool and equippedTool.Name or "Nothing" end
                     return "Nothing"
-                end
-            }
-        }
-    }
+                end } } }
 }
 
 local PlayerESP = {}
@@ -225,8 +113,6 @@ function PlayerESP.new()
     self._playerConnMgrs = {}
     self.espBillboards = {}
     self.dataCache = {}
-    
-    -- Gera configuração de exibição automaticamente baseada na tabela
     self.displayConfig = {}
     for i, frameConfig in ipairs(FRAME_CONFIG) do
         for j, labelConfig in ipairs(frameConfig.labels) do
@@ -234,18 +120,12 @@ function PlayerESP.new()
             self.displayConfig[configKey] = labelConfig.showByDefault
         end
     end
-    
-    -- Timestamps otimizados para diferentes tipos de atualização
     self._lastBillboardUpdate = 0
-    
-    -- Cache de caracteres locais para evitar múltiplas consultas
     self._localCharCache = nil
     self._localCharCacheTime = 0
-    
     return self
 end
 
--- Cache otimizado para character local
 function PlayerESP:getLocalCharacter()
     local currentTime = tick()
     if currentTime - self._localCharCacheTime > 1 then
@@ -255,7 +135,6 @@ function PlayerESP:getLocalCharacter()
     return self._localCharCache
 end
 
--- Função helper para criar labels de forma otimizada
 local function createLabel(text, parent)
     local label = newInstance("TextLabel")
     label.FontSize = Enum.FontSize.Size14
@@ -268,37 +147,31 @@ local function createLabel(text, parent)
     label.Size = UDim2.new(0, 0, 0.1, 0)
     label.AutomaticSize = Enum.AutomaticSize.X
     label.TextXAlignment = Enum.TextXAlignment.Center
-    label.RichText = true -- Enable RichText for colors
+    label.RichText = true
     label.Parent = parent
     return label
 end
 
--- Função para criar frame com layout
 local function createFrameWithLayout(frameName, layoutConfig, parent)
     local frame = newInstance("Frame")
     frame.Name = frameName
     frame.BackgroundTransparency = 1
     frame.Size = UDim2.new(1, 0, 0.1, 0)
     frame.Parent = parent
-
     local layout = newInstance("UIListLayout")
     layout.FillDirection = layoutConfig.fillDirection
     layout.HorizontalAlignment = layoutConfig.horizontalAlignment
     layout.VerticalAlignment = layoutConfig.verticalAlignment
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Parent = frame
-
     return frame
 end
 
 function PlayerESP:createBillboard(player)
     local character = player.Character
     if not character or character:FindFirstChild("PlayerESP") then return end
-    
     local adornee = getBestAdornee(character)
     if not adornee then return end
-
-    -- Criação otimizada do billboard com propriedades em lote
     local billboard = newInstance("BillboardGui")
     billboard.Name = "PlayerESP"
     billboard.LightInfluence = 1
@@ -308,83 +181,83 @@ function PlayerESP:createBillboard(player)
     billboard.AlwaysOnTop = true
     billboard.Size = UDim2.new(0, 500, 0, 100)
     billboard.Parent = adornee
-
-    -- Layout principal
     local mainLayout = newInstance("UIListLayout")
     mainLayout.Padding = UDim.new(0, 3)
     mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
     mainLayout.Parent = billboard
-
-    -- Estrutura para armazenar todos os elementos criados
-    local billboardData = {
-        billboard = billboard,
-        frames = {},
-        labels = {}
-    }
-
-    -- Criação dos frames e labels baseada na configuração
+    local billboardData = { billboard = billboard, frames = {}, labels = {} }
     for i, frameConfig in ipairs(FRAME_CONFIG) do
         local frame = createFrameWithLayout(frameConfig.name, frameConfig.layout, billboard)
         frame.LayoutOrder = i
         billboardData.frames[frameConfig.name] = frame
-
-        -- Criação dos labels para este frame
         for j, labelConfig in ipairs(frameConfig.labels) do
             local label = createLabel("", frame)
             label.LayoutOrder = j
             billboardData.labels[labelConfig.key] = label
         end
     end
-
     self.espBillboards[player] = billboardData
-    
-    -- Cache de dados simplificado
-    self.dataCache[player] = {
-        lastUpdate = 0
-    }
-    
-    self:setDisplayConfig(self.displayConfig) -- Apply initial visibility
-    self:updatePlayerData(player) -- Update initial data
+    self.dataCache[player] = { lastUpdate = 0 }
+    self:setDisplayConfig(self.displayConfig)
+    self:updatePlayerData(player)
 end
 
 function PlayerESP:removeBillboard(player)
     local data = self.espBillboards[player]
-    if data and data.billboard then
-        data.billboard:Destroy()
-        self.espBillboards[player] = nil
-    end
+    if data and data.billboard then data.billboard:Destroy(); self.espBillboards[player] = nil end
     self.dataCache[player] = nil
 end
 
 -- Função otimizada para atualizar dados dos players
 function PlayerESP:updatePlayerData(player)
     if not player or not player.Parent then return end
-    
     local cache = self.dataCache[player]
     if not cache then return end
-    
     local data = self.espBillboards[player]
     if not data then return end
     
-    -- Cache de characters para otimização
     local localChar = self:getLocalCharacter()
     local targetChar = player.Character
     
-    -- Get player class and color
     local playerClass = getPlayerClass(player)
     local classColor = class_colors[playerClass] or "#FFFFFF"
     
-    -- Atualização dos textos usando as funções getData da tabela
+    -- ** Check if player has Observe tool **
+    local isObserving = hasObserveTool(player)
+    
     for i, frameConfig in ipairs(FRAME_CONFIG) do
         for j, labelConfig in ipairs(frameConfig.labels) do
             local label = data.labels[labelConfig.key]
             if label and labelConfig.getData then
                 local value = labelConfig.getData(player, cache, localChar, targetChar)
                 
-                -- Special handling for player name to add class color
-                if labelConfig.key == "playerName" then
-                    label.Text = format("<font color='%s'>[%s]</font> %s", classColor, playerClass, value)
+                -- Determine the color to use
+                local displayColor = isObserving and OBSERVE_COLOR_HEX or classColor
+                
+                -- Apply color override if observing
+                if isObserving then
+                    label.TextColor3 = Color3.fromHex(OBSERVE_COLOR_HEX) -- Set base color for non-RichText parts
                 else
+                    label.TextColor3 = Color3.new(1,1,1) -- Reset to white for RichText handling
+                end
+
+                -- Format text with RichText, using blue if observing
+                if labelConfig.key == "playerName" then
+                     -- Apply blue color to the entire line if observing
+                    if isObserving then
+                         label.Text = format("<font color='%s'>[%s] %s</font>", displayColor, playerClass, value)
+                    else
+                         label.Text = format("<font color='%s'>[%s]</font> %s", displayColor, playerClass, value)
+                    end
+                elseif labelConfig.key == "distance" or labelConfig.key == "rogueName" or labelConfig.key == "edict" or labelConfig.key == "health" or labelConfig.key == "healthPercent" or labelConfig.key == "heldItem" then
+                    -- Apply blue color to the entire line if observing
+                     if isObserving then
+                          label.Text = format("<font color='%s'>%s</font>", displayColor, labelConfig.format:format(value))
+                     else
+                          label.Text = labelConfig.format:format(value) -- Keep original format if not observing
+                     end
+                else
+                    -- Fallback for any other labels
                     label.Text = labelConfig.format:format(value)
                 end
             end
@@ -392,82 +265,38 @@ function PlayerESP:updatePlayerData(player)
     end
 end
 
--- Função otimizada para atualizar billboards
+
 function PlayerESP:updateBillboards()
     local currentTime = tick()
     if currentTime - self._lastBillboardUpdate < UPDATE_INTERVAL then return end
     self._lastBillboardUpdate = currentTime
-    
-    -- Lista de players a serem removidos (para evitar modificação durante iteração)
     local toRemove = {}
-    
     for player, data in pairs(self.espBillboards) do
-        if player and player.Parent and player.Character then
-            self:updatePlayerData(player)
-        else
-            toRemove[#toRemove + 1] = player
-        end
+        if player and player.Parent and player.Character then self:updatePlayerData(player)
+        else table.insert(toRemove, player) end -- Use table.insert
     end
-    
-    -- Remove players inválidos
-    for i = 1, #toRemove do
-        self:removeBillboard(toRemove[i])
-    end
+    for i = 1, #toRemove do self:removeBillboard(toRemove[i]) end
 end
 
 function PlayerESP:connectPlayer(player)
     if player == LocalPlayer then return end
-    
     local mgr = self._playerConnMgrs[player]
     if mgr then mgr:disconnectAll() end
-    
     mgr = ConnectionManager.new()
     self._playerConnMgrs[player] = mgr
-    
-    mgr:add(player.CharacterAdded:Connect(function(character)
-        if self.enabled then
-            -- Pequeno delay para garantir que o character esteja totalmente carregado
-            task.wait(0.1)
-            self:createBillboard(player)
-        end
-    end))
-    
-    mgr:add(player.CharacterRemoving:Connect(function(character)
-        self:removeBillboard(player)
-    end))
-    
-    if player.Character then
-        self:createBillboard(player)
-    end
+    mgr:add(player.CharacterAdded:Connect(function(character) if self.enabled then task.wait(0.1); self:createBillboard(player) end end))
+    mgr:add(player.CharacterRemoving:Connect(function(character) self:removeBillboard(player) end))
+    if player.Character then self:createBillboard(player) end
 end
 
 function PlayerESP:enable()
     self.enabled = true
     self:cleanup()
-    
-    -- Conecta players existentes
     local playerList = Players:GetPlayers()
-    for i = 1, #playerList do
-        self:connectPlayer(playerList[i])
-    end
-    
-    self._connMgr:add(Players.PlayerAdded:Connect(function(player)
-        self:connectPlayer(player)
-    end))
-    
-    self._connMgr:add(Players.PlayerRemoving:Connect(function(player)
-        self:removeBillboard(player)
-        local mgr = self._playerConnMgrs[player]
-        if mgr then
-            mgr:disconnectAll()
-            self._playerConnMgrs[player] = nil
-        end
-    end))
-    
-    -- Usa Heartbeat com throttling interno otimizado
-    self._connMgr:add(RunService.Heartbeat:Connect(function()
-        self:updateBillboards()
-    end))
+    for i = 1, #playerList do self:connectPlayer(playerList[i]) end
+    self._connMgr:add(Players.PlayerAdded:Connect(function(player) self:connectPlayer(player) end))
+    self._connMgr:add(Players.PlayerRemoving:Connect(function(player) self:removeBillboard(player); local mgr = self._playerConnMgrs[player]; if mgr then mgr:disconnectAll(); self._playerConnMgrs[player] = nil end end))
+    self._connMgr:add(RunService.Heartbeat:Connect(function() self:updateBillboards() end))
 end
 
 function PlayerESP:disable()
@@ -477,78 +306,44 @@ end
 
 function PlayerESP:cleanup()
     self._connMgr:disconnectAll()
-    for _, mgr in pairs(self._playerConnMgrs) do
-        mgr:disconnectAll()
-    end
+    for _, mgr in pairs(self._playerConnMgrs) do mgr:disconnectAll() end
     self._playerConnMgrs = {}
-    for player, _ in pairs(self.espBillboards) do
-        self:removeBillboard(player)
-    end
+    for player, _ in pairs(self.espBillboards) do self:removeBillboard(player) end
     self.dataCache = {}
-    -- Limpa cache local
     self._localCharCache = nil
     self._localCharCacheTime = 0
 end
 
--- Funções de configuração otimizadas
 function PlayerESP:setTextSize(size)
-    for _, data in pairs(self.espBillboards) do
-        for _, label in pairs(data.labels) do
-            label.TextSize = size
-        end
-    end
+    for _, data in pairs(self.espBillboards) do for _, label in pairs(data.labels) do label.TextSize = size end end
 end
 
 function PlayerESP:setTextColor(color)
-    for _, data in pairs(self.espBillboards) do
-        for key, label in pairs(data.labels) do
-             -- Don't override player name color which uses RichText now
-            if key ~= "playerName" then
-                label.TextColor3 = color
-            end
-        end
-    end
+    for _, data in pairs(self.espBillboards) do for key, label in pairs(data.labels) do if key ~= "playerName" then label.TextColor3 = color end end end -- Avoid overriding playerName base color
 end
 
 function PlayerESP:setDisplayConfig(config)
-    -- Atualiza configuração se fornecida
-    if config then
-        for key, value in pairs(config) do
-            self.displayConfig[key] = value
-        end
-    end
-    
-    -- Iterate through all existing billboards
+    if config then for key, value in pairs(config) do self.displayConfig[key] = value end end
     for player, billboardData in pairs(self.espBillboards) do
         if billboardData and billboardData.billboard then
             local mainBillboard = billboardData.billboard
-            local anyFrameVisible = false -- Track if any frame should be shown for this player
-
-            -- Iterate through the FRAME_CONFIG to control frame visibility
+            local anyFrameVisible = false
             for i, frameConfig in ipairs(FRAME_CONFIG) do
                 local frame = billboardData.frames[frameConfig.name]
                 if frame then
                     local frameShouldBeVisible = false
-                    -- Check if *any* label within this frame should be visible
                     for j, labelConfig in ipairs(frameConfig.labels) do
                         local configKey = "show" .. labelConfig.key:gsub("^%l", string.upper)
-                        if self.displayConfig[configKey] ~= false then -- Visible if true or nil
-                            frameShouldBeVisible = true
-                            break -- No need to check other labels in this frame
-                        end
+                        if self.displayConfig[configKey] ~= false then frameShouldBeVisible = true; break end
                     end
-                    
-                    frame.Parent = frameShouldBeVisible and mainBillboard or nil -- Set parent based on visibility
-                    if frameShouldBeVisible then
-                        anyFrameVisible = true -- Mark that at least one frame is visible
-                    end
+                    frame.Parent = frameShouldBeVisible and mainBillboard or nil
+                    if frameShouldBeVisible then anyFrameVisible = true end
                 end
             end
-             -- Optional: Hide the entire billboard if NO frames are visible
-            -- mainBillboard.Enabled = anyFrameVisible 
+            -- mainBillboard.Enabled = anyFrameVisible -- Optional: Hide entire billboard if no content
         end
     end
 end
 
-
 return PlayerESP
+

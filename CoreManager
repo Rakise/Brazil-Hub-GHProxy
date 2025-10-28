@@ -1,3 +1,28 @@
+-- Puppy Hub Script with LinoriaLib UI Integration
+-- Refactored for better maintainability and organization
+
+--[[
+    Main script that integrates multiple game enhancement modules:
+    - Player ESP (Class Colors, Held Item)
+    - Trinket ESP (Name only)
+    - Auto-Aim system
+    - Better Leaderboard
+    - Observe UI
+    - Chat Log
+    - Spell Percentage
+    - Walkspeed Control
+    - Fog Control
+    - Trans Trail
+    - Sanity Filter
+    - Combo Counter
+    
+    Uses LinoriaLib for UI management with theme and save support.
+]]
+
+-- ========================================
+-- DEPENDENCIES AND LIBRARY SETUP
+-- ========================================
+
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting") -- Added for Fog/Sanity
 local TextChatService = game:GetService("TextChatService") -- Added for Chat Log
@@ -9,8 +34,10 @@ local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitFor
 
 local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
 local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
+
 -- Carrega LinoriaLib
 local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))() -- Use HTTPS for GitHub Raw
+
 -- Load LinoriaLib components
 local ThemeManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(REPO_BASE_URL .. 'addons/SaveManager.lua'))()
@@ -32,7 +59,7 @@ local function safeRequire(url)
     end
 end
 
-warn("ao")
+
 -- Load existing main-modules (FFDetector commented out)
 local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
 local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
@@ -361,7 +388,8 @@ function UICallbacks.onToggleWalkspeedOverride(enabled)
             if not walkspeedConnection then
                  walkspeedConnection = humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
                     if features.WalkspeedOverride and humanoid then -- Double check flag and humanoid
-                        humanoid.WalkSpeed = features.Walkspeed
+                        -- Use pcall for safety in case humanoid becomes invalid
+                        pcall(function() humanoid.WalkSpeed = features.Walkspeed end) 
                     end
                  end)
                  connMgr:add(walkspeedConnection) -- Manage connection
@@ -374,18 +402,22 @@ function UICallbacks.onToggleWalkspeedOverride(enabled)
             walkspeedConnection:Disconnect()
             walkspeedConnection = nil
         end
-        if humanoid then humanoid.WalkSpeed = 16 end -- Reset to default
+        -- Use pcall for safety
+        if humanoid then pcall(function() humanoid.WalkSpeed = 16 end) end -- Reset to default
         print("[Walkspeed] Override Disabled")
     end
 end
+
 
 function UICallbacks.onWalkspeedChanged(value)
     features.Walkspeed = value -- Update global state
     local humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
     if features.WalkspeedOverride and humanoid then
-        humanoid.WalkSpeed = value -- Update speed immediately if override is on
+        -- Use pcall for safety
+       pcall(function() humanoid.WalkSpeed = value end) -- Update speed immediately if override is on
     end
 end
+
 
 -- Fog Callbacks
 function UICallbacks.onFogEndChanged(value)
@@ -457,7 +489,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     -- Automatically add toggles for Player ESP components
     if ModuleInstances.playerEsp and ModuleInstances.playerEsp.displayConfig then
         for configKey, defaultValue in pairs(ModuleInstances.playerEsp.displayConfig) do
-            local labelText = configKey:gsub("show", ""):gsub("^%l", string.upper)
+            local labelText = configKey:gsub("show", ""):gsub("^%l", string.upper):gsub("PlayerName", "Name"):gsub("HeldItem", "Held Item") -- Better labels
             local toggleName = configKey:gsub("show", "Show") .. "ESP" -- Add suffix to avoid conflicts
             
             playerESPGroup:AddToggle(toggleName, {
@@ -684,19 +716,32 @@ local function createPuppyHubTabs(tabs, fovManager)
         if now - lastConnectionUpdate < connectionUpdateInterval then return end
         lastConnectionUpdate = now
         
-        if espLabel then espLabel:SetText('PlayerESP: ' .. (ModuleInstances.playerEsp and ModuleInstances.playerEsp._connMgr and ModuleInstances.playerEsp._connMgr:count() or 0)) end
-        if trinketLabel then trinketLabel:SetText('TrinketESP: ' .. (ModuleInstances.trinketEsp and ModuleInstances.trinketEsp._connMgr and ModuleInstances.trinketEsp._connMgr:count() or 0)) end
-        if leaderboardLabel then leaderboardLabel:SetText('BetterLB: ' .. (ModuleInstances.betterLeaderboard and ModuleInstances.betterLeaderboard._connMgr and ModuleInstances.betterLeaderboard._connMgr:count() or 0)) end
-        if intentLabel then intentLabel:SetText('Intent: ' .. (Intent and Intent.connectionMgr and Intent.connectionMgr:count() or 0)) end
-        -- New modules
-        if observeLabel then observeLabel:SetText('ObserveUI: ' .. (ModuleInstances.observeUI and ModuleInstances.observeUI._connections and #ModuleInstances.observeUI._connections or 0)) end -- Approx count
-        if chatLogLabel then chatLogLabel:SetText('ChatLog: ' .. (ModuleInstances.chatLog and ModuleInstances.chatLog._connections and #ModuleInstances.chatLog._connections or 0)) end -- Approx count
-        if spellPercLabel then spellPercLabel:SetText('Spell%: ' .. (ModuleInstances.spellPercentage and ModuleInstances.spellPercentage._connections and #ModuleInstances.spellPercentage._connections or 0)) end -- Approx count
-        if transTrailLabel then transTrailLabel:SetText('TransTrail: ' .. (ModuleInstances.transTrail and ModuleInstances.transTrail._connections and #ModuleInstances.transTrail._connections or 0)) end -- Approx count
-        if comboCountLabel then comboCountLabel:SetText('ComboCount: ' .. (ModuleInstances.comboCounter and ModuleInstances.comboCounter._connections and #ModuleInstances.comboCounter._connections or 0)) end -- Approx count
-
-        if scriptLabel then scriptLabel:SetText('Script: ' .. (connMgr and connMgr:count() or 0)) end
+        -- Helper function to safely get connection count string
+        local function getConnCountStr(instance, path)
+            local target = instance
+            if path then 
+                for _, key in ipairs(path) do
+                    if target then target = target[key] else return "0" end
+                end
+            end
+            if target and target.count then return tostring(target:count())
+            elseif target and type(target) == "table" and rawget(target, "_connections") then return tostring(table.maxn(target._connections)) -- Approx for ObserveUI etc.
+            elseif target and type(target) == "table" and rawget(target, "_connMgr") and target._connMgr.count then return tostring(target._connMgr:count()) -- For modules using ConnectionManager directly
+            else return "0" end
+        end
+        
+        if espLabel then espLabel:SetText('PlayerESP: ' .. getConnCountStr(ModuleInstances.playerEsp, {"_connMgr"})) end
+        if trinketLabel then trinketLabel:SetText('TrinketESP: ' .. getConnCountStr(ModuleInstances.trinketEsp, {"_connectionManager"})) end -- Use correct name
+        if leaderboardLabel then leaderboardLabel:SetText('BetterLB: ' .. getConnCountStr(ModuleInstances.betterLeaderboard, {"_connMgr"})) end
+        if intentLabel then intentLabel:SetText('Intent: ' .. getConnCountStr(Intent, {"connectionMgr"})) end -- Intent module structure
+        if observeLabel then observeLabel:SetText('ObserveUI: ' .. getConnCountStr(ModuleInstances.observeUI)) end 
+        if chatLogLabel then chatLogLabel:SetText('ChatLog: ' .. getConnCountStr(ModuleInstances.chatLog)) end 
+        if spellPercLabel then spellPercLabel:SetText('Spell%: ' .. getConnCountStr(ModuleInstances.spellPercentage)) end 
+        if transTrailLabel then transTrailLabel:SetText('TransTrail: ' .. getConnCountStr(ModuleInstances.transTrail)) end 
+        if comboCountLabel then comboCountLabel:SetText('ComboCount: ' .. getConnCountStr(ModuleInstances.comboCounter)) end 
+        if scriptLabel then scriptLabel:SetText('Script: ' .. getConnCountStr(connMgr)) end
     end
+
     
     -- Update connections label loop (only when UI visible)
     local isUIVisible = true -- Assume visible initially
@@ -704,8 +749,8 @@ local function createPuppyHubTabs(tabs, fovManager)
         if isUIVisible then updateConnectionsLabel() end
     end))
     -- Listen for menu toggle to update isUIVisible
-    connMgr:add(UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if type(Library.ToggleKeybind) == 'table' then -- KeyPicker
+    local function checkToggleKey(input)
+         if type(Library.ToggleKeybind) == 'table' then -- KeyPicker
             if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode.Name == Library.ToggleKeybind.Value then
                 isUIVisible = not isUIVisible
             end
@@ -713,35 +758,35 @@ local function createPuppyHubTabs(tabs, fovManager)
              if input.KeyCode == Library.ToggleKeybind then
                 isUIVisible = not isUIVisible
             end
-        else -- Default
-             if input.KeyCode == Enum.KeyCode.Insert then
+        else -- Default (Assuming Insert)
+             if input.KeyCode == Enum.KeyCode.Insert then 
                 isUIVisible = not isUIVisible
             end
         end
-    end))
+    end
+    connMgr:add(UserInputService.InputBegan:Connect(checkToggleKey))
 
 
     -- Apply initial default states from 'features' table to UI
-    if playerESPToggle then playerESPToggle:SetValue(features.PlayerEsp) end
-    -- Find and set other toggles based on feature keys...
     local allToggles = Library.GetObjects and Library:GetObjects("Toggle") or Toggles -- Compatibility
     if allToggles then
-        if allToggles.TrinketESP then allToggles.TrinketESP:SetValue(features.TrinketEsp) end
-        if allToggles.ObserveUIToggle then allToggles.ObserveUIToggle:SetValue(features.ShowObserveGui) end
-        if allToggles.ChatLogUIToggle then allToggles.ChatLogUIToggle:SetValue(features.ShowChatLogGui) end
-        if allToggles.SpellPercentageToggle then allToggles.SpellPercentageToggle:SetValue(features.ShowSpellPercentages) end
-        if allToggles.TransTrailToggle then allToggles.TransTrailToggle:SetValue(features.TransTrail) end
-        if allToggles.ComboCounterToggle then allToggles.ComboCounterToggle:SetValue(features.ShowComboCounter) end
-        if allToggles.SanityFilterToggle then allToggles.SanityFilterToggle:SetValue(features.SanityFilter) end
-        if allToggles.WalkspeedOverrideToggle then allToggles.WalkspeedOverrideToggle:SetValue(features.WalkspeedOverride) end
+        if allToggles.PlayerESP then pcall(allToggles.PlayerESP.SetValue, allToggles.PlayerESP, features.PlayerEsp) end
+        if allToggles.TrinketESP then pcall(allToggles.TrinketESP.SetValue, allToggles.TrinketESP, features.TrinketEsp) end
+        if allToggles.ObserveUIToggle then pcall(allToggles.ObserveUIToggle.SetValue, allToggles.ObserveUIToggle, features.ShowObserveGui) end
+        if allToggles.ChatLogUIToggle then pcall(allToggles.ChatLogUIToggle.SetValue, allToggles.ChatLogUIToggle, features.ShowChatLogGui) end
+        if allToggles.SpellPercentageToggle then pcall(allToggles.SpellPercentageToggle.SetValue, allToggles.SpellPercentageToggle, features.ShowSpellPercentages) end
+        if allToggles.TransTrailToggle then pcall(allToggles.TransTrailToggle.SetValue, allToggles.TransTrailToggle, features.TransTrail) end
+        if allToggles.ComboCounterToggle then pcall(allToggles.ComboCounterToggle.SetValue, allToggles.ComboCounterToggle, features.ShowComboCounter) end
+        if allToggles.SanityFilterToggle then pcall(allToggles.SanityFilterToggle.SetValue, allToggles.SanityFilterToggle, features.SanityFilter) end
+        if allToggles.WalkspeedOverrideToggle then pcall(allToggles.WalkspeedOverrideToggle.SetValue, allToggles.WalkspeedOverrideToggle, features.WalkspeedOverride) end
         -- ... and so on for other toggles using their assigned index/key
     end
     -- Apply initial slider values
     local allSliders = Library.GetObjects and Library:GetObjects("Slider") or Options -- Compatibility
      if allSliders then
-        if allSliders.WalkspeedSlider then allSliders.WalkspeedSlider:SetValue(features.Walkspeed) end
-        if allSliders.FogEndSlider then allSliders.FogEndSlider:SetValue(features.FogEnd) end
-        if allSliders.FogStartSlider then allSliders.FogStartSlider:SetValue(features.FogStart) end
+        if allSliders.WalkspeedSlider then pcall(allSliders.WalkspeedSlider.SetValue, allSliders.WalkspeedSlider, features.Walkspeed) end
+        if allSliders.FogEndSlider then pcall(allSliders.FogEndSlider.SetValue, allSliders.FogEndSlider, features.FogEnd) end
+        if allSliders.FogStartSlider then pcall(allSliders.FogStartSlider.SetValue, allSliders.FogStartSlider, features.FogStart) end
         -- ... set other sliders
     end
 
@@ -773,7 +818,7 @@ local function createUISettingsTab(uiSettingsTab)
     end)
     
     menuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { 
-        Default = 'Insert', 
+        Default = 'Insert', -- Changed Default keybind
         NoUI = true, 
         Text = 'Menu keybind' 
     })
@@ -807,11 +852,11 @@ local function applyPuppyTheme()
      Library:UpdateColorsUsingRegistry()
      
      -- Update theme manager options if they exist
-     if Options.FontColor then Options.FontColor:SetValueRGB(Library.FontColor) end
-     if Options.MainColor then Options.MainColor:SetValueRGB(Library.MainColor) end
-     if Options.BackgroundColor then Options.BackgroundColor:SetValueRGB(Library.BackgroundColor) end
-     if Options.AccentColor then Options.AccentColor:SetValueRGB(Library.AccentColor) end
-     if Options.OutlineColor then Options.OutlineColor:SetValueRGB(Library.OutlineColor) end
+     if Options.FontColor then pcall(Options.FontColor.SetValueRGB, Options.FontColor, Library.FontColor) end
+     if Options.MainColor then pcall(Options.MainColor.SetValueRGB, Options.MainColor, Library.MainColor) end
+     if Options.BackgroundColor then pcall(Options.BackgroundColor.SetValueRGB, Options.BackgroundColor, Library.BackgroundColor) end
+     if Options.AccentColor then pcall(Options.AccentColor.SetValueRGB, Options.AccentColor, Library.AccentColor) end
+     if Options.OutlineColor then pcall(Options.OutlineColor.SetValueRGB, Options.OutlineColor, Library.OutlineColor) end
 end
 
 
@@ -820,8 +865,8 @@ local function setupManagers(uiSettingsTab, fovManager)
     ThemeManager:SetLibrary(Library)
     SaveManager:SetLibrary(Library)
 
-    -- Apply Puppy Theme *before* ThemeManager applies its own saved/default theme
-    applyPuppyTheme() 
+    -- **FIX:** Apply Puppy Theme *after* ThemeManager has built its UI elements
+    -- but *before* it potentially loads a saved theme.
 
     -- Configure save settings
     SaveManager:IgnoreThemeSettings() -- Keep ignoring theme settings in saves
@@ -833,10 +878,18 @@ local function setupManagers(uiSettingsTab, fovManager)
 
     -- Build configuration and theme sections
     SaveManager:BuildConfigSection(uiSettingsTab)
-    ThemeManager:ApplyToTab(uiSettingsTab) -- ThemeManager will now potentially override puppy theme if a saved theme exists
+    ThemeManager:ApplyToTab(uiSettingsTab) 
     
-    -- Load auto-load configuration (might override puppy theme)
+    -- **FIX:** Apply Puppy theme again *after* ThemeManager:ApplyToTab 
+    -- and *after* loading autoload config to ensure it overrides.
+    applyPuppyTheme() 
+    
+    -- Load auto-load configuration (might override puppy theme if not reapplied)
     SaveManager:LoadAutoloadConfig()
+    
+    -- **FIX:** Apply Puppy theme one last time to be absolutely sure
+    applyPuppyTheme() 
+
     
     -- Setup cleanup when script is unloaded
     Library.OnUnload = function()
@@ -855,10 +908,6 @@ local function setupManagers(uiSettingsTab, fovManager)
             end
         end
         ModuleInstances = {} -- Clear table
-
-        -- Restore lighting settings altered by sliders/toggles if needed (optional)
-        -- pcall(function() Lighting.FogEnd = 100000; Lighting.FogStart = 99999; end) 
-        -- pcall(function() local se = Lighting:FindFirstChild("Sanity"); if se then se.Enabled = false end end)
 
         print("[Puppy Hub] Unload complete.")
     end
@@ -888,7 +937,7 @@ local function main()
     -- Setup UI components
     createPuppyHubTabs(tabs, fovManager) -- Use the new function
     createUISettingsTab(tabs.UISettings)
-    setupManagers(tabs.UISettings, fovManager) -- This now applies the theme
+    setupManagers(tabs.UISettings, fovManager) -- This now applies the theme correctly
 end
 
 -- Start the script
