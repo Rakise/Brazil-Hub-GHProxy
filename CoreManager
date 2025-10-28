@@ -34,10 +34,10 @@ local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitFor
 
 local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
 local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
-
+print("aooo")
 -- Carrega LinoriaLib
 local Library = loadstring(game:HttpGet(RepoBaseURL .. 'Library.lua'))() -- Use HTTPS for GitHub Raw
-
+print("tiao")
 -- Load LinoriaLib components
 local ThemeManager = loadstring(game:HttpGet(RepoBaseURL .. 'addons/ThemeManager.lua'))()
 local SaveManager = loadstring(game:HttpGet(RepoBaseURL .. 'addons/SaveManager.lua'))()
