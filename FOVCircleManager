@@ -4,35 +4,47 @@
 local FOVCircleManager = {}
 FOVCircleManager.__index = FOVCircleManager
 
+local Players = game:GetService("Players") -- Added Players service
+local RunService = game:GetService("RunService") -- Added RunService
+
 -- Configuration constants
 local CONFIG = {
     FOV_CIRCLE = {
-        DEFAULT_COLOR = Color3.fromRGB(0, 255, 128),
+        DEFAULT_COLOR = Color3.fromRGB(255, 182, 193), -- Default Puppy Pink
         STROKE_THICKNESS = 2,
         TRANSPARENCY = 0.3
     }
 }
 
 -- Throttle interval for updateCircle (in seconds)
-local FOV_UPDATE_INTERVAL = 0.1
+local FOV_UPDATE_INTERVAL = 0.05 -- Slightly faster update
 
 function FOVCircleManager.new()
     local self = setmetatable({}, FOVCircleManager)
-    self.player = game.Players.LocalPlayer
+    self.player = Players.LocalPlayer -- Use service variable
     self.isVisible = false
     self.color = CONFIG.FOV_CIRCLE.DEFAULT_COLOR
     self._lastUpdate = 0
     self._camera = workspace.CurrentCamera
     self._playerGui = self.player:FindFirstChildOfClass("PlayerGui") or self.player:WaitForChild("PlayerGui")
-    self:createFOVGui()
-    self:setupUpdateLoop()
+    self._updateCallback = nil -- Initialize callback
+    self._updateConnection = nil -- Initialize connection
+    
+    self:createFOVGui() -- Create GUI immediately
+    -- setupUpdateLoop is called after callback is set
+
     return self
 end
 
 function FOVCircleManager:createFOVGui()
     -- Cache playerGui
     local playerGui = self._playerGui
+    if not playerGui then return end -- Guard against missing playerGui
     
+    -- Destroy existing GUI if it exists
+    local existingGui = playerGui:FindFirstChild("AutoAimFOVGui")
+    if existingGui then existingGui:Destroy() end
+
     -- Create GUI container
     self.fovGui = Instance.new("ScreenGui")
     self.fovGui.Name = "AutoAimFOVGui"
@@ -43,12 +55,12 @@ function FOVCircleManager:createFOVGui()
     self.fovCircle = Instance.new("Frame")
     self.fovCircle.Name = "FOVCircle"
     self.fovCircle.AnchorPoint = Vector2.new(0.5, 0.5)
-    self.fovCircle.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    -- self.fovCircle.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- Background not needed with stroke
     self.fovCircle.BackgroundTransparency = 1
     self.fovCircle.BorderSizePixel = 0
-    self.fovCircle.Position = UDim2.new(0, 0, 0, 0)
-    self.fovCircle.Size = UDim2.new(0, 100, 0, 100)
-    self.fovCircle.Visible = false
+    self.fovCircle.Position = UDim2.new(0.5, 0, 0.5, 0) -- Center initially
+    self.fovCircle.Size = UDim2.new(0, 100, 0, 100) -- Default size
+    self.fovCircle.Visible = false -- Start hidden
     self.fovCircle.Parent = self.fovGui
     
     -- Add circular styling
@@ -73,52 +85,108 @@ end
 
 function FOVCircleManager:setVisible(visible)
     self.isVisible = visible
+    -- Immediately update visibility if GUI exists
+    if self.fovCircle then
+        self.fovCircle.Visible = visible and self:shouldBeVisible() -- Check tool condition too
+    end
 end
 
-function FOVCircleManager:updateCircle(autoAimInstance, connectionManager)
+-- Added helper to check tool condition
+function FOVCircleManager:shouldBeVisible()
+    if not self.isVisible then return false end -- Check main toggle
+
+    local character = self.player.Character
+    local equippedTool = character and character:FindFirstChildOfClass("Tool")
+    
+    -- Check against the autoAimInstance passed in the update callback context
+    -- This requires the callback structure to provide the instance
+    local holdingActiveTool = false
+    if self._currentAutoAimInstance and equippedTool and self._currentAutoAimInstance.toolNames then
+        holdingActiveTool = self._currentAutoAimInstance.toolNames[equippedTool.Name] == true
+        -- Debug Print
+        -- print(string.format("[FOV Circle] Tool Check: Equipped=%s, Active=%s, Names=%s", 
+        --      equippedTool and equippedTool.Name or "None", 
+        --      tostring(holdingActiveTool), 
+        --      self._currentAutoAimInstance and self._currentAutoAimInstance.toolNames)) 
+    end
+    
+    return holdingActiveTool
+end
+
+
+function FOVCircleManager:updateCircle(autoAimInstance, connectionManager) -- Parameters passed from CoreManager callback
     local now = tick()
     if now - self._lastUpdate < FOV_UPDATE_INTERVAL then return end
     self._lastUpdate = now
-    
-    local camera = self._camera
-    local viewport = camera.ViewportSize
-    local fieldOfView = camera.FieldOfView
-    local fov = autoAimInstance and autoAimInstance.fovMax or 20 -- Default FOV if no instance provided
-    
-    -- Pre-calculate trigonometric values
-    local fovRad = math.rad(fov/2)
-    local fieldRad = math.rad(fieldOfView/2)
-    local tanFov = math.tan(fovRad)
-    local tanField = math.tan(fieldRad)
-    local radius = tanFov / tanField * (viewport.X/2)
-    radius = math.clamp(radius, 10, math.min(viewport.X, viewport.Y)/2 - 10)
-    
-    -- Cache mouse
-    local mouse = self.player:GetMouse()
-    self.fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
-    self.fovCircle.Size = UDim2.new(0, radius*2, 0, radius*2)
-    
-    -- Show circle only if enabled and player has active tool
-    local character = self.player.Character
-    local equippedTool = character and character:FindFirstChildOfClass("Tool")
-    local holdingActiveTool = equippedTool and autoAimInstance and autoAimInstance.toolNames and autoAimInstance.toolNames[equippedTool.Name]
-    self.fovCircle.Visible = self.isVisible and holdingActiveTool or false
+
+    if not self.fovCircle or not self.fovCircle.Parent then return end -- Check if circle exists
+
+    -- Store the current autoAimInstance for shouldBeVisible check
+    self._currentAutoAimInstance = autoAimInstance
+
+    local shouldShow = self:shouldBeVisible()
+    if self.fovCircle.Visible ~= shouldShow then
+        self.fovCircle.Visible = shouldShow
+    end
+
+    -- Only calculate position/size if visible
+    if shouldShow then
+        local camera = self._camera
+        if not camera then return end -- Ensure camera exists
+
+        local viewport = camera.ViewportSize
+        local fieldOfView = camera.FieldOfView
+        local fov = autoAimInstance and autoAimInstance.fovMax or 20 -- Use FOV from instance
+
+        -- Prevent errors with extreme FOV values
+        if fieldOfView <= 0 or fieldOfView >= 180 or fov <= 0 or fov >= 180 then return end
+
+        -- Calculate radius based on FOV (Ensure positive results)
+        local fovRad = math.rad(fov / 2)
+        local fieldRad = math.rad(fieldOfView / 2)
+        local tanFov = math.tan(fovRad)
+        local tanField = math.tan(fieldRad)
+
+        if tanField == 0 then return end -- Avoid division by zero
+
+        local radius = (tanFov / tanField) * (viewport.X / 2)
+        radius = math.max(10, radius) -- Ensure minimum radius
+        radius = math.min(radius, math.min(viewport.X, viewport.Y) / 2 - 10) -- Ensure it fits
+
+        -- Get mouse position safely
+        local mouse = self.player:GetMouse()
+        if not mouse then return end
+
+        self.fovCircle.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+        self.fovCircle.Size = UDim2.new(0, radius*2, 0, radius*2)
+    end
 end
 
 function FOVCircleManager:setupUpdateLoop()
-    local RunService = game:GetService("RunService")
-    -- Use Heartbeat instead of RenderStepped for better performance
-    -- Only update when circle is visible and player has active tool
+    -- Disconnect existing connection if it exists
+    if self._updateConnection then
+        self._updateConnection:Disconnect()
+        self._updateConnection = nil
+    end
+
+    -- Use Heartbeat for updates
     self._updateConnection = RunService.Heartbeat:Connect(function()
+        -- Directly call the _updateCallback IF it's set and the circle should potentially be visible
         if self._updateCallback and self.isVisible then
-            self._updateCallback()
+             pcall(self._updateCallback) -- Use pcall for safety
+        elseif self.fovCircle and self.fovCircle.Visible then
+            -- Hide circle if callback is gone or isVisible is false, but circle is somehow still visible
+            self.fovCircle.Visible = false
         end
     end)
 end
 
 function FOVCircleManager:setUpdateCallback(callback)
     self._updateCallback = callback
+    -- Setup/Restart the update loop when the callback is set/changed
+    self:setupUpdateLoop()
 end
+
 
 function FOVCircleManager:destroy()
     if self._updateConnection then
@@ -132,6 +200,7 @@ function FOVCircleManager:destroy()
     end
     
     self._updateCallback = nil
+    self._currentAutoAimInstance = nil -- Clear instance reference
 end
 
-return FOVCircleManager 
+return FOVCircleManager
