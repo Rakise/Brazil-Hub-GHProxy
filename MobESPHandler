@@ -1,0 +1,332 @@
+-- MobESPHandler.lua
+-- Refactored to match PlayerESP layout
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local ConnectionManager = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
+
+-- Configuration
+local CONFIG = {
+    UPDATE_INTERVAL = 0.25, -- How often to update data (4 times a second)
+    MAX_DISTANCE = 300, -- Max distance to render ESP
+    BILLBOARD_SIZE = UDim2.new(0, 500, 0, 100), -- Match PlayerESP
+    BILLBOARD_OFFSET = Vector3.new(0, 2, 0),
+    DEFAULT_TEXT_SIZE = 14,
+}
+
+-- Cache
+local LocalPlayer = Players.LocalPlayer
+local LiveFolder = Workspace:WaitForChild("Live")
+local floor = math.floor
+local format = string.format
+local tick = tick
+local newInstance = Instance.new
+
+-- Frame layout configuration (similar to PlayerESP)
+local FRAME_CONFIG = {
+    {
+        name = "nameFrame",
+        layout = { fillDirection = Enum.FillDirection.Horizontal, horizontalAlignment = Enum.HorizontalAlignment.Center, verticalAlignment = Enum.VerticalAlignment.Center },
+        labels = {
+            { name = "nameLabel", key = "mobName", format = "%s", getData = function(monster, cache, cleanName) return cleanName end },
+            { name = "distanceLabel", key = "distance", format = " [%sm]", getData = function(monster, cache, cleanName, localHRP)
+                    if localHRP then
+                        local monsterHRP = monster:FindFirstChild("HumanoidRootPart")
+                        if monsterHRP then
+                            return floor((localHRP.Position - monsterHRP.Position).Magnitude)
+                        end
+                    end
+                    return "0"
+                end }
+        }
+    },
+    {
+        name = "hpFrame",
+        layout = { fillDirection = Enum.FillDirection.Horizontal, horizontalAlignment = Enum.HorizontalAlignment.Center, verticalAlignment = Enum.VerticalAlignment.Center },
+        labels = {
+            { name = "hpLabel", key = "health", format = "[%s/%s]", getData = function(monster, cache)
+                    local humanoid = cache.humanoid
+                    if humanoid then
+                        return floor(humanoid.Health + 0.5), floor(humanoid.MaxHealth + 0.5)
+                    end
+                    return "0", "0"
+                end },
+            { name = "hpPercLabel", key = "healthPercent", format = " [%s%%]", getData = function(monster, cache)
+                    local humanoid = cache.humanoid
+                    if humanoid and humanoid.MaxHealth > 0 then
+                        return floor((humanoid.Health / humanoid.MaxHealth) * 100)
+                    end
+                    return "0"
+                end }
+        }
+    }
+}
+
+
+local MobESP = {}
+MobESP.__index = MobESP
+
+function MobESP.new()
+    local self = setmetatable({}, MobESP)
+    self.enabled = false
+    self._connMgr = ConnectionManager.new()
+    self._mobConnections = {} -- [monster] = {DiedConn, ...}
+    self.espBillboards = {} -- [monster] = {billboard, labels={...}, humanoid, cleanName}
+    self._lastUpdate = 0
+    self._localCharCache = nil
+    self._localCharCacheTime = 0
+    return self
+end
+
+-- Helper: Get LocalPlayer's HRP (cached)
+function MobESP:getLocalHRP()
+    local currentTime = tick()
+    if currentTime - self._localCharCacheTime > 1 then
+        self._localCharCache = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        self._localCharCacheTime = currentTime
+    end
+    return self._localCharCache
+end
+
+-- Helper: Create a styled label
+local function createLabel(text, parent)
+    local label = newInstance("TextLabel")
+    label.FontSize = Enum.FontSize.Size14
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.Text = text
+    label.TextStrokeTransparency = 0.5
+    label.Font = Enum.Font.SourceSansSemibold
+    label.BackgroundTransparency = 1
+    label.TextSize = CONFIG.DEFAULT_TEXT_SIZE
+    label.Size = UDim2.new(0, 0, 0.1, 0)
+    label.AutomaticSize = Enum.AutomaticSize.X
+    label.TextXAlignment = Enum.TextXAlignment.Center
+    label.RichText = true
+    label.Parent = parent
+    return label
+end
+
+-- Helper: Create a frame with a layout
+local function createFrameWithLayout(frameName, layoutConfig, parent)
+    local frame = newInstance("Frame")
+    frame.Name = frameName
+    frame.BackgroundTransparency = 1
+    frame.Size = UDim2.new(1, 0, 0.1, 0)
+    frame.Parent = parent
+    local layout = newInstance("UIListLayout")
+    layout.FillDirection = layoutConfig.fillDirection
+    layout.HorizontalAlignment = layoutConfig.horizontalAlignment
+    layout.VerticalAlignment = layoutConfig.verticalAlignment
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = frame
+    return frame
+end
+
+-- Function to create the billboard UI for a monster
+function MobESP:createBillboard(monster, cleanName, humanoid, hrp)
+    -- Destroy old billboard if it exists
+    if self.espBillboards[monster] then
+        self:removeMonster(monster)
+    end
+
+    local billboard = newInstance("BillboardGui")
+    billboard.Name = "MobESP"
+    billboard.Adornee = hrp
+    billboard.Size = CONFIG.BILLBOARD_SIZE
+    billboard.StudsOffset = CONFIG.BILLBOARD_OFFSET
+    billboard.MaxDistance = CONFIG.MAX_DISTANCE
+    billboard.AlwaysOnTop = true
+    billboard.LightInfluence = 1
+    billboard.Parent = hrp -- Parent to HRP
+
+    local mainLayout = newInstance("UIListLayout")
+    mainLayout.Padding = UDim.new(0, 2)
+    mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    mainLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    mainLayout.Parent = billboard
+
+    -- Store references
+    local billboardData = {
+        billboard = billboard,
+        labels = {},
+        humanoid = humanoid, -- Cache humanoid
+        cleanName = cleanName
+    }
+    
+    -- Create frames and labels based on config
+    for i, frameConfig in ipairs(FRAME_CONFIG) do
+        local frame = createFrameWithLayout(frameConfig.name, frameConfig.layout, billboard)
+        frame.LayoutOrder = i
+        for j, labelConfig in ipairs(frameConfig.labels) do
+            local label = createLabel("", frame)
+            label.LayoutOrder = j
+            billboardData.labels[labelConfig.key] = label
+        end
+    end
+
+    self.espBillboards[monster] = billboardData
+    
+    -- Initial update
+    self:updateMobData(monster)
+end
+
+-- Function to handle adding a monster
+function MobESP:addMonster(monster)
+    if not self.enabled then return end
+    if self.espBillboards[monster] then return end -- Already tracking
+
+    -- Identify using your logic
+    local monsterInfo = monster:FindFirstChild("MonsterInfo")
+    local humanoid = monster:FindFirstChildOfClass("Humanoid")
+    local hrp = monster:FindFirstChild("HumanoidRootPart")
+    
+    if monsterInfo and humanoid and hrp then
+        local cleanName = "Unknown"
+        local monsterTypeVal = monsterInfo:FindFirstChild("MonsterType")
+        if monsterTypeVal then
+            cleanName = monsterTypeVal.Value
+        end
+        
+        -- Create the ESP
+        self:createBillboard(monster, cleanName, humanoid, hrp)
+        
+        -- Connect to Died event
+        local diedConn = humanoid.Died:Connect(function()
+            self:removeMonster(monster)
+        end)
+        
+        -- Store connection for cleanup
+        self._mobConnections[monster] = { DiedConn = diedConn }
+    end
+end
+
+-- Function to handle removing a monster
+function MobESP:removeMonster(monster)
+    -- Disconnect signals
+    if self._mobConnections[monster] then
+        for _, conn in pairs(self._mobConnections[monster]) do
+            conn:Disconnect()
+        end
+        self._mobConnections[monster] = nil
+    end
+    
+    -- Destroy billboard
+    if self.espBillboards[monster] then
+        if self.espBillboards[monster].billboard then
+            self.espBillboards[monster].billboard:Destroy()
+        end
+        self.espBillboards[monster] = nil
+    end
+end
+
+-- Function to update a monster's billboard data
+function MobESP:updateMobData(monster)
+    local data = self.espBillboards[monster]
+    if not data or not data.humanoid or not data.humanoid.Parent then
+        self:removeMonster(monster)
+        return
+    end
+    
+    local localHRP = self:getLocalHRP()
+    local cache = { humanoid = data.humanoid } -- Pass humanoid in a cache table
+    
+    -- Update all labels
+    for _, frameConfig in ipairs(FRAME_CONFIG) do
+        for _, labelConfig in ipairs(frameConfig.labels) do
+            local label = data.labels[labelConfig.key]
+            if label then
+                -- Get data
+                local values = { labelConfig.getData(monster, cache, data.cleanName, localHRP) }
+                -- Format text
+                label.Text = format(labelConfig.format, unpack(values))
+            end
+        end
+    end
+end
+
+-- Main update loop, throttled
+function MobESP:updateBillboards()
+    if not self.enabled then return end
+    
+    local currentTime = tick()
+    if currentTime - self._lastUpdate < CONFIG.UPDATE_INTERVAL then
+        return
+    end
+    self._lastUpdate = currentTime
+    
+    local localHRP = self:getLocalHRP() -- Get once per update
+    
+    for monster, data in pairs(self.espBillboards) do
+        -- Garbage collection: Check if monster is still valid
+        if not monster or not monster.Parent or not data.humanoid or not data.humanoid.Parent then
+            self:removeMonster(monster)
+        else
+            -- Update data
+            self:updateMobData(monster)
+            
+            -- Update max distance (BillboardGui handles the rest)
+            if data.billboard then
+                data.billboard.MaxDistance = CONFIG.MAX_DISTANCE
+            end
+        end
+    end
+end
+
+-- Public: Enable ESP
+function MobESP:enable()
+    if self.enabled then return end
+    self.enabled = true
+    
+    -- Connect to main Heartbeat loop
+    self._connMgr:add(RunService.Heartbeat:Connect(function()
+        self:updateBillboards()
+    end))
+    
+    -- Connect to Live folder events
+    self._connMgr:add(LiveFolder.ChildAdded:Connect(function(child)
+        self:addMonster(child)
+    end))
+    
+    self._connMgr:add(LiveFolder.ChildRemoved:Connect(function(child)
+        self:removeMonster(child)
+    end))
+    
+    -- Scan for existing monsters
+    for _, child in ipairs(LiveFolder:GetChildren()) do
+        self:addMonster(child)
+    end
+end
+
+-- Public: Disable ESP
+function MobESP:disable()
+    if not self.enabled then return end
+    self.enabled = false
+    
+    -- Disconnect all general connections
+    self._connMgr:disconnectAll()
+    
+    -- Remove all tracked monsters
+    local monstersToClear = {}
+    for monster in pairs(self.espBillboards) do
+        table.insert(monstersToClear, monster)
+    end
+    
+    for _, monster in ipairs(monstersToClear) do
+        self:removeMonster(monster)
+    end
+    
+    -- Ensure tables are empty
+    self.espBillboards = {}
+    self._mobConnections = {}
+end
+
+-- Public: Cleanup
+function MobESP:destroy()
+    self:disable()
+    self._connMgr = nil
+end
+
+return MobESP
+

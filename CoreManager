@@ -5,6 +5,7 @@
     Main script that integrates multiple game enhancement modules:
     - Player ESP (Class Colors, Held Item)
     - Trinket ESP (Name only)
+    - Mob ESP (NEW)
     - Auto-Aim system
     - Better Leaderboard
     - Observe UI
@@ -77,6 +78,7 @@ local ChatLog = safeRequire(BRAZIL_HUB_BASE_URL .. "ChatLog")
 local SpellPercentage = safeRequire(BRAZIL_HUB_BASE_URL .. "SpellPercentage")
 local TransTrail = safeRequire(BRAZIL_HUB_BASE_URL .. "TransTrail")
 local ComboCounter = safeRequire(BRAZIL_HUB_BASE_URL .. "ComboCounter")
+local MobESP = safeRequire(BRAZIL_HUB_BASE_URL .. "MobESPHandler") -- NEW: Load Mob ESP
 
 -- Load sub-modules
 local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
@@ -86,6 +88,81 @@ local ConnectionManager = safeRequire(BRAZIL_HUB_BASE_URL .. "ConnectionManager"
 local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
 
 local connMgr = ConnectionManager and ConnectionManager.new() or nil
+
+-- NEW: Store original lighting settings
+local OriginalLighting = {
+    FogEnd = Lighting.FogEnd,
+    FogStart = Lighting.FogStart,
+    Brightness = Lighting.Brightness,
+    Exposure = Lighting.ExposureCompensation,
+    Effects = {}
+}
+
+-- NEW: Effect types to manage
+local EFFECT_TYPES = {
+    "Atmosphere", "BloomEffect", "ColorCorrectionEffect", 
+    "DepthOfFieldEffect", "SunRaysEffect", "Sanity"
+}
+
+-- NEW: Helper function to check effects
+local function isTargetEffect(obj)
+    for _, effectType in ipairs(EFFECT_TYPES) do
+        if obj:IsA(effectType) then return true end
+    end
+    return false
+end
+
+-- NEW: Save initial effect states
+for _, child in ipairs(Lighting:GetChildren()) do
+    if isTargetEffect(child) then
+        OriginalLighting.Effects[child] = child.Enabled
+    end
+end
+
+-- NEW: Listener for new effects
+if connMgr then
+    connMgr:add(Lighting.ChildAdded:Connect(function(child)
+        if isTargetEffect(child) then
+            -- Store original state
+            if OriginalLighting.Effects[child] == nil then
+                OriginalLighting.Effects[child] = child.Enabled
+            end
+            -- If disable toggle is on, disable new effect
+            if features.DisableEffects then
+                child.Enabled = false
+            end
+        end
+    end))
+
+    -- NEW: Add Heartbeat loop to continuously enforce lighting settings
+    connMgr:add(RunService.Heartbeat:Connect(function()
+        pcall(function()
+            -- NEW: Only apply custom fog/lighting if the toggle is on
+            if features.EnableCustomFog then
+                -- Continuously apply slider values
+                if Lighting.FogEnd ~= features.FogEnd then
+            if Lighting.FogStart ~= features.FogStart then
+                Lighting.FogStart = features.FogStart
+            end
+            if Lighting.Brightness ~= features.Brightness then
+                Lighting.Brightness = features.Brightness
+                if Lighting.ExposureCompensation ~= features.Exposure then
+                    Lighting.ExposureCompensation = features.Exposure
+                end
+            end
+            
+            -- Continuously enforce "Disable Effects" if toggled on
+            if features.DisableEffects then
+                for effect, _ in pairs(OriginalLighting.Effects) do
+                    if effect and effect.Parent and effect.Enabled then
+                        effect.Enabled = false
+                    end
+                end
+            end
+        end)
+    end))
+end
+
 
 -- Helper para instanciar módulos com segurança
 local function safeNew(module, name, ...) -- Added ... for arguments like playerGui
@@ -112,6 +189,7 @@ local ModuleInstances = {
     trinketEsp = safeNew(TrinketESP, "TrinketESP"),
     autoBlock = safeNew(AutoBlock, "AutoBlock"),
     indicator = safeNew(Indicator, "Indicator"),
+    mobEsp = safeNew(MobESP, "MobESP"), -- NEW: Instantiate Mob ESP
     -- New module instances
     observeUI = safeNew(ObserveUI, "ObserveUI", playerGui), -- Pass playerGui
     chatLog = safeNew(ChatLog, "ChatLog", playerGui),       -- Pass playerGui
@@ -158,9 +236,13 @@ local features = {
 	TransTrail = false, 
 	
 	-- NEW UI Features (flags)
-	SanityFilter = false,
-	FogEnd = 100000,
-	FogStart = 99999,
+    EnableCustomFog = false, -- NEW: Master toggle for custom lighting
+	SanityFilter = false, -- This will be replaced by DisableEffects
+    DisableEffects = false, -- NEW
+	FogEnd = OriginalLighting.FogEnd, -- UPDATED: Default to original
+	FogStart = OriginalLighting.FogStart, -- UPDATED: Default to original
+    Brightness = OriginalLighting.Brightness, -- NEW
+    Exposure = OriginalLighting.Exposure, -- NEW
 	Walkspeed = 16,
 	WalkspeedOverride = false, 
 }
@@ -326,6 +408,20 @@ function UICallbacks.onToggleTrinketESP(enabled)
     end
 end
 
+-- NEW: Mob ESP callback
+function UICallbacks.onToggleMobESP(enabled)
+    features.MobEsp = enabled -- Update global state
+    if ModuleInstances.mobEsp then
+        if enabled then
+            ModuleInstances.mobEsp:enable()
+            print("[Mob ESP] Enabled")
+        else
+            ModuleInstances.mobEsp:disable()
+            print("[Mob ESP] Disabled")
+        end
+    end
+end
+
 
 -- Intent Billboard toggle
 function UICallbacks.onToggleIntentBillboard(enabled)
@@ -421,12 +517,55 @@ end
 -- Fog Callbacks
 function UICallbacks.onFogEndChanged(value)
     features.FogEnd = value -- Update global state
-    Lighting.FogEnd = value
+    -- REMOVED: Lighting.FogEnd = value
 end
 function UICallbacks.onFogStartChanged(value)
     features.FogStart = value -- Update global state
-    Lighting.FogStart = value
+    -- REMOVED: Lighting.FogStart = value
 end
+
+-- NEW: Brightness/Exposure Callbacks
+function UICallbacks.onBrightnessChanged(value)
+    features.Brightness = value
+    -- REMOVED: Lighting.Brightness = value
+end
+
+function UICallbacks.onExposureChanged(value)
+    features.Exposure = value
+    -- REMOVED: Lighting.ExposureCompensation = value
+end
+
+-- NEW: Callback for the master lighting toggle
+function UICallbacks.onToggleCustomFog(enabled)
+    features.EnableCustomFog = enabled
+    if not enabled then
+        -- Immediately restore original lighting when toggled off
+        pcall(function()
+            Lighting.FogEnd = OriginalLighting.FogEnd
+            Lighting.FogStart = OriginalLighting.FogStart
+            Lighting.Brightness = OriginalLighting.Brightness
+            Lighting.ExposureCompensation = OriginalLighting.Exposure
+        end)
+        print("[Lighting] Custom Lighting Disabled. Restored original values.")
+    else
+        print("[Lighting] Custom Lighting Enabled.")
+    end
+end
+
+function UICallbacks.onToggleDisableEffects(enabled)
+    features.DisableEffects = enabled
+    for effect, originalEnabled in pairs(OriginalLighting.Effects) do
+        if effect and effect.Parent then
+            -- If toggle is on (enabled=true), disable effect.
+            -- If toggle is off (enabled=false), restore original state.
+            pcall(function()
+                effect.Enabled = enabled and false or originalEnabled
+            end)
+        end
+    end
+    print("[Lighting] Post-Processing Effects " .. (enabled and "Disabled" or "Restored"))
+end
+
 
 -- TransTrail Callback
 function UICallbacks.onToggleTransTrail(enabled)
@@ -462,10 +601,27 @@ local function createPuppyHubTabs(tabs, fovManager)
 
     -- Lighting Tab
     local lightingGroup = tabs.Lighting:AddLeftGroupbox('Fog & Effects')
+    
+    -- NEW: Master toggle for custom lighting
+    lightingGroup:AddToggle('EnableCustomFogToggle', {
+        Text = 'Enable Custom Lighting', Default = features.EnableCustomFog, Tooltip = 'Toggle to enable/disable all custom fog and lighting sliders.',
+        Callback = UICallbacks.onToggleCustomFog
+    })
+
+    -- OLD SanityFilterToggle REMOVED
+    --[[
     lightingGroup:AddToggle('SanityFilterToggle', {
         Text = 'Sanity Filter', Default = features.SanityFilter, Tooltip = 'Toggle the sanity visual effect',
         Callback = UICallbacks.onToggleSanityFilter
     })
+    ]]--
+    
+    -- NEW: Disable Effects Toggle
+    lightingGroup:AddToggle('DisableEffectsToggle', {
+        Text = 'Disable Post-Processing', Default = features.DisableEffects, Tooltip = 'Disable all post-processing (Bloom, Sanity, ColorCorrection, etc.)',
+        Callback = UICallbacks.onToggleDisableEffects
+    })
+    
     lightingGroup:AddSlider('FogEndSlider', {
         Text = 'Fog End', Default = features.FogEnd, Min = 0, Max = 100000, Rounding = 0,
         Callback = UICallbacks.onFogEndChanged
@@ -474,11 +630,21 @@ local function createPuppyHubTabs(tabs, fovManager)
         Text = 'Fog Start', Default = features.FogStart, Min = 0, Max = 100000, Rounding = 0,
         Callback = UICallbacks.onFogStartChanged
     })
-    -- Add more lighting controls if needed
+    
+    -- NEW: Brightness Sliders
+    lightingGroup:AddSlider('BrightnessSlider', {
+        Text = 'Brightness', Default = features.Brightness, Min = 0, Max = 10, Rounding = 1,
+        Callback = UICallbacks.onBrightnessChanged
+    })
+    lightingGroup:AddSlider('ExposureSlider', {
+        Text = 'Exposure', Default = features.Exposure, Min = -5, Max = 5, Rounding = 1,
+        Callback = UICallbacks.onExposureChanged
+    })
+    
 
     -- Visuals Tab
     local playerESPGroup = tabs.Visuals:AddLeftGroupbox('Player ESP')
-    local trinketESPGroup = tabs.Visuals:AddRightGroupbox('Trinket ESP')
+    local trinketESPGroup = tabs.Visuals:AddRightGroupbox('Item/Mob ESP') -- Renamed group
     local otherVisualsGroup = tabs.Visuals:AddLeftGroupbox('Other Visuals')
 
     local playerESPToggle = playerESPGroup:AddToggle('PlayerESP', {
@@ -512,6 +678,22 @@ local function createPuppyHubTabs(tabs, fovManager)
         Text = 'Enable Trinket ESP', Default = features.TrinketEsp, Tooltip = 'Show names for trinkets',
         Callback = UICallbacks.onToggleTrinketESP
     })
+    -- NEW: Button to clear trinkets
+    trinketESPGroup:AddButton('Clear Trinket ESP', {
+        Text = 'Clear All Trinkets', Tooltip = 'Manually clear all trinket billboards',
+        Callback = function()
+            if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
+                ModuleInstances.trinketEsp:clearAllBillboards()
+            end
+        end
+    })
+    
+    -- NEW: Mob ESP Toggle
+    trinketESPGroup:AddToggle('MobESP', {
+        Text = 'Enable Mob ESP', Default = features.MobEsp, Tooltip = 'Show names and health for mobs',
+        Callback = UICallbacks.onToggleMobESP
+    })
+
 
     otherVisualsGroup:AddToggle('IntentBillboard', {
         Text = 'Intent Billboard', Default = false, Tooltip = 'Show equipped tool above players',
@@ -685,6 +867,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     -- local ffLabel = connectionsGroup:AddLabel('FFDetector: ...') -- Removed
     local espLabel = connectionsGroup:AddLabel('PlayerESP: ...')
     local trinketLabel = connectionsGroup:AddLabel('TrinketESP: ...')
+    local mobLabel = connectionsGroup:AddLabel('MobESP: ...') -- NEW
     local leaderboardLabel = connectionsGroup:AddLabel('BetterLeaderboard: ...')
     -- local nofogLabel = connectionsGroup:AddLabel('NoFog: ...') -- NoFog module removed, only slider exists
     local intentLabel = connectionsGroup:AddLabel('Intent: ...')
@@ -726,11 +909,13 @@ local function createPuppyHubTabs(tabs, fovManager)
             if target and target.count then return tostring(target:count())
             elseif target and type(target) == "table" and rawget(target, "_connections") then return tostring(table.maxn(target._connections)) -- Approx for ObserveUI etc.
             elseif target and type(target) == "table" and rawget(target, "_connMgr") and target._connMgr.count then return tostring(target._connMgr:count()) -- For modules using ConnectionManager directly
+            elseif target and type(target) == "table" and rawget(target, "_connectionManager") and target._connectionManager.count then return tostring(target._connectionManager:count()) -- For trinket_esp_handler
             else return "0" end
         end
         
         if espLabel then espLabel:SetText('PlayerESP: ' .. getConnCountStr(ModuleInstances.playerEsp, {"_connMgr"})) end
-        if trinketLabel then trinketLabel:SetText('TrinketESP: ' .. getConnCountStr(ModuleInstances.trinketEsp, {"_connectionManager"})) end -- Use correct name
+        if trinketLabel then trinketLabel:SetText('TrinketESP: ' .. getConnCountStr(ModuleInstances.trinketEsp, {"_connectionManager"})) end
+        if mobLabel then mobLabel:SetText('MobESP: ' .. getConnCountStr(ModuleInstances.mobEsp, {"_connMgr"})) end -- NEW
         if leaderboardLabel then leaderboardLabel:SetText('BetterLB: ' .. getConnCountStr(ModuleInstances.betterLeaderboard, {"_connMgr"})) end
         if intentLabel then intentLabel:SetText('Intent: ' .. getConnCountStr(Intent, {"connectionMgr"})) end -- Intent module structure
         if observeLabel then observeLabel:SetText('ObserveUI: ' .. getConnCountStr(ModuleInstances.observeUI)) end 
@@ -771,12 +956,20 @@ local function createPuppyHubTabs(tabs, fovManager)
     if allToggles then
         if allToggles.PlayerESP then pcall(allToggles.PlayerESP.SetValue, allToggles.PlayerESP, features.PlayerEsp) end
         if allToggles.TrinketESP then pcall(allToggles.TrinketESP.SetValue, allToggles.TrinketESP, features.TrinketEsp) end
+        if allToggles.MobESP then pcall(allToggles.MobESP.SetValue, allToggles.MobESP, features.MobEsp) end -- NEW
         if allToggles.ObserveUIToggle then pcall(allToggles.ObserveUIToggle.SetValue, allToggles.ObserveUIToggle, features.ShowObserveGui) end
         if allToggles.ChatLogUIToggle then pcall(allToggles.ChatLogUIToggle.SetValue, allToggles.ChatLogUIToggle, features.ShowChatLogGui) end
         if allToggles.SpellPercentageToggle then pcall(allToggles.SpellPercentageToggle.SetValue, allToggles.SpellPercentageToggle, features.ShowSpellPercentages) end
         if allToggles.TransTrailToggle then pcall(allToggles.TransTrailToggle.SetValue, allToggles.TransTrailToggle, features.TransTrail) end
         if allToggles.ComboCounterToggle then pcall(allToggles.ComboCounterToggle.SetValue, allToggles.ComboCounterToggle, features.ShowComboCounter) end
-        if allToggles.SanityFilterToggle then pcall(allToggles.SanityFilterToggle.SetValue, allToggles.SanityFilterToggle, features.SanityFilter) end
+        
+        -- OLD SanityFilterToggle REMOVED
+        -- if allToggles.SanityFilterToggle then pcall(allToggles.SanityFilterToggle.SetValue, allToggles.SanityFilterToggle, features.SanityFilter) end
+        
+        -- NEW: Set new toggles
+        if allToggles.EnableCustomFogToggle then pcall(allToggles.EnableCustomFogToggle.SetValue, allToggles.EnableCustomFogToggle, features.EnableCustomFog) end
+        if allToggles.DisableEffectsToggle then pcall(allToggles.DisableEffectsToggle.SetValue, allToggles.DisableEffectsToggle, features.DisableEffects) end
+
         if allToggles.WalkspeedOverrideToggle then pcall(allToggles.WalkspeedOverrideToggle.SetValue, allToggles.WalkspeedOverrideToggle, features.WalkspeedOverride) end
         -- ... and so on for other toggles using their assigned index/key
     end
@@ -786,6 +979,10 @@ local function createPuppyHubTabs(tabs, fovManager)
         if allSliders.WalkspeedSlider then pcall(allSliders.WalkspeedSlider.SetValue, allSliders.WalkspeedSlider, features.Walkspeed) end
         if allSliders.FogEndSlider then pcall(allSliders.FogEndSlider.SetValue, allSliders.FogEndSlider, features.FogEnd) end
         if allSliders.FogStartSlider then pcall(allSliders.FogStartSlider.SetValue, allSliders.FogStartSlider, features.FogStart) end
+        
+        -- NEW: Set new sliders
+        if allSliders.BrightnessSlider then pcall(allSliders.BrightnessSlider.SetValue, allSliders.BrightnessSlider, features.Brightness) end
+        if allSliders.ExposureSlider then pcall(allSliders.ExposureSlider.SetValue, allSliders.ExposureSlider, features.Exposure) end
         -- ... set other sliders
     end
 
@@ -888,6 +1085,18 @@ local function setupManagers(uiSettingsTab, fovManager)
         if walkspeedConnection then walkspeedConnection:Disconnect() end -- Disconnect walkspeed listener
         if connMgr then connMgr:disconnectAll() end -- Use disconnectAll for safety
         
+        -- NEW: Restore original lighting settings
+        pcall(function() Lighting.FogEnd = OriginalLighting.FogEnd end)
+        pcall(function() Lighting.FogStart = OriginalLighting.FogStart end)
+        pcall(function() Lighting.Brightness = OriginalLighting.Brightness end)
+        pcall(function() Lighting.ExposureCompensation = OriginalLighting.Exposure end)
+        for effect, originalEnabled in pairs(OriginalLighting.Effects) do
+            if effect and effect.Parent then
+                pcall(function() effect.Enabled = originalEnabled end)
+            end
+        end
+        print("[PuppPlayer Hub] Restored original lighting settings.")
+
         -- Destroy modules
         if triggerMonitor then triggerMonitor:destroy() end
         if fovManager then fovManager:destroy() end
@@ -942,4 +1151,6 @@ if queue_on_teleport and typeof(queue_on_teleport) == "function" then
 end
 
 print("[Puppy Hub] Loaded!")
+
+
 

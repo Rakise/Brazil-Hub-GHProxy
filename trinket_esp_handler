@@ -11,6 +11,8 @@ local Config = {
         TextStrokeColor = Color3.new(0.2, 0.2, 0.2),
         Font = Enum.Font.SourceSans,
         MaxProcessPerFrame = 5,
+        -- NEW: Garbage Collection interval
+        GC_INTERVAL = 3.0, -- Check for invalid trinkets every 3 seconds
     },
     
     Colors = {
@@ -110,9 +112,6 @@ local function cleanMeshId(id)
     str = str:gsub("%s+", "")
     -- Remove rbxassetid:// se presente
     str = str:gsub("rbxassetid://", "")
-    -- Debug: print para verificar se os IDs estão sendo limpos corretamente
-    -- print("Original MeshID:", id)
-    -- print("Cleaned MeshID:", str)
     return str
 end
 
@@ -238,6 +237,8 @@ function TrinketESP.new()
         _processingQueue = false,
         -- Cache para evitar re-verificações
         _processedObjects = {},
+        -- NEW: Garbage collection timestamp
+        _lastGCTime = 0,
     }, TrinketESP)
 end
 
@@ -377,6 +378,55 @@ function TrinketESP:scanExistingTrinkets()
     end
 end
 
+-- NEW: Garbage Collection for invalid trinkets
+function TrinketESP:garbageCollect()
+    if not self.enabled then return end
+    
+    local currentTime = tick()
+    if currentTime - self._lastGCTime < Config.ESP.GC_INTERVAL then
+        return
+    end
+    self._lastGCTime = currentTime
+
+    local trinketsToClear = {}
+    
+    -- Find invalid billboards
+    for trinket, billboardData in pairs(self.espBillboards) do
+        -- Check if trinket (adornee) is no longer valid
+        if not trinket or not trinket.Parent or not billboardData.billboard or not billboardData.billboard.Parent then
+            table.insert(trinketsToClear, trinket)
+        end
+    end
+    
+    -- Clear them
+    for _, trinket in ipairs(trinketsToClear) do
+        self:removeBillboard(trinket)
+    end
+end
+
+-- NEW: Public function to clear all billboards manually
+function TrinketESP:clearAllBillboards()
+    print("[Trinket ESP] Clearing all billboards manually...")
+    
+    local trinketsToClear = {}
+    for trinket in pairs(self.espBillboards) do
+        table.insert(trinketsToClear, trinket)
+    end
+    
+    for _, trinket in ipairs(trinketsToClear) do
+        self:removeBillboard(trinket)
+    end
+    
+    -- Clear caches
+    trinketCache = {}
+    self._processedObjects = {}
+    self._pendingTrinkets = {}
+    self._processingQueue = false
+    
+    -- Immediately scan for trinkets again
+    self:scanExistingTrinkets()
+end
+
 function TrinketESP:enable()
     if self.enabled then return end
     
@@ -392,6 +442,11 @@ function TrinketESP:enable()
     
     self._connectionManager:add(Workspace.ChildRemoved:Connect(function(obj)
         self:onChildRemoved(obj)
+    end))
+
+    -- NEW: Start garbage collection loop
+    self._connectionManager:add(RunService.Heartbeat:Connect(function()
+        self:garbageCollect()
     end))
 end
 
