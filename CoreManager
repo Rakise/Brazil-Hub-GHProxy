@@ -1,11 +1,7 @@
--- Puppy Hub Script with LinoriaLib UI Integration
--- Refactored for better maintainability and organization
-
 --[[
     Main script that integrates multiple game enhancement modules:
     - Player ESP (Class Colors, Held Item)
     - Trinket ESP (Name only)
-    - Mob ESP (NEW)
     - Auto-Aim system
     - Better Leaderboard
     - Observe UI
@@ -16,6 +12,7 @@
     - Trans Trail
     - Sanity Filter
     - Combo Counter
+    - Mob ESP
     
     Uses LinoriaLib for UI management with theme and save support.
 ]]
@@ -137,7 +134,7 @@ if connMgr then
     -- NEW: Add Heartbeat loop to continuously enforce lighting settings
     connMgr:add(RunService.Heartbeat:Connect(function()
         pcall(function()
-            -- NEW: Only apply custom fog/lighting if the toggle is on
+            -- Only apply custom fog/lighting if the toggle is on
             if features.EnableCustomFog then
                 -- Continuously apply slider values
                 if Lighting.FogEnd ~= features.FogEnd then
@@ -153,7 +150,7 @@ if connMgr then
                     Lighting.ExposureCompensation = features.Exposure
                 end
             end
-            
+
             -- Continuously enforce "Disable Effects" if toggled on
             if features.DisableEffects then
                 for effect, _ in pairs(OriginalLighting.Effects) do
@@ -228,6 +225,7 @@ end
 -- This holds the toggle state for your admin features
 local features = {
 	TrinketEsp = false,
+    MobEsp = false, -- NEW
 	PlayerEsp = true, -- Enable Player ESP by default
 	NoFall = false, 
 	Configurations = false,
@@ -425,6 +423,19 @@ function UICallbacks.onToggleMobESP(enabled)
     end
 end
 
+-- NEW: Callback for ClearTrinketESPButton
+function UICallbacks.onClearTrinketESP()
+    if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
+        ModuleInstances.trinketEsp:clearAllBillboards()
+        print("[Trinket ESP] Cleared all billboards.")
+    end
+end
+
+-- NEW: Callback for UnloadButton
+function UICallbacks.onUnloadScript()
+    Library:Unload()
+end
+
 
 -- Intent Billboard toggle
 function UICallbacks.onToggleIntentBillboard(enabled)
@@ -599,7 +610,7 @@ end
 -- UI COMPONENT CREATION
 -- ========================================
 
--- New function to create components based on PuppyAdmin structure
+-- New function to create components based of PuppyAdmin structure
 local function createPuppyHubTabs(tabs, fovManager)
 
     -- Lighting Tab
@@ -612,12 +623,6 @@ local function createPuppyHubTabs(tabs, fovManager)
     })
 
     -- OLD SanityFilterToggle REMOVED
-    --[[
-    lightingGroup:AddToggle('SanityFilterToggle', {
-        Text = 'Sanity Filter', Default = features.SanityFilter, Tooltip = 'Toggle the sanity visual effect',
-        Callback = UICallbacks.onToggleSanityFilter
-    })
-    ]]--
     
     -- NEW: Disable Effects Toggle
     lightingGroup:AddToggle('DisableEffectsToggle', {
@@ -677,25 +682,13 @@ local function createPuppyHubTabs(tabs, fovManager)
     })
     -- Color picker removed as colors are now class-based
 
-    trinketESPGroup:AddButton('ClearTrinketESPButton', {
-        -- Name property is not needed here
-        Text = 'Clear All Trinkets', Tooltip = 'Manually clear all trinket billboards',
-        Callback = function()
-            if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
-                ModuleInstances.trinketEsp:clearAllBillboards()
-            end
-        end
+    trinketESPGroup:AddToggle('TrinketESP', {
+        Text = 'Enable Trinket ESP', Default = features.TrinketEsp, Tooltip = 'Show names for trinkets',
+        Callback = UICallbacks.onToggleTrinketESP
     })
-    -- NEW: Button to clear trinkets
-    trinketESPGroup:AddButton({
-        Name = 'Clear Trinket ESP',
-        Text = 'Clear All Trinkets', Tooltip = 'Manually clear all trinket billboards',
-        Callback = function()
-            if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
-                ModuleInstances.trinketEsp:clearAllBillboards()
-            end
-        end
-    })
+    
+    -- FIXED: Use the simple AddButton(Text, Callback) syntax
+    trinketESPGroup:AddButton('Clear All Trinkets', UICallbacks.onClearTrinketESP)
     
     -- NEW: Mob ESP Toggle
     trinketESPGroup:AddToggle('MobESP', {
@@ -973,7 +966,6 @@ local function createPuppyHubTabs(tabs, fovManager)
         if allToggles.ComboCounterToggle then pcall(allToggles.ComboCounterToggle.SetValue, allToggles.ComboCounterToggle, features.ShowComboCounter) end
         
         -- OLD SanityFilterToggle REMOVED
-        -- if allToggles.SanityFilterToggle then pcall(allToggles.SanityFilterToggle.SetValue, allToggles.SanityFilterToggle, features.SanityFilter) end
         
         -- NEW: Set new toggles
         if allToggles.EnableCustomFogToggle then pcall(allToggles.EnableCustomFogToggle.SetValue, allToggles.EnableCustomFogToggle, features.EnableCustomFog) end
@@ -1018,9 +1010,8 @@ end
 local function createUISettingsTab(uiSettingsTab)
     local menuGroup = uiSettingsTab:AddLeftGroupbox('Menu')
     
-    menuGroup:AddButton('Unload', function() 
-        Library:Unload() 
-    end)
+    -- FIXED: Use the simple AddButton(Text, Callback) syntax
+    menuGroup:AddButton('Unload', UICallbacks.onUnloadScript)
     
     menuGroup:AddLabel('Menu bind'):AddKeyPicker('MenuKeybind', { 
         Default = 'Insert', -- Changed Default keybind
@@ -1104,7 +1095,7 @@ local function setupManagers(uiSettingsTab, fovManager)
                 pcall(function() effect.Enabled = originalEnabled end)
             end
         end
-        print("[PuppPlayer Hub] Restored original lighting settings.")
+        print("[Player Hub] Restored original lighting settings.")
 
         -- Destroy modules
         if triggerMonitor then triggerMonitor:destroy() end
@@ -1154,13 +1145,5 @@ end
 -- Start the script
 main()
 
--- Ensure execution on teleport if supported
-if queue_on_teleport and typeof(queue_on_teleport) == "function" then
-    queue_on_teleport('loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CoreManager"))()')
-end
-
 print("[Puppy Hub] Loaded!")
-
-
-
 
