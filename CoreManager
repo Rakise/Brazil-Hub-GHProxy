@@ -1162,11 +1162,6 @@ end
 -- Start the script
 main()
 
--- Ensure execution on teleport if supported
-if queue_on_teleport and typeof(queue_on_teleport) == "function" then
-    queue_on_teleport('loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CoreManager"))()')
-end
-
 print("[Puppy Hub] Loaded!")
 
 
