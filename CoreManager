@@ -160,7 +160,7 @@ if connMgr then
                 end
             end
         end)
-    end))
+    end)
 end
 
 
