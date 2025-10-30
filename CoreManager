@@ -134,24 +134,10 @@ if connMgr then
         end
     end))
 
-    if connMgr then
-    connMgr:add(Lighting.ChildAdded:Connect(function(child)
-        if isTargetEffect(child) then
-            -- Store original state
-            if OriginalLighting.Effects[child] == nil then
-                OriginalLighting.Effects[child] = child.Enabled
-            end
-            -- If disable toggle is on, disable new effect
-            if features.DisableEffects then
-                child.Enabled = false
-            end
-        end
-    end))
-
     -- NEW: Add Heartbeat loop to continuously enforce lighting settings
     connMgr:add(RunService.Heartbeat:Connect(function()
         pcall(function()
-            -- Only apply custom fog/lighting if the toggle is on
+            -- NEW: Only apply custom fog/lighting if the toggle is on
             if features.EnableCustomFog then
                 -- Continuously apply slider values
                 if Lighting.FogEnd ~= features.FogEnd then
@@ -167,7 +153,7 @@ if connMgr then
                     Lighting.ExposureCompensation = features.Exposure
                 end
             end
-
+            
             -- Continuously enforce "Disable Effects" if toggled on
             if features.DisableEffects then
                 for effect, _ in pairs(OriginalLighting.Effects) do
@@ -1162,7 +1148,13 @@ end
 -- Start the script
 main()
 
+-- Ensure execution on teleport if supported
+if queue_on_teleport and typeof(queue_on_teleport) == "function" then
+    queue_on_teleport('loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CoreManager"))()')
+end
+
 print("[Puppy Hub] Loaded!")
+
 
 
 

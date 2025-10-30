@@ -114,8 +114,14 @@ function SpellPercentage:_updateSpellOverlays(spell_tool)
             if spell_cost_data then
                 local normal_cast_info = spell_cost_data[1]
                 if normal_cast_info then
-                    local topPercent = normal_cast_info[1] / 100
-                    local heightPercent = math.abs(normal_cast_info[1] - normal_cast_info[2]) / 100
+                    -- BUGFIX: Use the MAX value and invert it (100 - max) to get the correct TOP Y-position
+                    -- The mana bar is 0% at the bottom (Y=1) and 100% at the top (Y=0)
+                    local minCost = math.min(normal_cast_info[1], normal_cast_info[2])
+                    local maxCost = math.max(normal_cast_info[1], normal_cast_info[2])
+                    
+                    local topPercent = (100 - maxCost) / 100 -- Position is based on the highest mana value
+                    local heightPercent = (maxCost - minCost) / 100 -- Height is the difference
+
                     self.normal_overlay.Position = UDim2.new(0, 0, topPercent, 0) 
                     self.normal_overlay.Size = UDim2.new(1, 0, heightPercent, 0)
                     self.normal_overlay.Visible = true
@@ -125,8 +131,13 @@ function SpellPercentage:_updateSpellOverlays(spell_tool)
 
                 local snap_cast_info = spell_cost_data[2]
                 if snap_cast_info then
-                    local topPercent = snap_cast_info[1] / 100
-                    local heightPercent = math.abs(snap_cast_info[1] - snap_cast_info[2]) / 100
+                    -- BUGFIX: Apply the same inversion logic for the snap cast
+                    local minCost = math.min(snap_cast_info[1], snap_cast_info[2])
+                    local maxCost = math.max(snap_cast_info[1], snap_cast_info[2])
+
+                    local topPercent = (100 - maxCost) / 100 -- Position is based on the highest mana value
+                    local heightPercent = (maxCost - minCost) / 100 -- Height is the difference
+                    
                     self.snap_overlay.Position = UDim2.new(0, 0, topPercent, 0) 
                     self.snap_overlay.Size = UDim2.new(1, 0, heightPercent, 0)
                     self.snap_overlay.Visible = true
