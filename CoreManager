@@ -134,23 +134,40 @@ if connMgr then
         end
     end))
 
+    if connMgr then
+    connMgr:add(Lighting.ChildAdded:Connect(function(child)
+        if isTargetEffect(child) then
+            -- Store original state
+            if OriginalLighting.Effects[child] == nil then
+                OriginalLighting.Effects[child] = child.Enabled
+            end
+            -- If disable toggle is on, disable new effect
+            if features.DisableEffects then
+                child.Enabled = false
+            end
+        end
+    end))
+
     -- NEW: Add Heartbeat loop to continuously enforce lighting settings
     connMgr:add(RunService.Heartbeat:Connect(function()
         pcall(function()
-            -- NEW: Only apply custom fog/lighting if the toggle is on
+            -- Only apply custom fog/lighting if the toggle is on
             if features.EnableCustomFog then
                 -- Continuously apply slider values
                 if Lighting.FogEnd ~= features.FogEnd then
-            if Lighting.FogStart ~= features.FogStart then
-                Lighting.FogStart = features.FogStart
-            end
-            if Lighting.Brightness ~= features.Brightness then
-                Lighting.Brightness = features.Brightness
+                    Lighting.FogEnd = features.FogEnd
+                end
+                if Lighting.FogStart ~= features.FogStart then
+                    Lighting.FogStart = features.FogStart
+                end
+                if Lighting.Brightness ~= features.Brightness then
+                    Lighting.Brightness = features.Brightness
+                end
                 if Lighting.ExposureCompensation ~= features.Exposure then
                     Lighting.ExposureCompensation = features.Exposure
                 end
             end
-            
+
             -- Continuously enforce "Disable Effects" if toggled on
             if features.DisableEffects then
                 for effect, _ in pairs(OriginalLighting.Effects) do
@@ -160,7 +177,7 @@ if connMgr then
                 end
             end
         end)
-    end)
+    end))
 end
 
 
