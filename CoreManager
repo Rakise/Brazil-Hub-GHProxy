@@ -677,12 +677,18 @@ local function createPuppyHubTabs(tabs, fovManager)
     })
     -- Color picker removed as colors are now class-based
 
-    trinketESPGroup:AddToggle('TrinketESP', {
-        Text = 'Enable Trinket ESP', Default = features.TrinketEsp, Tooltip = 'Show names for trinkets',
-        Callback = UICallbacks.onToggleTrinketESP
+    trinketESPGroup:AddButton('ClearTrinketESPButton', {
+        -- Name property is not needed here
+        Text = 'Clear All Trinkets', Tooltip = 'Manually clear all trinket billboards',
+        Callback = function()
+            if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
+                ModuleInstances.trinketEsp:clearAllBillboards()
+            end
+        end
     })
     -- NEW: Button to clear trinkets
-    trinketESPGroup:AddButton('Clear Trinket ESP', {
+    trinketESPGroup:AddButton({
+        Name = 'Clear Trinket ESP',
         Text = 'Clear All Trinkets', Tooltip = 'Manually clear all trinket billboards',
         Callback = function()
             if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
