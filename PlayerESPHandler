@@ -20,34 +20,65 @@ local newInstance = Instance.new
 -- Constantes para otimização
 local UPDATE_INTERVAL = 0.5 -- Intervalo de atualização dos billboards
 
--- ADDED: Class Tools mapping from PuppyAdmin
-local class_tools = {
-	["DRUID"] = "Fons Vitae", ["SPY"] = "Rapier", ["WRAITH"] = "Dark Eruption",
-	["SHIN"] = "Grapple", ["FACE"] = "Shadow Fan", ["NECRO"] = "Secare",
-	["DEEP"] = "Chain Pull", ["ABYSS"] = "Wrathful Leap", ["ONI"] = "Demon Step",
-	["SMITH"] = "Ruby Shard", ["BARD"] = "Joyous Dance", ["ILLU"] = "Observe",
-	["SIGIL"] = "Flame Charge", ["DSAGE"] = "Lightning Drop", ["SLAYER"] = "Thunder Spear Crash"
+-- NEW: Class identification table
+local classIdentify = {
+	["DRUID"] = {"Perflora", "Floresco", "WiseCasting", "FastSigns"},
+	["WHPSRR"] = {"Elegant Slash", "Needle's Eye", "RapierTraining", "Acrobat"},
+	["D-SIGL"] = {"Dark Eruption", "Dark Flame Burst", "PlateTraining", "MercenaryCarry"},
+	["SHNOBI"] = {"Grapple", "Resurrection", "FeatherFall", "UpgradedAgility"},
+	["FACLES"] = {"Ethereal Strike", "Shadow Fan", "Chain Lethality", "UpgradedBane"},
+	["M-NCRO"] = {"Secare", "Furantur", "WiseCasting", "FastSigns"},
+	["DEEP-K"] = {"Chain Pull", "Leviathan Plunge", "FighterFootwork", "PrinceBlessing"},
+	["ABYS-W"] = {"Abyssal Scream", "Wrathful Leap", "Abysswalker", "MercenaryCarry"},
+	["ONI"] = {"Axe Kick", "Demon Step", "Misogi", "TrainedCombat"},
+	["LPRDST"] = {"Ruby Shard", "Sapphire Shard", "Sharpener", "Gemcutter"},
+	["U-BARD"] = {"Sweet Soothing", "Joyous Dance", "MusiciansResolve", "BlastMeter"},
+	["M-ILUS"] = {"Globus", "Dominus", "WiseCasting", "FastSigns"},
+	["SIGL-C"] = {"Charged Blow", "Hyper Body", "ChargeMastery", "PlateTraining"},
+	["DSAGE"] = {"Lightning Drop", "Lightning Elbow", "MonasteryShield", "ChiBlock"},
+	["DSLAYR"] = {"Thunder Spear Crash", "Dragon Blood", "FighterFootwork", "Dragon Awakening"}
 }
 
--- ADDED: Class colors from PuppyAdmin
+-- NEW: Updated class colors based on new abbreviations
 local class_colors = {
-	["DRUID"] = "#55FF55", ["SPY"] = "#AAAAAA", ["WRAITH"] = "#55557F", ["SHIN"] = "#FFAA00",
-	["FACE"] = "#FF55FF", ["NECRO"] = "#AA0000", ["DEEP"] = "#0055AA", ["ABYSS"] = "#2A0055",
-	["ONI"] = "#FF5555", ["SMITH"] = "#FFAA7F", ["BARD"] = "#FFFF55", ["ILLU"] = "#AA55FF",
-	["SIGIL"] = "#FF7F00", ["DSAGE"] = "#55FFFF", ["SLAYER"] = "#FF0000", ["FRESH"] = "#FFFFFF"
+	["DRUID"] = "#55FF55",
+	["WHPSRR"] = "#AAAAAA", -- Spy
+	["D-SIGL"] = "#55557F", -- Wraith
+	["SHNOBI"] = "#FFAA00", -- Shinobi
+	["FACLES"] = "#FF55FF", -- Faceless
+	["M-NCRO"] = "#AA0000", -- Necro
+	["DEEP-K"] = "#0055AA", -- Deep
+	["ABYS-W"] = "#2A0055", -- Abyss
+	["ONI"] = "#FF5555",
+	["LPRDST"] = "#FFAA7F", -- Smith
+	["U-BARD"] = "#FFFF55", -- Bard
+	["M-ILUS"] = "#AA55FF", -- Illusionist
+	["SIGL-C"] = "#FF7F00", -- Sigil
+	["DSAGE"] = "#55FFFF",
+	["DSLAYR"] = "#FF0000", -- Slayer
+	["FRESH"] = "#FFFFFF"
 }
+
 -- ADDED: Observe color
 local OBSERVE_COLOR_HEX = "#55FFFF" -- Light Blue/Cyan
 
--- ADDED: Function to get player class based on backpack tools OR character (from PuppyAdmin)
+-- NEW: Function to get player class based on backpack/character tools
 local function getPlayerClass(targetPlayer)
-	local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
+    local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
 	local characterModel = targetPlayer.Character
-	for classAbbr, toolName in pairs(class_tools) do
-		local foundInBackpack = backpack and backpack:FindFirstChild(toolName)
-		local foundInCharacter = characterModel and characterModel:FindFirstChild(toolName)
-		if foundInBackpack or foundInCharacter then return classAbbr end
-	end
+    
+    if not backpack and not characterModel then return "FRESH" end
+
+    for classAbbr, toolList in pairs(classIdentify) do
+        for _, toolName in ipairs(toolList) do
+            local foundInBackpack = backpack and backpack:FindFirstChild(toolName)
+            local foundInCharacter = characterModel and characterModel:FindFirstChild(toolName)
+            if foundInBackpack or foundInCharacter then
+                return classAbbr
+            end
+        end
+    end
+
 	return "FRESH"
 end
 
@@ -346,4 +377,3 @@ function PlayerESP:setDisplayConfig(config)
 end
 
 return PlayerESP
-

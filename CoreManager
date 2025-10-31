@@ -76,6 +76,7 @@ local SpellPercentage = safeRequire(BRAZIL_HUB_BASE_URL .. "SpellPercentage")
 local TransTrail = safeRequire(BRAZIL_HUB_BASE_URL .. "TransTrail")
 local ComboCounter = safeRequire(BRAZIL_HUB_BASE_URL .. "ComboCounter")
 local MobESP = safeRequire(BRAZIL_HUB_BASE_URL .. "MobESPHandler") -- NEW: Load Mob ESP
+local CooldownIndicator = safeRequire(BRAZIL_HUB_BASE_URL .. "CooldownIndicator") -- NEW: Load Cooldown Indicator
 
 -- Load sub-modules
 local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
@@ -137,18 +138,11 @@ if connMgr then
             -- Only apply custom fog/lighting if the toggle is on
             if features.EnableCustomFog then
                 -- Continuously apply slider values
-                if Lighting.FogEnd ~= features.FogEnd then
-                    Lighting.FogEnd = features.FogEnd
-                end
-                if Lighting.FogStart ~= features.FogStart then
-                    Lighting.FogStart = features.FogStart
-                end
-                if Lighting.Brightness ~= features.Brightness then
-                    Lighting.Brightness = features.Brightness
-                end
-                if Lighting.ExposureCompensation ~= features.Exposure then
-                    Lighting.ExposureCompensation = features.Exposure
-                end
+                -- FIXED: Remove conditional checks, always force the value
+                Lighting.FogEnd = features.FogEnd
+                Lighting.FogStart = features.FogStart
+                Lighting.Brightness = features.Brightness
+                Lighting.ExposureCompensation = features.Exposure
             end
 
             -- Continuously enforce "Disable Effects" if toggled on
@@ -189,13 +183,14 @@ local ModuleInstances = {
     trinketEsp = safeNew(TrinketESP, "TrinketESP"),
     autoBlock = safeNew(AutoBlock, "AutoBlock"),
     indicator = safeNew(Indicator, "Indicator"),
-    mobEsp = safeNew(MobESP, "MobESP"), -- NEW: Instantiate Mob ESP
+    mobEsp = safeNew(MobESP, "MobESP"), 
     -- New module instances
     observeUI = safeNew(ObserveUI, "ObserveUI", playerGui), -- Pass playerGui
     chatLog = safeNew(ChatLog, "ChatLog", playerGui),       -- Pass playerGui
     spellPercentage = safeNew(SpellPercentage, "SpellPercentage", playerGui), -- Pass playerGui
     transTrail = safeNew(TransTrail, "TransTrail"),
-    comboCounter = safeNew(ComboCounter, "ComboCounter", playerGui) -- Pass playerGui
+    comboCounter = safeNew(ComboCounter, "ComboCounter", playerGui), -- Pass playerGui
+    cooldownIndicator = safeNew(CooldownIndicator, "CooldownIndicator", playerGui) -- NEW: Instantiate Cooldown Indicator
 }
 
 
@@ -225,7 +220,7 @@ end
 -- This holds the toggle state for your admin features
 local features = {
 	TrinketEsp = false,
-    MobEsp = false, -- NEW
+    MobEsp = false, 
 	PlayerEsp = true, -- Enable Player ESP by default
 	NoFall = false, 
 	Configurations = false,
@@ -233,6 +228,7 @@ local features = {
 	ShowChatLogGui = true, 
 	ArtifactNotifier = false, 
 	ShowSpellPercentages = false, 
+    ShowCooldowns = false, -- NEW
 	ShowComboCounter = true, 
 	TransTrail = false, 
 	
@@ -409,7 +405,7 @@ function UICallbacks.onToggleTrinketESP(enabled)
     end
 end
 
--- NEW: Mob ESP callback
+-- Mob ESP callback
 function UICallbacks.onToggleMobESP(enabled)
     features.MobEsp = enabled -- Update global state
     if ModuleInstances.mobEsp then
@@ -423,7 +419,7 @@ function UICallbacks.onToggleMobESP(enabled)
     end
 end
 
--- NEW: Callback for ClearTrinketESPButton
+-- Callback for ClearTrinketESPButton
 function UICallbacks.onClearTrinketESP()
     if ModuleInstances.trinketEsp and ModuleInstances.trinketEsp.clearAllBillboards then
         ModuleInstances.trinketEsp:clearAllBillboards()
@@ -431,7 +427,7 @@ function UICallbacks.onClearTrinketESP()
     end
 end
 
--- NEW: Callback for UnloadButton
+-- Callback for UnloadButton
 function UICallbacks.onUnloadScript()
     Library:Unload()
 end
@@ -483,6 +479,14 @@ function UICallbacks.onToggleSpellPercentage(enabled)
     features.ShowSpellPercentages = enabled -- Update global state
      if ModuleInstances.spellPercentage then
         if enabled then ModuleInstances.spellPercentage:enable() else ModuleInstances.spellPercentage:disable() end
+    end
+end
+
+-- NEW: Cooldown Indicator Callback
+function UICallbacks.onToggleCooldownIndicator(enabled)
+    features.ShowCooldowns = enabled -- Update global state
+     if ModuleInstances.cooldownIndicator then
+        if enabled then ModuleInstances.cooldownIndicator:enable() else ModuleInstances.cooldownIndicator:disable() end
     end
 end
 
@@ -610,7 +614,7 @@ end
 -- UI COMPONENT CREATION
 -- ========================================
 
--- New function to create components based of PuppyAdmin structure
+-- New function to create components based on PuppyAdmin structure
 local function createPuppyHubTabs(tabs, fovManager)
 
     -- Lighting Tab
@@ -621,8 +625,6 @@ local function createPuppyHubTabs(tabs, fovManager)
         Text = 'Enable Custom Lighting', Default = features.EnableCustomFog, Tooltip = 'Toggle to enable/disable all custom fog and lighting sliders.',
         Callback = UICallbacks.onToggleCustomFog
     })
-
-    -- OLD SanityFilterToggle REMOVED
     
     -- NEW: Disable Effects Toggle
     lightingGroup:AddToggle('DisableEffectsToggle', {
@@ -687,7 +689,7 @@ local function createPuppyHubTabs(tabs, fovManager)
         Callback = UICallbacks.onToggleTrinketESP
     })
     
-    -- FIXED: Use the simple AddButton(Text, Callback) syntax
+    -- Use the simple AddButton(Text, Callback) syntax
     trinketESPGroup:AddButton('Clear All Trinkets', UICallbacks.onClearTrinketESP)
     
     -- NEW: Mob ESP Toggle
@@ -817,6 +819,11 @@ local function createPuppyHubTabs(tabs, fovManager)
         Text = 'Damage/Regen Indicators', Default = false, Tooltip = 'Show floating damage/healing numbers',
         Callback = function(val) if ModuleInstances.indicator then if val then ModuleInstances.indicator:enable() else ModuleInstances.indicator:disable() end end end
     })
+    -- NEW: Cooldown Indicator Toggle
+    combatVisualsGroup:AddToggle('CooldownIndicatorToggle', {
+        Text = 'Show Cooldowns', Default = features.ShowCooldowns, Tooltip = 'Show ability cooldowns on hotbar',
+        Callback = UICallbacks.onToggleCooldownIndicator
+    })
 
 
     -- Movement Tab
@@ -869,7 +876,8 @@ local function createPuppyHubTabs(tabs, fovManager)
     -- local ffLabel = connectionsGroup:AddLabel('FFDetector: ...') -- Removed
     local espLabel = connectionsGroup:AddLabel('PlayerESP: ...')
     local trinketLabel = connectionsGroup:AddLabel('TrinketESP: ...')
-    local mobLabel = connectionsGroup:AddLabel('MobESP: ...') -- NEW
+    local mobLabel = connectionsGroup:AddLabel('MobESP: ...') 
+    local cooldownLabel = connectionsGroup:AddLabel('Cooldowns: ...') -- NEW
     local leaderboardLabel = connectionsGroup:AddLabel('BetterLeaderboard: ...')
     -- local nofogLabel = connectionsGroup:AddLabel('NoFog: ...') -- NoFog module removed, only slider exists
     local intentLabel = connectionsGroup:AddLabel('Intent: ...')
@@ -908,16 +916,24 @@ local function createPuppyHubTabs(tabs, fovManager)
                     if target then target = target[key] else return "0" end
                 end
             end
-            if target and target.count then return tostring(target:count())
-            elseif target and type(target) == "table" and rawget(target, "_connections") then return tostring(table.maxn(target._connections)) -- Approx for ObserveUI etc.
-            elseif target and type(target) == "table" and rawget(target, "_connMgr") and target._connMgr.count then return tostring(target._connMgr:count()) -- For modules using ConnectionManager directly
-            elseif target and type(target) == "table" and rawget(target, "_connectionManager") and target._connectionManager.count then return tostring(target._connectionManager:count()) -- For trinket_esp_handler
+            
+            if not target then return "N/A" end
+            
+            if target.count and type(target.count) == "function" then return tostring(target:count())
+            elseif type(target) == "table" and rawget(target, "_connections") then
+                -- Count keys in a table
+                local count = 0
+                for _ in pairs(target._connections) do count = count + 1 end
+                return tostring(count)
+            elseif type(target) == "table" and rawget(target, "_connMgr") and target._connMgr.count then return tostring(target._connMgr:count()) -- For modules using ConnectionManager directly
+            elseif type(target) == "table" and rawget(target, "_connectionManager") and target._connectionManager.count then return tostring(target._connectionManager:count()) -- For trinket_esp_handler
             else return "0" end
         end
         
         if espLabel then espLabel:SetText('PlayerESP: ' .. getConnCountStr(ModuleInstances.playerEsp, {"_connMgr"})) end
         if trinketLabel then trinketLabel:SetText('TrinketESP: ' .. getConnCountStr(ModuleInstances.trinketEsp, {"_connectionManager"})) end
-        if mobLabel then mobLabel:SetText('MobESP: ' .. getConnCountStr(ModuleInstances.mobEsp, {"_connMgr"})) end -- NEW
+        if mobLabel then mobLabel:SetText('MobESP: ' .. getConnCountStr(ModuleInstances.mobEsp, {"_connMgr"})) end 
+        if cooldownLabel then cooldownLabel:SetText('Cooldowns: ' .. getConnCountStr(ModuleInstances.cooldownIndicator, {"_connections"})) end -- NEW
         if leaderboardLabel then leaderboardLabel:SetText('BetterLB: ' .. getConnCountStr(ModuleInstances.betterLeaderboard, {"_connMgr"})) end
         if intentLabel then intentLabel:SetText('Intent: ' .. getConnCountStr(Intent, {"connectionMgr"})) end -- Intent module structure
         if observeLabel then observeLabel:SetText('ObserveUI: ' .. getConnCountStr(ModuleInstances.observeUI)) end 
@@ -957,11 +973,12 @@ local function createPuppyHubTabs(tabs, fovManager)
     local allToggles = Library.GetObjects and Library:GetObjects("Toggle") or Toggles -- Compatibility
     if allToggles then
         if allToggles.PlayerESP then pcall(allToggles.PlayerESP.SetValue, allToggles.PlayerESP, features.PlayerEsp) end
-        if allToggles.TrinketESP then pcall(allToggles.TrinketESP.SetValue, allToggles.TrinketESP, features.TrinketEsp) end
-        if allToggles.MobESP then pcall(allToggles.MobESP.SetValue, allToggles.MobESP, features.MobEsp) end -- NEW
+        if allToggles.TrinketESP then pcall(allTagles.TrinketESP.SetValue, allToggles.TrinketESP, features.TrinketEsp) end
+        if allToggles.MobESP then pcall(allToggles.MobESP.SetValue, allToggles.MobESP, features.MobEsp) end 
         if allToggles.ObserveUIToggle then pcall(allToggles.ObserveUIToggle.SetValue, allToggles.ObserveUIToggle, features.ShowObserveGui) end
         if allToggles.ChatLogUIToggle then pcall(allToggles.ChatLogUIToggle.SetValue, allToggles.ChatLogUIToggle, features.ShowChatLogGui) end
         if allToggles.SpellPercentageToggle then pcall(allToggles.SpellPercentageToggle.SetValue, allToggles.SpellPercentageToggle, features.ShowSpellPercentages) end
+        if allToggles.CooldownIndicatorToggle then pcall(allToggles.CooldownIndicatorToggle.SetValue, allToggles.CooldownIndicatorToggle, features.ShowCooldowns) end -- NEW
         if allToggles.TransTrailToggle then pcall(allToggles.TransTrailToggle.SetValue, allToggles.TransTrailToggle, features.TransTrail) end
         if allToggles.ComboCounterToggle then pcall(allToggles.ComboCounterToggle.SetValue, allToggles.ComboCounterToggle, features.ShowComboCounter) end
         
