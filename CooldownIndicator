@@ -168,20 +168,20 @@ function CooldownIndicator:FindToolButton(toolName)
     if not self.mainFrame or not self.backpackFrame then return nil end
     
     -- Check the MainFrame (Hotbar) first
-  for _, button in ipairs(self.mainFrame:GetChildren()) do
-    if button:IsA("TextButton") and button.Text == toolName then
-      return button
-    end
-  end
-  
-  -- Check the BackpackFrame (Inventory)
-  for _, button in ipairs(self.backpackFrame:GetChildren()) do
-    if button:IsA("TextButton") and button.Text == toolName then
-      return button
-    end
-  end
-  
-  return nil
+    for _, button in ipairs(self.mainFrame:GetChildren()) do
+        if button:IsA("TextButton") and button.Text == toolName then
+            return button
+        end
+    end
+    
+    -- Check the BackpackFrame (Inventory)
+    for _, button in ipairs(self.backpackFrame:GetChildren()) do
+        if button:IsA("TextButton") and button.Text == toolName then
+            return button
+        end
+    end
+    
+    return nil
 end
 
 -- This is the function that runs when a melee/ability is used.
