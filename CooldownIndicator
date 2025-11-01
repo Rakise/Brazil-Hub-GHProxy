@@ -125,7 +125,7 @@ local cooldowns = {
 	
 	----- Race Abilities -----
 	["Flock"] = {20, false},
-	["Shift"] = {2.5, false},
+	["Shift"] = {3, false},
 	["Trinket Shift"] = {10, false},
 	["Exhaust"] = {30, false},
 	["Swiftfoot"] = {45, false},
