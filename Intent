@@ -14,7 +14,7 @@ Intent.enabled = false
 local Players = game:GetService("Players")
 
 -- Load UtilsService
-local Utils = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/UtilsService"))()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/UtilsService"))()
 local utils = Utils.new()
 
 -- Configuration constants
@@ -30,7 +30,7 @@ local CONFIG = {
 }
 
 -- Internal state
-local ConnectionManager = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
 local billboardRegistry = {}
 local connectionMgr = ConnectionManager.new() -- global (PlayerAdded, etc)
 local connectionMgrs = {} -- [player] = ConnectionManager para tool monitoring

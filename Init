@@ -1,5 +1,5 @@
 -- URL do Módulo
-local SUPER_LEADERBOARD_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CustomLBModule"
+local SUPER_LEADERBOARD_URL = "https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CustomLBModule"
 
 -- Função para carregar o módulo usando game:HttpGet e loadstring
 local function loadSuperLeaderboard()

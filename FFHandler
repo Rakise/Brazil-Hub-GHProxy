@@ -13,16 +13,16 @@ local ipairs = ipairs
 local pairs = pairs
 
 -- Carrega o módulo Utils
-local Utils = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/UtilsService"))()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/UtilsService"))()
 local utils = Utils.new()
 
--- Constantes pré-calculadas
+-- Constantes pré-calculadas 
 local FF_DURATION = 120
 local BILLBOARD_SIZE = UDim2.new(0, 80, 0, 24)
 local BILLBOARD_OFFSET = Vector3.new(0, 2.2, 0)
 local UPDATE_INTERVAL = 0.4 -- Aumentado para reduzir frequência e lag
 
-local ConnectionManager = loadstring(game:HttpGet("https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
 
 -- Cache para evitar múltiplas buscas
 local adorneeCache = {}
