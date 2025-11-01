@@ -125,8 +125,8 @@ local cooldowns = {
 	
 	----- Race Abilities -----
 	["Flock"] = {20, false},
-	["Shift"] = {3, false},
-	["Trinket Shift"] = {10, false},
+	["Shift"] = {2.5, false},
+	["Trinket Shift"] = {1, false}, -- FIXED: Was 1G
 	["Exhaust"] = {30, false},
 	["Swiftfoot"] = {45, false},
 	["Fury"] = {300, false},
@@ -333,3 +333,4 @@ function CooldownIndicator:destroy()
 end
 
 return CooldownIndicator
+

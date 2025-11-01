@@ -30,8 +30,8 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui") -- Ensure playerGui exists
 
-local REPO_BASE_URL = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
-local BRAZIL_HUB_BASE_URL = "https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
+local REPO_BASE_URL = 'https://ghproxy.net/https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/refs/heads/main/'
+local BRAZIL_HUB_BASE_URL = "https://ghproxy.net/https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/"
 
 -- Carrega LinoriaLib
 local Library = loadstring(game:HttpGet(REPO_BASE_URL .. 'Library.lua'))() -- Use HTTPS for GitHub Raw
@@ -415,7 +415,7 @@ function UICallbacks.onToggleMobESP(enabled)
         else
             ModuleInstances.mobEsp:disable()
             print("[Mob ESP] Disabled")
-        end 
+        end
     end
 end
 
@@ -973,7 +973,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     local allToggles = Library.GetObjects and Library:GetObjects("Toggle") or Toggles -- Compatibility
     if allToggles then
         if allToggles.PlayerESP then pcall(allToggles.PlayerESP.SetValue, allToggles.PlayerESP, features.PlayerEsp) end
-        if allToggles.TrinketESP then pcall(allTagles.TrinketESP.SetValue, allToggles.TrinketESP, features.TrinketEsp) end
+        if allToggles.TrinketESP then pcall(allToggles.TrinketESP.SetValue, allToggles.TrinketESP, features.TrinketEsp) end -- FIXED
         if allToggles.MobESP then pcall(allToggles.MobESP.SetValue, allToggles.MobESP, features.MobEsp) end 
         if allToggles.ObserveUIToggle then pcall(allToggles.ObserveUIToggle.SetValue, allToggles.ObserveUIToggle, features.ShowObserveGui) end
         if allToggles.ChatLogUIToggle then pcall(allToggles.ChatLogUIToggle.SetValue, allToggles.ChatLogUIToggle, features.ShowChatLogGui) end
