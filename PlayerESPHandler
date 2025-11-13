@@ -2,7 +2,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
-local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/refs/heads/main/UtilsService"))()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/UtilsService"))()
 local utils = Utils.new()
 local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/ConnectionManager"))()
 

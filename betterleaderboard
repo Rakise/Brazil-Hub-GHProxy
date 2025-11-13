@@ -37,7 +37,7 @@ local utils = nil
 
 local function initializeUtilsService()
     local success, result = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/refs/heads/main/UtilsService"))()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/UtilsService"))()
     end)
     
     if success then

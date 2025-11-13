@@ -13,7 +13,7 @@ local ipairs = ipairs
 local pairs = pairs
 
 -- Carrega o módulo Utils
-local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/refs/heads/main/UtilsService"))()
+local Utils = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/UtilsService"))()
 local utils = Utils.new()
 
 -- Constantes pré-calculadas 
