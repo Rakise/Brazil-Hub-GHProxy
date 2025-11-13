@@ -6,7 +6,7 @@ NoFog.enabled = false
 NoFog._connections = {}
 NoFog._original = nil
 
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/ConnectionManager"))()
 NoFog._connMgr = ConnectionManager.new()
 
 -- Lista de efeitos suportados

@@ -5,7 +5,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/ConnectionManager"))()
 
 -- Configuration
 local CONFIG = {

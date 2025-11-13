@@ -1,4 +1,4 @@
-local ScriptURL = "https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/CoreManager"
+local ScriptURL = "https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/CoreManager"
 
 -- Executa o script agora (sempre)
 loadstring(game:HttpGet(ScriptURL))()

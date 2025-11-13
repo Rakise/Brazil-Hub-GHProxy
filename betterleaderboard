@@ -37,7 +37,7 @@ local utils = nil
 
 local function initializeUtilsService()
     local success, result = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/UtilsService"))()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/refs/heads/main/UtilsService"))()
     end)
     
     if success then
@@ -53,7 +53,7 @@ initializeUtilsService()
 local BetterLeaderboard = {}
 BetterLeaderboard.__index = BetterLeaderboard
 
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/main/ConnectionManager"))()
+local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/ConnectionManager"))()
 
 --- Creates a new BetterLeaderboard instance
 -- @return BetterLeaderboard: New instance of the leaderboard

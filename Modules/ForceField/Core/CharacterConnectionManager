@@ -1,7 +1,7 @@
 -- CharacterConnections.lua
 -- Gerencia todas as conexões associadas a um personagem
 
-local ConnectionManager = loadstring(game:HttpGet('https://raw.githubusercontent.com/Rakise/Brazil-Hub-GHProxy/refs/heads/main/ConnectionManager'))()
+local ConnectionManager = loadstring(game:HttpGet('https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/refs/heads/main/ConnectionManager'))()
 
 local CharacterConnections = {}
 CharacterConnections.__index = CharacterConnections
