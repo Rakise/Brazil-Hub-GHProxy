@@ -16,7 +16,6 @@ AutoAim.__index = AutoAim
 
 local cos, deg, acos, random = math.cos, math.deg, math.acos, math.random
 local Vector3new, Vector2new = Vector3.new, Vector2.new
-local mousemoverel = mousemoverel or (Input and Input.MouseMove) -- Get the mousemoverel function
 
 function AutoAim.new()
     return setmetatable({
