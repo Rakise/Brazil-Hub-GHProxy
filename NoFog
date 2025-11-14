@@ -1,75 +1,70 @@
 -- NoFog.lua
--- Módulo para remover e restaurar fog e efeitos visuais do Lighting
+-- Simple module to remove fog based on user-provided loop logic
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
 
 local NoFog = {}
-NoFog.enabled = false
-NoFog._connections = {}
-NoFog._original = nil
+NoFog.__index = NoFog
 
-local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/Rakise/Puppy-Hub/refs/heads/main/ConnectionManager"))()
-NoFog._connMgr = ConnectionManager.new()
-
--- Lista de efeitos suportados
-local EFFECT_TYPES = {
-    "Atmosphere",
-    "BloomEffect", 
-    "ColorCorrectionEffect",
-    "DepthOfFieldEffect",
-    "SunRaysEffect"
-}
-
-local function isTargetEffect(obj)
-    for _, effectType in ipairs(EFFECT_TYPES) do
-        if obj:IsA(effectType) then
-            return true
-        end
-    end
-    return false
-end
-
-local lastDestroy = 0
-local DESTROY_COOLDOWN = 0.2 -- segundos
-
-function NoFog:apply()
-    local Lighting = game:GetService("Lighting")
+function NoFog.new()
+    local self = setmetatable({}, NoFog)
+    self.enabled = false
+    self.loopConnection = nil
     
-    -- Remove fog
-    Lighting.FogEnd = 1e10
-    Lighting.FogStart = 1e10 - 1
-    Lighting.FogColor = Color3.new(1, 1, 1)
-end
-
-function NoFog:restoreOriginal()
-    local Lighting = game:GetService("Lighting")
-    if not self._original then return end
+    -- Store original values to restore
+    self.originalFogEnd = Lighting.FogEnd
+    self.originalFogStart = Lighting.FogStart
     
-    -- Restaura propriedades do fog
-    Lighting.FogStart = self._original.FogStart
-    Lighting.FogEnd = self._original.FogEnd
-    Lighting.FogColor = self._original.FogColor
+    return self
 end
 
 function NoFog:enable()
     if self.enabled then return end
     self.enabled = true
-    self:saveOriginal()
-    self:apply()
+    
+    -- Stop any existing loop
+    if self.loopConnection then
+        self.loopConnection:Disconnect()
+        self.loopConnection = nil
+    end
+    
+    print("[NoFog] Enabled. Loop started.")
+    -- Start the new loop
+    self.loopConnection = RunService.Heartbeat:Connect(function()
+        -- Use pcall for safety in case Lighting service is not available
+        pcall(function()
+            if Lighting.FogEnd ~= 100000 then
+                Lighting.FogEnd = 100000
+            end
+            if Lighting.FogStart ~= 99999 then
+                Lighting.FogStart = 99999
+            end
+        end)
+    end)
 end
 
 function NoFog:disable()
     if not self.enabled then return end
     self.enabled = false
-    self._connMgr:disconnectAll()
-    self:restoreOriginal()
+    
+    -- Stop the loop
+    if self.loopConnection then
+        self.loopConnection:Disconnect()
+        self.loopConnection = nil
+    end
+    
+    -- Restore original fog settings
+    pcall(function()
+        Lighting.FogEnd = self.originalFogEnd
+        Lighting.FogStart = self.originalFogStart
+    end)
+    
+    print("[NoFog] Disabled. Original fog restored.")
 end
 
-function NoFog:cleanup()
+function NoFog:destroy()
     self:disable()
-end
-
--- Método para verificar se está habilitado
-function NoFog:isEnabled()
-    return self.enabled
 end
 
 return NoFog

@@ -76,10 +76,31 @@ function ComboCounter:_initializeComboCounter(currentChar)
 		
 		-- Find or create the Combo value instance in the character
 		local comboValue = currentChar:FindFirstChild("Combo")
-		if not comboValue then 
-			warn("Character.Combo ValueInstance not found. Combo Counter disabled.")
-			return 
-		end
+		
+        -- NEW: Wait for Combo value if it doesn't exist yet
+        if not comboValue then
+            -- Disconnect previous waiter if any
+            if self._connections["WaitingForCombo"] then
+                self._connections["WaitingForCombo"]:Disconnect()
+                self._connections["WaitingForCombo"] = nil
+            end
+            
+            local conn = currentChar.ChildAdded:Connect(function(child)
+                if child.Name == "Combo" and child:IsA("ValueBase") then
+                    -- Found it, now re-run initialization
+                    if self._connections["WaitingForCombo"] then
+                        self._connections["WaitingForCombo"]:Disconnect()
+                        self._connections["WaitingForCombo"] = nil
+                    end
+                    self:_initializeComboCounter(currentChar) -- Re-call
+                end
+            end)
+            self._connections["WaitingForCombo"] = conn -- Store to disconnect
+            warn("Combo value not found, waiting...")
+            return -- Stop execution for now
+        end
+        -- End NEW
+		
 		if not comboValue:IsA("ValueBase") then
 			warn("Character.Combo is not a ValueInstance. Combo Counter disabled.")
 			return
@@ -158,6 +179,7 @@ function ComboCounter:destroy()
     self:disable() -- Ensure label is hidden
     if self.comboCounterConnection then self.comboCounterConnection:Disconnect() end
     if self._connections.CharacterAdded then self._connections.CharacterAdded:Disconnect() end
+    if self._connections["WaitingForCombo"] then self._connections["WaitingForCombo"]:Disconnect() end -- NEW
     if self.comboCounterLabel then self.comboCounterLabel:Destroy() end
     -- Clear references
     self.comboCounterLabel = nil

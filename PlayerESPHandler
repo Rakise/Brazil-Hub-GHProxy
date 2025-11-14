@@ -63,6 +63,7 @@ local class_colors = {
 local OBSERVE_COLOR_HEX = "#55FFFF" -- Light Blue/Cyan
 
 -- NEW: Function to get player class based on backpack/character tools
+-- UPDATED: Now only checks the *first* tool in the list to act as a defining tool
 local function getPlayerClass(targetPlayer)
     local backpack = targetPlayer:FindFirstChildOfClass("Backpack")
 	local characterModel = targetPlayer.Character
@@ -70,17 +71,19 @@ local function getPlayerClass(targetPlayer)
     if not backpack and not characterModel then return "FRESH" end
 
     for classAbbr, toolList in pairs(classIdentify) do
-        for _, toolName in ipairs(toolList) do
-            local foundInBackpack = backpack and backpack:FindFirstChild(toolName)
-            local foundInCharacter = characterModel and characterModel:FindFirstChild(toolName)
+        local definingToolName = toolList[1] -- Check ONLY the first tool
+        if definingToolName then
+            local foundInBackpack = backpack and backpack:FindFirstChild(definingToolName)
+            local foundInCharacter = characterModel and characterModel:FindFirstChild(definingToolName)
             if foundInBackpack or foundInCharacter then
-                return classAbbr
+                return classAbbr -- Return as soon as the defining tool is found
             end
         end
     end
 
 	return "FRESH"
 end
+
 
 -- ADDED: Function to check if a player has the Observe tool
 local function hasObserveTool(targetPlayer)
@@ -280,7 +283,7 @@ function PlayerESP:updatePlayerData(player)
                     else
                          label.Text = format("<font color='%s'>[%s]</font> %s", displayColor, playerClass, value)
                     end
-                elseif labelConfig.key == "distance" or labelConfig.key == "rogueName" or labelConfig.key == "edict" or labelConfig.key == "health" or labelConfig.key == "healthPercent" or labelConfig.key == "heldItem" then
+                elseif labelConfig.key == "distance" or labelConfig.key == "rogueName" or labelConfig.key == "edict" or labelConfig.key == "health" or labelConfig.key == "healthPercent" or labelE/A" then
                     -- Apply blue color to the entire line if observing
                      if isObserving then
                           label.Text = format("<font color='%s'>%s</font>", displayColor, labelConfig.format:format(value))

@@ -57,6 +57,18 @@ end
 -- Initialize Overlays Logic
 function SpellPercentage:_initializeOverlays()
     safeCall(function()
+        -- If already created, just ensure parent is correct
+        if self.normal_overlay and self.snap_overlay then
+             if not self.manaBar or not self.manaBar.Parent then
+                self.manaBar = self.playerGui:WaitForChild("StatGui", 5):WaitForChild("LeftContainer", 5):WaitForChild("Mana", 5)
+             end
+             if self.manaBar then
+                 self.normal_overlay.Parent = self.manaBar
+                 self.snap_overlay.Parent = self.manaBar
+             end
+             return -- Already initialized
+        end
+
         self.manaBar = self.playerGui:WaitForChild("StatGui", 5):WaitForChild("LeftContainer", 5):WaitForChild("Mana", 5)
         if not self.manaBar then
             warn("Could not find Player Mana bar (StatGui.LeftContainer.Mana). Spell Percentage Overlays disabled.")
@@ -158,6 +170,16 @@ end
 -- Connect Listeners Logic
 function SpellPercentage:_connectSpellListeners(char)
     safeCall(function()
+        -- NEW: Ensure overlays are initialized before connecting
+        if not self.manaBar or not self.manaBar.Parent then
+            self:_initializeOverlays()
+            if not self.manaBar then
+                warn("SpellPercentage: Cannot connect listeners, Mana bar not found on respawn.")
+                return -- Give up for this character
+            end
+        end
+        -- End NEW
+
         -- Disconnect existing if they exist
         if self._connections.SpellToolAdded then self._connections.SpellToolAdded:Disconnect() end
         if self._connections.SpellToolRemoved then self._connections.SpellToolRemoved:Disconnect() end
@@ -196,9 +218,11 @@ function SpellPercentage:enable()
     end
 
     -- Connect CharacterAdded listener
-    self._connections.CharacterAdded = player.CharacterAdded:Connect(function(newChar)
-		self:_connectSpellListeners(newChar)
-	end)
+    if not self._connections.CharacterAdded then -- Only connect once
+        self._connections.CharacterAdded = player.CharacterAdded:Connect(function(newChar)
+            self:_connectSpellListeners(newChar)
+        end)
+    end
 
     -- Connect listeners for current character
     if char then
@@ -213,10 +237,10 @@ function SpellPercentage:disable()
     if not self.enabled then return end
     self.enabled = false
 
-    -- Disconnect all listeners
-    if self._connections.CharacterAdded then self._connections.CharacterAdded:Disconnect(); self._connections.CharacterAdded = nil end
+    -- Disconnect tool listeners
     if self._connections.SpellToolAdded then self._connections.SpellToolAdded:Disconnect(); self._connections.SpellToolAdded = nil end
     if self._connections.SpellToolRemoved then self._connections.SpellToolRemoved:Disconnect(); self._connections.SpellToolRemoved = nil end
+    -- Keep CharacterAdded connection alive
 
     -- Hide overlays
     if self.normal_overlay then self.normal_overlay.Visible = false end
@@ -226,6 +250,11 @@ end
 -- Cleanup
 function SpellPercentage:destroy()
     self:disable()
+    -- Disconnect all listeners
+    if self._connections.CharacterAdded then self._connections.CharacterAdded:Disconnect(); self._connections.CharacterAdded = nil end
+    if self._connections.SpellToolAdded then self._connections.SpellToolAdded:Disconnect(); self._connections.SpellToolAdded = nil end
+    if self._connections.SpellToolRemoved then self._connections.SpellToolRemoved:Disconnect(); self._connections.SpellToolRemoved = nil end
+    
     if self.normal_overlay then self.normal_overlay:Destroy() end
     if self.snap_overlay then self.snap_overlay:Destroy() end
     -- Clear references

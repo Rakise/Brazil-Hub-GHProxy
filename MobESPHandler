@@ -10,6 +10,7 @@ local ConnectionManager = loadstring(game:HttpGet("https://raw.githubusercontent
 -- Configuration
 local CONFIG = {
     UPDATE_INTERVAL = 0.25, -- How often to update data (4 times a second)
+    RESCAN_INTERVAL = 3.0, -- How often to rescan for missed mobs
     MAX_DISTANCE = 300, -- Max distance to render ESP
     BILLBOARD_SIZE = UDim2.new(0, 500, 0, 100), -- Match PlayerESP
     BILLBOARD_OFFSET = Vector3.new(0, 2, 0),
@@ -75,6 +76,7 @@ function MobESP.new()
     self._mobConnections = {} -- [monster] = {DiedConn, ...}
     self.espBillboards = {} -- [monster] = {billboard, labels={...}, humanoid, cleanName}
     self._lastUpdate = 0
+    self._lastRescan = 0 -- NEW: For throttled rescan
     self._localCharCache = nil
     self._localCharCacheTime = 0
     return self
@@ -258,8 +260,9 @@ function MobESP:updateBillboards()
     
     local localHRP = self:getLocalHRP() -- Get once per update
     
+    -- GARBAGE COLLECTION: Check existing billboards
     for monster, data in pairs(self.espBillboards) do
-        -- Garbage collection: Check if monster is still valid
+        -- Check if monster is still valid
         if not monster or not monster.Parent or not data.humanoid or not data.humanoid.Parent then
             self:removeMonster(monster)
         else
@@ -272,12 +275,29 @@ function MobESP:updateBillboards()
             end
         end
     end
+
+    -- NEW: RESCAN for missed mobs
+    if currentTime - self._lastRescan > CONFIG.RESCAN_INTERVAL then
+        self._lastRescan = currentTime
+        -- Use pcall in case LiveFolder is destroyed
+        pcall(function()
+            local children = LiveFolder:GetChildren()
+            for i = 1, #children do
+                local child = children[i]
+                -- If it's a model and not already tracked, try to add it
+                if child:IsA("Model") and not self.espBillboards[child] then
+                    self:addMonster(child)
+                end
+            end
+        end)
+    end
 end
 
 -- Public: Enable ESP
 function MobESP:enable()
     if self.enabled then return end
     self.enabled = true
+    self._lastRescan = 0 -- Force rescan on next update
     
     -- Connect to main Heartbeat loop
     self._connMgr:add(RunService.Heartbeat:Connect(function()
@@ -329,4 +349,3 @@ function MobESP:destroy()
 end
 
 return MobESP
-

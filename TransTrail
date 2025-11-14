@@ -119,7 +119,11 @@ function TransTrail:enable()
     -- Listen for character respawn
     self._connections.CharacterAdded = player.CharacterAdded:Connect(function(newChar)
         if self.enabled then -- Only create if still enabled
-            self:_createTransTrail(newChar)
+            -- NEW: Wait for character to load
+            task.wait(0.5) 
+            if newChar.Parent then -- Check if character is still valid
+                self:_createTransTrail(newChar)
+            end
         end
     end)
     -- Listen for character removal (just in case destroy fails)
