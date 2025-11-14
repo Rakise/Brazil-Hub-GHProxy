@@ -116,14 +116,14 @@ function AutoAim:setTools(toolTable)
 end
 
 
---// Function: AutoAim:getBestNPC
---// Description: Finds the best target within FOV and range (Rewritten for robustness)
-function AutoAim:getBestNPC(localChar)
+--// Function: AutoAim:GetClosestPlayer
+--// Description: Finds the best player target within FOV and range (Replaced getBestNPC)
+function AutoAim:GetClosestPlayer(localChar)
     local hrp = localChar:FindFirstChild("HumanoidRootPart")
-    if not hrp then print("[AutoAim Error] Local HRP not found"); return end
+    if not hrp then print("[AutoAim Error] Local HRP not found"); return nil end
 
     local camera = Workspace.CurrentCamera
-    if not camera then print("[AutoAim Error] Camera not found"); return end
+    if not camera then print("[AutoAim Error] Camera not found"); return nil end
 
     -- Use UserInputService for consistent mouse position
     local mousePos = UserInputService:GetMouseLocation()
@@ -132,66 +132,90 @@ function AutoAim:getBestNPC(localChar)
     local camPos = camera.CFrame.Position
     local fovMaxRad = math.rad(self.fovMax) 
 
-    local closestNPC, minDistSq = nil, self.maxRange * self.maxRange 
-    local children = LIVE_FOLDER:GetChildren()
+    local closestPlayerChar, closestDist = nil, math.huge 
     
     -- Setup RaycastParams for visibility check
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Exclude
     raycastParams.IgnoreWater = true
-    -- We will set FilterDescendantsInstances inside the loop
+    
+    local players = Players:GetPlayers()
+    print("[AutoAim Debug] Checking " .. #players .. " players.")
 
-    for i = 1, #children do
-        local model = children[i]
-        if model ~= localChar and model:IsA("Model") then
-            local targetHrp = model:FindFirstChild("HumanoidRootPart")
-            local targetHead = model:FindFirstChild("Head") 
+    for i = 1, #players do
+        local player = players[i]
+        local character = player.Character
+        
+        -- Basic checks
+        if player ~= LocalPlayer and character then
+            local targetHrp = character:FindFirstChild("HumanoidRootPart")
+            local targetHead = character:FindFirstChild("Head") 
 
-            if targetHrp and targetHead and not model:FindFirstChild("Knocked") then
+            if targetHrp and targetHead and not character:FindFirstChild("Knocked") then
+                -- print("[AutoAim Debug] Checking valid player: " .. player.Name) -- This is a bit spammy, enable if needed
                 local targetPos = targetHrp.Position
-                local distSq = (targetPos - hrp.Position).Magnitude^2 
-
-                if distSq <= minDistSq then
-                    -- FOV Check
+                
+                -- 1. Range Check (3D distance)
+                local dist3D = (targetPos - hrp.Position).Magnitude
+                if dist3D <= self.maxRange then
+                    
+                    -- 2. FOV Check (Angle)
                     local npcDir = (targetPos - camPos).Unit
                     local dotProduct = mouseDir:Dot(npcDir)
 
-                    -- dotProduct > 0 ensures target is in front of the camera
-                    if dotProduct > 0 and dotProduct <= 1 then 
+                    if dotProduct > 0 and dotProduct <= 1 then -- Target is in front
                          local angleRad = acos(dotProduct)
 
                          if angleRad <= fovMaxRad then
-                             -- Visibility Check (Modern Raycast)
+                             
+                             -- 3. Visibility Check (Raycast)
                              local targetHeadPos = targetHead.Position
                              local rayDirection = targetHeadPos - camPos
-                             
-                             -- Update filter list to ignore self and the current target
-                             raycastParams.FilterDescendantsInstances = {localChar, model} 
+                             raycastParams.FilterDescendantsInstances = {localChar, character} 
                              
                              local rayResult = Workspace:Raycast(camPos, rayDirection, raycastParams)
 
                              if not rayResult then 
-                                 -- No obstruction found
-                                 closestNPC = model
-                                 minDistSq = distSq
+                                 -- 4. Screen Distance Check (User's logic)
+                                 local vector, onScreen = camera:WorldToViewportPoint(targetHrp.Position)
+                                 if onScreen then
+                                     local screenDistance = (mousePos - Vector2.new(vector.X, vector.Y)).Magnitude
+                                     
+                                     print("[AutoAim Debug] Player " .. player.Name .. " is a valid target. Screen distance: " .. screenDistance)
+                                     
+                                     if screenDistance < closestDist then
+                                         closestDist = screenDistance
+                                         closestPlayerChar = character -- Return the Character model
+                                     end
+                                 -- else
+                                     -- print("[AutoAim Debug] Player " .. player.Name .. " is visible but not on screen?")
+                                 end
                              -- else
-                                 -- Debug: print what we hit
-                                 -- print("[AutoAim] Target", model.Name, "obstructed by", rayResult.Instance.Name)
+                                 -- print("[AutoAim Debug] Player " .. player.Name .. " is obstructed by: " .. (rayResult and rayResult.Instance.Name or "nil"))
                              end
+                         -- else
+                            -- print("[AutoAim Debug] Player " .. player.Name .. " is outside FOV.")
                          end
+                    -- else
+                        -- print("[AutoAim Debug] Player " .. player.Name .. " is behind camera.")
                     end
+                -- else
+                    -- print("[AutoAim Debug] Player " .. player.Name .. " is out of range (" .. dist3D .. " > " .. self.maxRange .. ")")
                 end
+            -- else
+                 -- if player ~= LocalPlayer then
+                    -- print("[AutoAim Debug] Skipping player: " .. player.Name .. " (No HRP, Head, or is Knocked)")
+                 -- end
             end
         end
     end
 
-    if closestNPC then 
-        print("[AutoAim] Target found:", closestNPC.Name) 
+    if closestPlayerChar then 
+        print("[AutoAim] Target found:", closestPlayerChar.Name) 
     else
-        -- Add this for debugging
-        print("[AutoAim] No valid target found in FOV.")
+        print("[AutoAim] No valid target found in FOV/Range/Visible.")
     end
-    return closestNPC
+    return closestPlayerChar -- Return the character model
 end
 
 --// Function: AutoAim:OnInputBegan
@@ -241,7 +265,7 @@ function AutoAim:OnRenderStep()
         
         -- If we don't have a target, find one
         if not self.lockedTarget then
-            self.lockedTarget = self:getBestNPC(character)
+            self.lockedTarget = self:GetClosestPlayer(character) -- Changed from getBestNPC
             if self.lockedTarget then
                 print("[AutoAim] Target locked:", self.lockedTarget.Name)
             end
@@ -309,7 +333,7 @@ function AutoAim:enable()
     end
     
     self.enabled = true
-    print("[AutoAim] Enabled. Hold MouseButton3 to lock on.")
+    print("[AutoAim] Enabled. Hold E to lock on.")
 
     -- Start periodic cleanup of target history
     self._cleanupConnection = RunService.Heartbeat:Connect(function()
