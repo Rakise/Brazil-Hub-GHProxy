@@ -343,9 +343,8 @@ local function sb_fetchServers()
     -- Run in a new thread to not yield the game
     task.spawn(function()
         local success, response = safeCall(function()
-            -- Ensure syn.request is available
-            if not syn or not syn.request then
-                warn("syn.request is not available. Cannot fetch servers.")
+            if not request then
+                warn("request is not available. Cannot fetch servers.")
                 return nil
             end
             
@@ -354,7 +353,7 @@ local function sb_fetchServers()
                 CONFIG.SERVER_BROWSER.GAME_ID
             )
             
-            return syn.request({
+            return request({
                 Url = url,
                 Method = "GET",
                 Headers = {
