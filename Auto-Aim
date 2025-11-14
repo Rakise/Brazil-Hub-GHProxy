@@ -247,28 +247,6 @@ function AutoAim:OnRenderStep()
     local character = LocalPlayer.Character
     if not character then return end
     
-    local equippedTool = character:FindFirstChildOfClass("Tool")
-    
-    -- Check if we have a valid tool equipped
-    if not equippedTool or not self.toolNames[equippedTool.Name] then
-        if self.lockedTarget then
-            print("[AutoAim] Tool unequipped, lock released.")
-        end
-        self.lockedTarget = nil -- Release lock if we switch tools
-        
-        -- NEW DEBUGGING
-        if self.isLockOnHeld then -- Only print if we are trying to aim
-            if equippedTool then
-                print("[AutoAim Debug] Tool check FAILED. Equipped: '" .. equippedTool.Name .. "'. Is in table? " .. tostring(self.toolNames[equippedTool.Name]))
-            else
-                print("[AutoAim Debug] Tool check FAILED. No tool equipped.")
-            end
-        end
-        -- END NEW DEBUGGING
-        
-        return
-    end
-    
     -- NEW DEBUGGING
     if self.isLockOnHeld then
          print("[AutoAim Debug] Tool check OK. isLockOnHeld: " .. tostring(self.isLockOnHeld))
