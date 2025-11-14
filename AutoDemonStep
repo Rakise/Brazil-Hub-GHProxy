@@ -1,0 +1,162 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local AutoDemonStep = {}
+AutoDemonStep.__index = AutoDemonStep
+
+function AutoDemonStep.new()
+    local self = setmetatable({}, AutoDemonStep)
+    
+    self.enabled = false
+    self.localPlayer = Players.LocalPlayer
+    self.character = self.localPlayer.Character
+    self.humanoid = self.character and self.character:FindFirstChildOfClass("Humanoid")
+    self.chargeRemote = nil
+    
+    -- State tracking
+    self.isAltDown_last = false -- No longer need isAltDown_last
+    self.isMoveDown_last = false
+    
+    -- Timers for throttling loops
+    self.demonStepTimer = 0
+    self.chargeTimer = 0
+    
+    -- Connections
+    self.heartbeatConn = nil
+    self.charAddedConn = nil
+    
+    return self
+end
+
+-- Helper to find the character and humanoid
+function AutoDemonStep:_updateCharacter()
+    self.character = self.localPlayer.Character
+    self.humanoid = self.character and self.character:FindFirstChildOfClass("Humanoid")
+    self.chargeRemote = nil -- Reset remote so it's re-found
+    if self.character then
+        self.chargeRemote = self.character:WaitForChild("CharacterHandler", 5)
+        if self.chargeRemote then
+            self.chargeRemote = self.chargeRemote:WaitForChild("Remotes", 5)
+            if self.chargeRemote then
+                self.chargeRemote = self.chargeRemote:WaitForChild("SetManaChargeState", 5)
+            end
+        end
+    end
+end
+
+-- The main loop that runs every frame
+function AutoDemonStep:_onHeartbeat(dt)
+    if not self.enabled or not self.humanoid or not self.humanoid.Parent then
+        return 
+    end
+    
+    -- Get current input states
+    local isAltDown = UserInputService:IsKeyDown(Enum.KeyCode.LeftAlt)
+    local isMoveDown = isAltDown and (UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.S))
+    
+    -- 1. Handle *both* loops
+    if isMoveDown then
+        -- A. Handle Demon Step Equip/Unequip Loop
+        self.demonStepTimer = self.demonStepTimer + dt
+        -- User's `task.wait(0.1)`
+        if self.demonStepTimer > 0.1 then
+            self.demonStepTimer = 0
+            
+            -- Run in a separate thread to avoid yielding the heartbeat
+            task.spawn(function()
+                local tool = self.localPlayer.Backpack:FindFirstChild("Demon Step")
+                if tool and self.humanoid then
+                    -- This is the core loop
+                    self.humanoid:EquipTool(tool)
+                    tool:Activate()
+                    self.humanoid:UnequipTools()
+                end
+            end)
+        end
+        
+        -- B. Handle Mana Charge Loop
+        self.chargeTimer = self.chargeTimer + dt
+        -- Match user's `wait(0.1)`
+        if self.chargeTimer > 0.1 then
+            self.chargeTimer = 0
+            
+            -- Fire the remote, same as the user's 'G' key example
+            if self.chargeRemote and self.character and not self.character:FindFirstChild("Charge") then
+                self.chargeRemote:FireServer({math.random(1, 10), math.random()})
+            end
+        end
+    elseif self.isMoveDown_last and not isMoveDown then
+        -- We *just* stopped holding W/S or Alt
+        -- Reset timers
+        self.demonStepTimer = 0
+        self.chargeTimer = 0
+        
+        -- Fire empty to stop charging
+        if self.chargeRemote then
+            self.chargeRemote:FireServer()
+        end
+    end
+    
+    -- Update last states for next frame
+    self.isMoveDown_last = isMoveDown
+end
+
+-- Public: Enable the module
+function AutoDemonStep:enable()
+    if self.enabled then return end
+    self.enabled = true
+    
+    -- Reset states
+    self.isMoveDown_last = false
+    self.demonStepTimer = 0
+    self.chargeTimer = 0
+    
+    -- Get character
+    self:_updateCharacter()
+    
+    -- Connect to CharacterAdded
+    self.charAddedConn = self.localPlayer.CharacterAdded:Connect(function(char)
+        self:_updateCharacter()
+    end)
+    
+    -- Connect to Heartbeat
+    self.heartbeatConn = RunService.Heartbeat:Connect(function(dt)
+        self:_onHeartbeat(dt)
+    end)
+end
+
+-- Public: Disable the module
+function AutoDemonStep:disable()
+    if not self.enabled then return end
+    self.enabled = false
+    
+    -- Disconnect listeners
+    if self.heartbeatConn then
+        self.heartbeatConn:Disconnect()
+        self.heartbeatConn = nil
+    end
+    if self.charAddedConn then
+        self.charAddedConn:Disconnect()
+        self.charAddedConn = nil
+    end
+    
+    -- Ensure we stop charging if we were
+    if self.isMoveDown_last then
+        if self.chargeRemote then
+            pcall(function()
+                self.chargeRemote:FireServer()
+            end)
+        end
+    end
+    
+    -- Clear states
+    self.isMoveDown_last = false
+end
+
+-- Public: Cleanup for unload
+function AutoDemonStep:destroy()
+    self:disable()
+end
+
+return AutoDemonStep

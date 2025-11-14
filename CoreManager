@@ -13,6 +13,7 @@
     - Combo Counter
     - Mob ESP
     - Server Browser
+    - Auto Demon Step (NEW)
     
     Uses LinoriaLib for UI management with theme and save support.
 ]]
@@ -94,6 +95,7 @@ local ComboCounter = safeRequire(BRAZIL_HUB_BASE_URL .. "ComboCounter")
 local MobESP = safeRequire(BRAZIL_HUB_BASE_URL .. "MobESPHandler") -- NEW: Load Mob ESP
 local CooldownIndicator = safeRequire(BRAZIL_HUB_BASE_URL .. "CooldownIndicator") -- NEW: Load Cooldown Indicator
 local NoFog = safeRequire(BRAZIL_HUB_BASE_URL .. "NoFog") -- NEW: Load simplified NoFog
+local AutoDemonStep = safeRequire(BRAZIL_HUB_BASE_URL .. "AutoDemonStep") -- NEW: Load Auto Demon Step
 
 -- Load sub-modules
 local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
@@ -137,7 +139,8 @@ local ModuleInstances = {
     transTrail = safeNew(TransTrail, "TransTrail"),
     comboCounter = safeNew(ComboCounter, "ComboCounter", playerGui), -- Pass playerGui
     cooldownIndicator = safeNew(CooldownIndicator, "CooldownIndicator", playerGui), -- NEW: Instantiate Cooldown Indicator
-    noFog = safeNew(NoFog, "NoFog") -- NEW: Instantiate NoFog
+    noFog = safeNew(NoFog, "NoFog"), -- NEW: Instantiate NoFog
+    autoDemonStep = safeNew(AutoDemonStep, "AutoDemonStep"), -- NEW: Instantiate Auto Demon Step
     -- ServerBrowser is not a module, it's built into the UI tabs
 }
 
@@ -184,6 +187,7 @@ local features = {
     NoFog = false, -- NEW: Simple toggle
 	Walkspeed = 16,
 	WalkspeedOverride = false, 
+    AutoDemonStep = false, -- NEW
     -- Server Browser toggle is not needed here as it's just a tab
 }
 
@@ -755,6 +759,14 @@ function UICallbacks.onToggleComboCounter(enabled)
     end
 end
 
+-- NEW: Auto Demon Step Callback
+function UICallbacks.onToggleAutoDemonStep(enabled)
+    features.AutoDemonStep = enabled -- Update global state
+    if ModuleInstances.autoDemonStep then
+        if enabled then ModuleInstances.autoDemonStep:enable() else ModuleInstances.autoDemonStep:disable() end
+    end
+end
+
 
 -- ========================================
 -- UI COMPONENT CREATION
@@ -939,6 +951,11 @@ local function createPuppyHubTabs(tabs, fovManager)
         Text = 'Walkspeed Value', Default = features.Walkspeed, Min = 16, Max = 100, Rounding = 0,
         Callback = UICallbacks.onWalkspeedChanged
     })
+    -- NEW: Add Auto Demon Step toggle
+    movementGroup:AddToggle('AutoDemonStepToggle', {
+        Text = 'Auto Demon Step', Default = features.AutoDemonStep, Tooltip = 'Hold LeftAlt to auto-use Demon Step. Hold W/S to charge mana.',
+        Callback = UICallbacks.onToggleAutoDemonStep
+    })
 
     -- Misc Tab
     local miscGroup = tabs.Misc:AddLeftGroupbox('Miscellaneous')
@@ -1028,6 +1045,7 @@ local function createPuppyHubTabs(tabs, fovManager)
             elseif type(target) == "table" and rawget(target, "_connMgr") and target._connMgr.count then return tostring(target._connMgr:count()) -- For modules using ConnectionManager directly
             elseif type(target) == "table" and rawget(target, "_connectionManager") and target._connectionManager.count then return tostring(target._connectionManager:count()) -- For trinket_esp_handler
             elseif target.loopConnection then return "1" -- Specific for new NoFog
+            elseif target.heartbeatConn then return "1" -- Specific for new AutoDemonStep
             else return "0" end
         end
         
@@ -1113,7 +1131,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     sbui.InfoGroup = infoGroup -- Store reference to groupbox
     
     sbui.PlayerLabel = infoGroup:AddLabel("Select a server")
-    sbui.PingLabel = infoGroup:AddLabel("Ping: N/A")
+    sbui.PingLabel = infoInfo:AddLabel("Ping: N/A")
     sbui.FPSLabel = infoGroup:AddLabel("Server FPS: N/A")
     
     infoGroup:AddBlank(10) -- Add spacing
@@ -1141,6 +1159,7 @@ local function createPuppyHubTabs(tabs, fovManager)
         
         -- NEW: Set new toggles
         if allToggles.NoFogToggle then pcall(allToggles.NoFogToggle.SetValue, allToggles.NoFogToggle, features.NoFog) end
+        if allToggles.AutoDemonStepToggle then pcall(allToggles.AutoDemonStepToggle.SetValue, allToggles.AutoDemonStepToggle, features.AutoDemonStep) end -- NEW
         
         if allToggles.WalkspeedOverrideToggle then pcall(allToggles.WalkspeedOverrideToggle.SetValue, allToggles.WalkspeedOverrideToggle, features.WalkspeedOverride) end
     end
