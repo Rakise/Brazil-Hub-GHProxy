@@ -1131,7 +1131,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     sbui.InfoGroup = infoGroup -- Store reference to groupbox
     
     sbui.PlayerLabel = infoGroup:AddLabel("Select a server")
-    sbui.PingLabel = infoInfo:AddLabel("Ping: N/A")
+    sbui.PingLabel = infoGroup:AddLabel("Ping: N/A") -- FIXED: Was infoInfo
     sbui.FPSLabel = infoGroup:AddLabel("Server FPS: N/A")
     
     infoGroup:AddBlank(10) -- Add spacing
