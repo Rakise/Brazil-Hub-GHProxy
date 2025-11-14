@@ -69,11 +69,23 @@ function SpellPercentage:_initializeOverlays()
              return -- Already initialized
         end
 
-        self.manaBar = self.playerGui:WaitForChild("StatGui", 5):WaitForChild("LeftContainer", 5):WaitForChild("Mana", 5)
-        if not self.manaBar then
-            warn("Could not find Player Mana bar (StatGui.LeftContainer.Mana). Spell Percentage Overlays disabled.")
+        -- UPDATED: Safer chaining for WaitForChild
+        local statGui = self.playerGui:WaitForChild("StatGui", 5)
+        if not statGui then
+            warn("Could not find Player StatGui. Spell Percentage Overlays disabled.")
             return
         end
+        local leftContainer = statGui:WaitForChild("LeftContainer", 5)
+        if not leftContainer then
+            warn("Could not find Player StatGui.LeftContainer. Spell Percentage Overlays disabled.")
+            return
+        end
+        self.manaBar = leftContainer:WaitForChild("Mana", 5)
+        if not self.manaBar then
+            warn("Could not find Player StatGui.LeftContainer.Mana. Spell Percentage Overlays disabled.")
+            return
+        end
+        -- END UPDATED
 
         -- Normal Spell Overlay (Blue, Horizontal)
         self.normal_overlay = Instance.new("Frame")

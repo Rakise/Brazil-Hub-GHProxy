@@ -283,7 +283,7 @@ function PlayerESP:updatePlayerData(player)
                     else
                          label.Text = format("<font color='%s'>[%s]</font> %s", displayColor, playerClass, value)
                     end
-                elseif labelConfig.key == "distance" or labelConfig.key == "rogueName" or labelConfig.key == "edict" or labelConfig.key == "health" or labelConfig.key == "healthPercent" then
+                elseif labelConfig.key == "distance" or labelConfig.key == "rogueName" or labelConfig.key == "edict" or labelConfig.key == "health" or labelConfig.key == "healthPercent" or labelConfig.key == "heldItem" then -- FIXED TYPO HERE
                     -- Apply blue color to the entire line if observing
                      if isObserving then
                           label.Text = format("<font color='%s'>%s</font>", displayColor, labelConfig.format:format(value))

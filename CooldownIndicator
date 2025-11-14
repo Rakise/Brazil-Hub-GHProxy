@@ -285,7 +285,25 @@ function CooldownIndicator:OnCharacterAdded(character)
 end
 
 function CooldownIndicator:enable()
-    if self.enabled or not self.mainFrame then return end
+    if self.enabled then return end -- Already enabled
+    
+    -- NEW: Re-check for UI elements if they were missing during .new()
+    if not self.mainFrame or not self.backpackFrame then
+        self.backpackGui = self.playerGui:FindFirstChild("BackpackGui")
+        self.mainFrame = self.backpackGui and self.backpackGui:FindFirstChild("MainFrame")
+        self.backpackFrame = self.backpackGui and self.backpackGui:FindFirstChild("BackpackFrame")
+        if self.backpackFrame then
+            self.backpackFrame = self.backpackFrame:FindFirstChild("ScrollingFrame")
+        end
+        
+        if not self.mainFrame or not self.backpackFrame then
+             -- Still not found, warn and exit
+            warn("[CooldownIndicator] Backpack UI not found on enable. Module will not function.")
+            return 
+        end
+    end
+    -- END NEW
+
     self.enabled = true
     print("[CooldownIndicator] Enabled")
     

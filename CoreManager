@@ -70,6 +70,9 @@ local function safeCall(func, ...)
 end
 
 
+-- NEW: Load UtilsService first as other modules depend on it
+local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
+
 -- Load existing main-modules
 local PlayerESP = safeRequire(BRAZIL_HUB_BASE_URL .. "PlayerESPHandler")
 local AutoAim = safeRequire(BRAZIL_HUB_BASE_URL .. "Auto-Aim")
@@ -96,7 +99,7 @@ local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
 
 -- Load util-modules
 local ConnectionManager = safeRequire(BRAZIL_HUB_BASE_URL .. "ConnectionManager")
-local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService")
+-- local UtilsService = safeRequire(BRAZIL_HUB_BASE_URL .. "UtilsService") -- MOVED TO TOP
 
 local connMgr = ConnectionManager and ConnectionManager.new() or nil
 
@@ -343,13 +346,14 @@ local function sb_fetchServers()
     -- Run in a new thread to not yield the game
     task.spawn(function()
         local success, response = safeCall(function()
+            -- Ensure request is available
             if not request then
-                warn("request is not available. Cannot fetch servers.")
+                warn("`request` function is not available. Cannot fetch servers.")
                 return nil
             end
             
             local url = string.format(
-                "https://games.roblox.com/v1/games/%d/servers/0?sortOrder=2&excludeFullGames=false&limit=100",
+                "https://roproxy-production-0200.up.railway.app/games/v1/games/%d/servers/0?sortOrder=2&excludeFullGames=false&limit=100",
                 CONFIG.SERVER_BROWSER.GAME_ID
             )
             
@@ -357,7 +361,7 @@ local function sb_fetchServers()
                 Url = url,
                 Method = "GET",
                 Headers = {
-                    ["accept"] = "application/json"
+                    ["Accept"] = "application/json"
                 }
             })
         end)
