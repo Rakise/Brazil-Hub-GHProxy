@@ -117,7 +117,7 @@ end
 
 
 --// Function: AutoAim:getBestNPC
---// Description: Finds the best target within FOV and range
+--// Description: Finds the best target within FOV and range (Rewritten for robustness)
 function AutoAim:getBestNPC(localChar)
     local hrp = localChar:FindFirstChild("HumanoidRootPart")
     if not hrp then print("[AutoAim Error] Local HRP not found"); return end
@@ -125,13 +125,21 @@ function AutoAim:getBestNPC(localChar)
     local camera = Workspace.CurrentCamera
     if not camera then print("[AutoAim Error] Camera not found"); return end
 
-    local mouseRay = camera:ScreenPointToRay(Mouse.X, Mouse.Y)
+    -- Use UserInputService for consistent mouse position
+    local mousePos = UserInputService:GetMouseLocation()
+    local mouseRay = camera:ScreenPointToRay(mousePos.X, mousePos.Y)
     local mouseDir = mouseRay.Direction
     local camPos = camera.CFrame.Position
     local fovMaxRad = math.rad(self.fovMax) 
 
     local closestNPC, minDistSq = nil, self.maxRange * self.maxRange 
     local children = LIVE_FOLDER:GetChildren()
+    
+    -- Setup RaycastParams for visibility check
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    raycastParams.IgnoreWater = true
+    -- We will set FilterDescendantsInstances inside the loop
 
     for i = 1, #children do
         local model = children[i]
@@ -144,19 +152,31 @@ function AutoAim:getBestNPC(localChar)
                 local distSq = (targetPos - hrp.Position).Magnitude^2 
 
                 if distSq <= minDistSq then
+                    -- FOV Check
                     local npcDir = (targetPos - camPos).Unit
                     local dotProduct = mouseDir:Dot(npcDir)
 
-                    if dotProduct >= -1 and dotProduct <= 1 then
+                    -- dotProduct > 0 ensures target is in front of the camera
+                    if dotProduct > 0 and dotProduct <= 1 then 
                          local angleRad = acos(dotProduct)
 
                          if angleRad <= fovMaxRad then
-                             local ray = Ray.new(camPos, (targetHead.Position - camPos).Unit * (targetHead.Position - camPos).Magnitude)
-                             local hitPart = Workspace:FindPartOnRayWithIgnoreList(ray, {localChar, model}) 
+                             -- Visibility Check (Modern Raycast)
+                             local targetHeadPos = targetHead.Position
+                             local rayDirection = targetHeadPos - camPos
+                             
+                             -- Update filter list to ignore self and the current target
+                             raycastParams.FilterDescendantsInstances = {localChar, model} 
+                             
+                             local rayResult = Workspace:Raycast(camPos, rayDirection, raycastParams)
 
-                             if not hitPart then 
+                             if not rayResult then 
+                                 -- No obstruction found
                                  closestNPC = model
                                  minDistSq = distSq
+                             -- else
+                                 -- Debug: print what we hit
+                                 -- print("[AutoAim] Target", model.Name, "obstructed by", rayResult.Instance.Name)
                              end
                          end
                     end
@@ -165,7 +185,12 @@ function AutoAim:getBestNPC(localChar)
         end
     end
 
-    if closestNPC then print("[AutoAim] Target found:", closestNPC.Name) end
+    if closestNPC then 
+        print("[AutoAim] Target found:", closestNPC.Name) 
+    else
+        -- Add this for debugging
+        print("[AutoAim] No valid target found in FOV.")
+    end
     return closestNPC
 end
 
@@ -174,7 +199,7 @@ end
 function AutoAim:OnInputBegan(input, gameProcessed)
     if gameProcessed then return end -- Don't aim if typing in chat, etc.
     
-    if input.UserInputType == Enum.UserInputType.MouseButton3 then
+    if input.UserInputType == Enum.UserInputType.E then
         self.isLockOnHeld = true
         -- We will find the target in the RenderStep loop
     end
@@ -183,7 +208,7 @@ end
 --// Function: AutoAim:OnInputEnded
 --// Description: Handles key releases
 function AutoAim:OnInputEnded(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton3 then
+    if input.UserInputType == Enum.UserInputType.E then
         self.isLockOnHeld = false
         self.lockedTarget = nil -- Release the lock
         print("[AutoAim] Lock released.")
