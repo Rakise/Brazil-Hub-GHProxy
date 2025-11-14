@@ -224,6 +224,7 @@ function AutoAim:OnInputBegan(input, gameProcessed)
     if gameProcessed then return end -- Don't aim if typing in chat, etc.
     
     if input.KeyCode == Enum.KeyCode.E then
+        print("[AutoAim Debug] 'E' Key PRESSED. isLockOnHeld = true") -- NEW DEBUG
         self.isLockOnHeld = true
         -- We will find the target in the RenderStep loop
     end
@@ -255,8 +256,25 @@ function AutoAim:OnRenderStep()
             print("[AutoAim] Tool unequipped, lock released.")
         end
         self.lockedTarget = nil -- Release lock if we switch tools
+        
+        -- NEW DEBUGGING
+        if self.isLockOnHeld then -- Only print if we are trying to aim
+            if equippedTool then
+                print("[AutoAim Debug] Tool check FAILED. Equipped: '" .. equippedTool.Name .. "'. Is in table? " .. tostring(self.toolNames[equippedTool.Name]))
+            else
+                print("[AutoAim Debug] Tool check FAILED. No tool equipped.")
+            end
+        end
+        -- END NEW DEBUGGING
+        
         return
     end
+    
+    -- NEW DEBUGGING
+    if self.isLockOnHeld then
+         print("[AutoAim Debug] Tool check OK. isLockOnHeld: " .. tostring(self.isLockOnHeld))
+    end
+    -- END NEW DEBUGGING
     
     -- Check if we are holding the lock-on button
     if self.isLockOnHeld then
