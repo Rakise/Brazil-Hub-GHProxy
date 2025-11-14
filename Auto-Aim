@@ -2,49 +2,44 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Debris = game:GetService("Debris")
-local RunService = game:GetService("RunService") -- Added RunService
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService") -- Added UserInputService
 
-local LIVE_FOLDER = Workspace:WaitForChild("Live") -- Potential issue if this folder structure changes
+local LIVE_FOLDER = Workspace:WaitForChild("Live")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local RemoteFunction
--- Safer RemoteFunction finding
-local function findRemoteFunction()
-    if game.PlaceId == 14341521240 then -- Specific PlaceId logic
-        for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
-            if obj:IsA("RemoteFunction") and obj.Name == "" then return obj end
-        end
-        warn("[AutoAim] RemoteFunction not found in ReplicatedStorage for PlaceId 14341521240.")
-    else -- General logic
-        local requests = ReplicatedStorage:FindFirstChild("Requests")
-        if requests then
-            local getMouse = requests:FindFirstChild("GetMouse")
-            if getMouse and getMouse:IsA("RemoteFunction") then return getMouse end
-        end
-         warn("[AutoAim] RemoteFunction 'Requests/GetMouse' not found.")
-    end
-    return nil
-end
-RemoteFunction = findRemoteFunction()
+local Mouse = LocalPlayer:GetMouse() -- Still useful for tool logic, though not for aiming
+
+-- Removed all RemoteFunction logic
 
 local AutoAim = {}
 AutoAim.__index = AutoAim
 
 local cos, deg, acos, random = math.cos, math.deg, math.acos, math.random
 local Vector3new, Vector2new = Vector3.new, Vector2.new
+local mousemoverel = mousemoverel or (Input and Input.MouseMove) -- Get the mousemoverel function
 
 function AutoAim.new()
     return setmetatable({
         enabled = false,
         maxRange = 200,
         timeToHit = 0.15,
-        toolNames = {}, -- Initialize as empty hash table
+        toolNames = {}, 
         studsBehindMin = 20,
         studsBehindMax = 30,
         fovMax = 20,
+        
+        mouseSensitivity = 5, -- Lower = faster aiming, Higher = smoother
+        
         targetHistory = {}, 
         historyMaxSize = 10,
-        _cleanupConnection = nil -- Added for history cleanup
+        
+        lockedTarget = nil, -- The target we are currently locked onto
+        isLockOnHeld = false, -- Is MouseButton3 down?
+        
+        _cleanupConnection = nil,
+        _renderStepConnection = nil,
+        _inputBeganConnection = nil,
+        _inputEndedConnection = nil
     }, AutoAim)
 end
 
@@ -52,11 +47,12 @@ function AutoAim:setRange(range) self.maxRange = range end
 function AutoAim:setTimeToHit(time) self.timeToHit = time end
 function AutoAim:setFOV(fov) self.fovMax = fov end
 function AutoAim:setStudsBehindRange(min, max) self.studsBehindMin, self.studsBehindMax = min, max end
+function AutoAim:setMouseSensitivity(sensitivity) self.mouseSensitivity = math.max(1, sensitivity) end
 
 --// Function: AutoAim:updateTargetHistory
 --// Description: Updates the movement history for a specific target
 function AutoAim:updateTargetHistory(target)
-    if not target or not target.Parent then return end -- Check parent validity
+    if not target or not target.Parent then return end 
 
     local hrp = target:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
@@ -83,11 +79,8 @@ function AutoAim:calculateMovementPrediction(target, predictionTime)
     if not target then return Vector3.new(0, 0, 0) end
     local hrp = target:FindFirstChild("HumanoidRootPart")
     if hrp then
-        -- Simple prediction: Current position + velocity * time
         local predictedPos = hrp.Position + hrp.Velocity * predictionTime
-         -- Add slight downward correction for gravity effect (optional)
-        -- predictedPos = predictedPos + Vector3.new(0, -0.5 * 9.81 * predictionTime^2, 0) -- Basic gravity
-        print("[AutoAim] Prediction:", predictedPos)
+        -- print("[AutoAim] Prediction:", predictedPos)
         return predictedPos
     end
     return Vector3.new(0, 0, 0) -- Fallback
@@ -100,35 +93,33 @@ function AutoAim:cleanupTargetHistory()
     local currentTime = tick()
     local cleanupCount = 0
     for target, history in pairs(self.targetHistory) do
-        -- Check if target is still valid and has been updated recently
-        if not target.Parent or (history[#history] and currentTime - history[#history].time > 10) then -- Remove if gone or inactive for 10s
+        if not target.Parent or (history[#history] and currentTime - history[#history].time > 10) then 
             self.targetHistory[target] = nil
             cleanupCount = cleanupCount + 1
         end
     end
-    -- if cleanupCount > 0 then print("[AutoAim] Cleaned up history for", cleanupCount, "targets.") end
 end
 
--- FIX 1: Ensure toolTable is handled correctly (array -> hash)
+--// Function: AutoAim:setTools
 function AutoAim:setTools(toolTable)
     if type(toolTable) == "table" then
-        print("[AutoAim] Setting tools:", toolTable) -- Debug print
+        print("[AutoAim] Setting tools:", toolTable) 
         local hash = {}
-        -- Check if it's an array (has numerical index 1 or is simply empty)
         if toolTable[1] or #toolTable == 0 then
             for i = 1, #toolTable do hash[toolTable[i]] = true end
-        else -- Assume it's already a hash table (like { ["Armis"] = true }) passed from Linoria maybe?
-             hash = toolTable -- Accept hash directly
+        else 
+             hash = toolTable 
         end
         self.toolNames = hash
-        print("[AutoAim] Tool names hash:", self.toolNames) -- Debug print
+        print("[AutoAim] Tool names hash:", self.toolNames)
     end
 end
 
 
--- Slightly modified target selection
+--// Function: AutoAim:getBestNPC
+--// Description: Finds the best target within FOV and range
 function AutoAim:getBestNPC(localChar)
-    local hrp = localChar:FindFirstChild("HumanoidRootPart") -- Use FindFirstChild for safety
+    local hrp = localChar:FindFirstChild("HumanoidRootPart")
     if not hrp then print("[AutoAim Error] Local HRP not found"); return end
 
     local camera = Workspace.CurrentCamera
@@ -137,41 +128,35 @@ function AutoAim:getBestNPC(localChar)
     local mouseRay = camera:ScreenPointToRay(Mouse.X, Mouse.Y)
     local mouseDir = mouseRay.Direction
     local camPos = camera.CFrame.Position
-    local fovMaxRad = math.rad(self.fovMax) -- Use radians for dot product check
+    local fovMaxRad = math.rad(self.fovMax) 
 
-    local closestNPC, minDistSq = nil, self.maxRange * self.maxRange -- Use squared distance
+    local closestNPC, minDistSq = nil, self.maxRange * self.maxRange 
     local children = LIVE_FOLDER:GetChildren()
 
     for i = 1, #children do
         local model = children[i]
-        -- Basic checks first
         if model ~= localChar and model:IsA("Model") then
             local targetHrp = model:FindFirstChild("HumanoidRootPart")
-            local targetHead = model:FindFirstChild("Head") -- Check head for visibility test
+            local targetHead = model:FindFirstChild("Head") 
 
             if targetHrp and targetHead and not model:FindFirstChild("Knocked") then
                 local targetPos = targetHrp.Position
-                local distSq = (targetPos - hrp.Position).Magnitude^2 -- Squared distance
+                local distSq = (targetPos - hrp.Position).Magnitude^2 
 
                 if distSq <= minDistSq then
-                    -- FOV Check using Dot Product (more efficient)
                     local npcDir = (targetPos - camPos).Unit
                     local dotProduct = mouseDir:Dot(npcDir)
 
-                    -- Ensure dot product is within valid range for acos
                     if dotProduct >= -1 and dotProduct <= 1 then
                          local angleRad = acos(dotProduct)
 
                          if angleRad <= fovMaxRad then
-                             -- Visibility Check (Simple Raycast) - Optional but recommended
                              local ray = Ray.new(camPos, (targetHead.Position - camPos).Unit * (targetHead.Position - camPos).Magnitude)
-                             local hitPart = Workspace:FindPartOnRayWithIgnoreList(ray, {localChar, model}) -- Ignore self and target
+                             local hitPart = Workspace:FindPartOnRayWithIgnoreList(ray, {localChar, model}) 
 
-                             if not hitPart then -- No obstruction found
-                                 -- Check if _, onScreen = camera:WorldToViewportPoint(targetHead.Position) -- Simplified check
+                             if not hitPart then 
                                  closestNPC = model
                                  minDistSq = distSq
-                             -- else print("[AutoAim] Target", model.Name, "obstructed by", hitPart.Name)
                              end
                          end
                     end
@@ -184,106 +169,133 @@ function AutoAim:getBestNPC(localChar)
     return closestNPC
 end
 
+--// Function: AutoAim:OnInputBegan
+--// Description: Handles key presses
+function AutoAim:OnInputBegan(input, gameProcessed)
+    if gameProcessed then return end -- Don't aim if typing in chat, etc.
+    
+    if input.UserInputType == Enum.UserInputType.MouseButton3 then
+        self.isLockOnHeld = true
+        -- We will find the target in the RenderStep loop
+    end
+end
+
+--// Function: AutoAim:OnInputEnded
+--// Description: Handles key releases
+function AutoAim:OnInputEnded(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton3 then
+        self.isLockOnHeld = false
+        self.lockedTarget = nil -- Release the lock
+        print("[AutoAim] Lock released.")
+    end
+end
+
+--// Function: AutoAim:OnRenderStep
+--// Description: The main aiming loop
+function AutoAim:OnRenderStep()
+    if not self.enabled or not mousemoverel then return end
+    
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    
+    -- Check if we have a valid tool equipped
+    if not equippedTool or not self.toolNames[equippedTool.Name] then
+        if self.lockedTarget then
+            print("[AutoAim] Tool unequipped, lock released.")
+        end
+        self.lockedTarget = nil -- Release lock if we switch tools
+        return
+    end
+    
+    -- Check if we are holding the lock-on button
+    if self.isLockOnHeld then
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        
+        -- If we don't have a target, find one
+        if not self.lockedTarget then
+            self.lockedTarget = self:getBestNPC(character)
+            if self.lockedTarget then
+                print("[AutoAim] Target locked:", self.lockedTarget.Name)
+            end
+        end
+        
+        -- If we have a valid target, aim at it
+        if self.lockedTarget then
+            -- Validate the target is still good
+            local npcHRP = self.lockedTarget:FindFirstChild("HumanoidRootPart")
+            if not npcHRP or not self.lockedTarget.Parent or self.lockedTarget:FindFirstChild("Knocked") then
+                print("[AutoAim] Locked target became invalid. Releasing.")
+                self.lockedTarget = nil
+                return
+            end
+            
+            -- Update and predict target's position
+            self:updateTargetHistory(self.lockedTarget)
+            local hitPosition = self:calculateMovementPrediction(self.lockedTarget, self.timeToHit)
+
+            -- Apply Studs Behind logic
+            if equippedTool.Name == "Percutiens" then
+                 local charHRP = character:FindFirstChild("HumanoidRootPart")
+                 if charHRP then
+                     local directionToTarget = (npcHRP.Position - charHRP.Position).Unit
+                     hitPosition = hitPosition + directionToTarget * random(self.studsBehindMin, self.studsBehindMax)
+                 end
+            end
+            
+            -- Convert 3D world space to 2D screen space
+            local targetScreenPos, onScreen = camera:WorldToViewportPoint(hitPosition)
+            
+            -- If target is no longer on screen, release lock
+            if not onScreen then
+                print("[AutoAim] Target left screen. Releasing.")
+                self.lockedTarget = nil
+                return
+            end
+
+            -- Get current mouse position
+            local mousePos = UserInputService:GetMouseLocation()
+            
+            -- Calculate the difference (delta)
+            local deltaX = (targetScreenPos.X - mousePos.X) / self.mouseSensitivity
+            local deltaY = (targetScreenPos.Y - mousePos.Y) / self.mouseSensitivity
+            
+            -- Move the mouse
+            mousemoverel(deltaX, deltaY)
+
+        end
+    else
+        -- This is handled by OnInputEnded, but as a fallback
+        if self.lockedTarget then
+            self.lockedTarget = nil
+        end
+    end
+end
+
 
 function AutoAim:enable()
-    if self.enabled or not RemoteFunction then
-         if not RemoteFunction then warn("[AutoAim] Cannot enable, RemoteFunction not found.") end
-         return
+    if self.enabled then return end
+    
+    if not mousemoverel then
+        warn("[AutoAim] 'mousemoverel' function not found. Cannot enable.")
+        return
     end
+    
     self.enabled = true
-    print("[AutoAim] Enabled.")
+    print("[AutoAim] Enabled. Hold MouseButton3 to lock on.")
 
     -- Start periodic cleanup of target history
     self._cleanupConnection = RunService.Heartbeat:Connect(function()
         self:cleanupTargetHistory()
     end)
+    
+    -- Connect RenderStep and Input listeners
+    self._renderStepConnection = RunService.RenderStepped:Connect(function() self:OnRenderStep() end)
+    self._inputBeganConnection = UserInputService.InputBegan:Connect(function(input, gp) self:OnInputBegan(input, gp) end)
+    self._inputEndedConnection = UserInputService.InputEnded:Connect(function(input) self:OnInputEnded(input) end)
 
-    -- Store original OnClientInvoke if needed, then set ours
-    -- local originalOnClientInvoke = RemoteFunction.OnClientInvoke -- Uncomment if restoring is needed on disable
-    RemoteFunction.OnClientInvoke = function()
-        -- Use pcall for safety within the hook
-        local success, result = pcall(function()
-            local character = LocalPlayer.Character
-            if not character or not self.enabled then -- Also check self.enabled
-                return {Hit=Mouse.Hit, Target=Mouse.Target, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
-            end
-
-            local equippedTool = character:FindFirstChildOfClass("Tool")
-            local areaMarkers = Workspace:FindFirstChild("AreaMarkers")
-            if areaMarkers then
-                 -- Cautious TargetFilter setting
-                 pcall(function() Mouse.TargetFilter = areaMarkers:FindFirstChild("The Arena") end)
-            end
-
-            -- Check if tool is selected in the hash table
-            if equippedTool and self.toolNames and self.toolNames[equippedTool.Name] then
-                 print("[AutoAim] Active tool detected:", equippedTool.Name) -- Debug
-                 local targetNPC = self:getBestNPC(character)
-
-                 if targetNPC then
-                    local npcHRP = targetNPC:FindFirstChild("HumanoidRootPart")
-                    local npcHead = targetNPC:FindFirstChild("Head") -- Use head for prediction base? Or HRP? Let's stick to HRP for now.
-
-                    if npcHRP then
-                        self:updateTargetHistory(targetNPC) -- Update history
-
-                        local hitPosition = self:calculateMovementPrediction(targetNPC, self.timeToHit) -- Use simplified prediction
-
-                        -- Add Studs Behind for specific tools if needed (e.g., Percutiens)
-                        if equippedTool.Name == "Percutiens" then
-                             local directionToTarget = (npcHRP.Position - (character:FindFirstChild("HumanoidRootPart") and character.HumanoidRootPart.Position or npcHRP.Position)).Unit
-                             hitPosition = hitPosition + directionToTarget * random(self.studsBehindMin, self.studsBehindMax)
-                             print("[AutoAim] Applied studs behind for Percutiens")
-                        end
-
-
-                        -- Visual Debug Markers (Optional but helpful)
-                        local marker = Instance.new("Part")
-                        marker.Anchored = true
-                        marker.CanCollide = false
-                        marker.Size = Vector3new(0.5, 0.5, 0.5)
-                        marker.Color = Color3.new(0, 1, 0) -- Green for prediction
-                        marker.Material = Enum.Material.Neon
-                        marker.Position = hitPosition
-                        marker.Parent = Workspace
-                        Debris:AddItem(marker, 0.5) -- Shorter life
-
-                        local currentMarker = Instance.new("Part")
-                        currentMarker.Anchored = true
-                        currentMarker.CanCollide = false
-                        currentMarker.Size = Vector3new(0.3, 0.3, 0.3)
-                        currentMarker.Color = Color3.new(1, 0, 0) -- Red for current
-                        currentMarker.Material = Enum.Material.Neon
-                        currentMarker.Position = npcHRP.Position -- Show current HRP pos
-                        currentMarker.Parent = Workspace
-                        Debris:AddItem(currentMarker, 0.5)
-                        -- End Visual Debug
-
-                        print("[AutoAim] Returning predicted Hit CFrame:", hitPosition)
-                        -- Return the calculated hit position. Target needs to be an Instance.
-                        return {Hit=CFrame.new(hitPosition), Target=npcHRP, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
-                    else
-                         print("[AutoAim] Target found but missing HRP.")
-                    end
-                 else
-                     -- print("[AutoAim] No valid target found.") -- Can be spammy
-                 end
-            -- else
-                -- if equippedTool then print("[AutoAim] Tool not selected:", equippedTool.Name) end -- Can be spammy
-            end
-
-            -- Default return if no aim assist applied
-            -- print("[AutoAim] Returning default Mouse Hit.") -- Can be spammy
-            return {Hit=Mouse.Hit, Target=Mouse.Target, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
-        end)
-
-        if not success then
-             warn("[AutoAim] Error in OnClientInvoke:", result)
-             -- Fallback to default mouse properties in case of error
-             return {Hit=Mouse.Hit, Target=Mouse.Target, UnitRay=Mouse.UnitRay, X=Mouse.X, Y=Mouse.Y}
-        end
-        return result
-    end
 end
 
 function AutoAim:disable()
@@ -291,19 +303,29 @@ function AutoAim:disable()
     self.enabled = false
     print("[AutoAim] Disabled.")
     
-    -- Disconnect history cleanup
+    -- Disconnect all connections
     if self._cleanupConnection then
         self._cleanupConnection:Disconnect()
         self._cleanupConnection = nil
     end
-
-    -- Clear history
-    self.targetHistory = {}
-
-    -- Restore original OnClientInvoke or set to nil
-    if RemoteFunction then
-        RemoteFunction.OnClientInvoke = nil -- Or restore original if you saved it
+    if self._renderStepConnection then
+        self._renderStepConnection:Disconnect()
+        self._renderStepConnection = nil
     end
+    if self._inputBeganConnection then
+        self._inputBeganConnection:Disconnect()
+        self._inputBeganConnection = nil
+    end
+    if self._inputEndedConnection then
+        self._inputEndedConnection:Disconnect()
+        self._inputEndedConnection = nil
+    end
+
+    -- Clear history and target
+    self.targetHistory = {}
+    self.lockedTarget = nil
+    self.isLockOnHeld = false
+    
 end
 
 return AutoAim

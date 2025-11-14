@@ -28,6 +28,7 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService") -- NEW: For Server Browser
 local TeleportService = game:GetService("TeleportService") -- NEW: For Server Browser
+local ReplicatedStorage = game:GetService("ReplicatedStorage") -- NEW: For Server Join Event
 
 local LocalPlayer = Players.LocalPlayer
 local playerGui = LocalPlayer:FindFirstChild("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui") -- Ensure playerGui exists
@@ -216,6 +217,13 @@ local CONFIG = {
             StatusLabel = nil,
             ServerListFrame = nil,
             IsFetching = false,
+            -- NEW: Info Panel Elements
+            InfoGroup = nil,
+            PlayerLabel = nil,
+            PingLabel = nil,
+            FPSLabel = nil,
+            TeleportButton = nil,
+            SelectedJobId = nil
         }
     }
 }
@@ -260,17 +268,88 @@ local triggerMonitor = TriggerMonitor and TriggerMonitor.new(connMgr) or nil
 -- SERVER BROWSER LOGIC (INTEGRATED)
 -- ========================================
 
-local function sb_teleportToServer(jobId)
-    if not jobId then return end
+-- Renamed function to be more generic
+local function sb_teleportToJob(jobId)
+    if not jobId then 
+        warn("Teleport failed: No JobId provided.")
+        return 
+    end
     
     local sbui = CONFIG.SERVER_BROWSER.UI_ELEMENTS
     if sbui.StatusLabel then
-        sbui.StatusLabel:SetText("Teleporting to server...")
+        sbui.StatusLabel:SetText("Preparing to join...")
+    end
+
+    -- NEW: Use the ReplicatedStorage Event system instead of TeleportService or UI simulation
+    local success, err = safeCall(function()
+        local requests = ReplicatedStorage:FindFirstChild("Requests")
+        local joinEvent = requests and requests:FindFirstChild("JoinPublicServer")
+        
+        if not joinEvent or not joinEvent:IsA("RemoteEvent") then
+            warn("Cannot find 'JoinPublicServer' RemoteEvent in ReplicatedStorage.Requests")
+            if sbui.StatusLabel then sbui.StatusLabel:SetText("Error: Join event not found!") end
+            return
+        end
+
+        local serverInfo = ReplicatedStorage:FindFirstChild("ServerInfo")
+        
+        --[[
+            OLD LOGIC (Removed):
+            local jobFolder = serverInfo and serverInfo:FindFirstChild(jobId)
+            local serverNameValue = jobFolder and jobFolder:FindFirstChild("ServerName")
+            
+            if serverNameValue and serverNameValue:IsA("StringValue") then
+                -- Method 1: Found ServerName, use it
+                local serverName = serverNameValue.Value
+                warn("Found ServerName:", serverName, "for JobId:", jobId)
+                if sbui.StatusLabel then sbui.StatusLabel:SetText("Joining server: " .. serverName) end
+                joinEvent:FireServer(serverName)
+            else
+                -- Method 2: Could not find ServerName, use JobId as fallback
+                warn("Could not find ServerName for JobId:", jobId, ". Firing with JobId directly.")
+                if sbui.StatusLabel then sbui.StatusLabel:SetText("Joining server: " .. jobId) end
+                joinEvent:FireServer(jobId)
+            end
+        ]]
+
+        -- NEW LOGIC:
+        -- Based on MenuServerClient.lua, the server *always* expects the JobId string,
+        -- not the ServerName value.
+        warn("Firing JoinPublicServer with JobId:", jobId)
+        if sbui.StatusLabel then sbui.StatusLabel:SetText("Joining server: " .. jobId) end
+        joinEvent:FireServer(jobId)
+
+    end)
+    
+    if not success then
+        warn("Error during JoinPublicServer event:", err)
+        if sbui.StatusLabel then sbui.StatusLabel:SetText("Error: Join event failed.") end
+    end
+end
+
+-- NEW: Function to display server info in the right panel
+local function sb_displayServerInfo(server)
+    local sbui = CONFIG.SERVER_BROWSER.UI_ELEMENTS
+    if not sbui.InfoGroup then return end
+
+    -- Store the selected job ID
+    sbui.SelectedJobId = server.id
+
+    -- Update labels
+    if sbui.PlayerLabel then
+        sbui.PlayerLabel:SetText(string.format("Players: %d / %d", server.playing, server.maxPlayers))
+    end
+    if sbui.PingLabel then
+        sbui.PingLabel:SetText(string.format("Ping: %d ms", server.ping))
+    end
+    if sbui.FPSLabel then
+        sbui.FPSLabel:SetText(string.format("Server FPS: %.0f", server.fps))
     end
     
-    safeCall(function()
-        TeleportService:TeleportToPlaceInstance(CONFIG.SERVER_BROWSER.GAME_ID, jobId, Players.LocalPlayer)
-    end)
+    -- Show the teleport button
+    if sbui.TeleportButton then
+        sbui.TeleportButton.Outer.Visible = true
+    end
 end
 
 local function sb_clearServerList()
@@ -281,11 +360,23 @@ local function sb_clearServerList()
             child:Destroy()
         end
     end
+    
+    -- NEW: Clear info panel and hide teleport button
+    if sbui.PlayerLabel then sbui.PlayerLabel:SetText("Select a server") end
+    if sbui.PingLabel then sbui.PingLabel:SetText("Ping: N/A") end
+    if sbui.FPSLabel then sbui.FPSLabel:SetText("Server FPS: N/A") end
+    if sbui.TeleportButton then sbui.TeleportButton.Outer.Visible = false end
+    sbui.SelectedJobId = nil
 end
 
 local function sb_populateUI(serverList)
     local sbui = CONFIG.SERVER_BROWSER.UI_ELEMENTS
     if not sbui.ServerListFrame then return end
+    
+    -- Sort servers by player count (descending)
+    table.sort(serverList, function(a, b)
+        return a.playing > b.playing
+    end)
     
     for _, server in ipairs(serverList) do
         local serverId = server.id
@@ -302,7 +393,8 @@ local function sb_populateUI(serverList)
             Name = serverId,
             Text = text,
             Size = UDim2.new(1, -10, 0, 30),
-            Parent = sbui.ServerListFrame,
+            ZIndex = 10, -- ZINDEX FIX
+            -- Parent = sbui.ServerListFrame, -- Removed from properties
             BackgroundColor3 = Library.MainColor,
             BorderColor3 = Library.OutlineColor,
             BorderMode = Enum.BorderMode.Inset,
@@ -319,16 +411,23 @@ local function sb_populateUI(serverList)
         
         -- Add click event
         button.MouseButton1Click:Connect(function()
-            sb_teleportToServer(serverId)
+            -- NEW: Display info instead of teleporting
+            sb_displayServerInfo(server)
         end)
+        
+        -- Set Parent *after* all properties are set
+        button.Parent = sbui.ServerListFrame
     end
     
     -- Update canvas size
-    task.wait()
-    local layout = sbui.ServerListFrame:FindFirstChildOfClass("UIListLayout")
-    if layout then
-        sbui.ServerListFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y)
-    end
+    -- task.wait() -- This is unreliable
+    -- A better way to wait for layout update:
+    task.delay(0.1, function()
+        local layout = sbui.ServerListFrame:FindFirstChildOfClass("UIListLayout")
+        if layout then
+            sbui.ServerListFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y)
+        end
+    end)
 end
 
 local function sb_fetchServers()
@@ -346,24 +445,35 @@ local function sb_fetchServers()
     -- Run in a new thread to not yield the game
     task.spawn(function()
         local success, response = safeCall(function()
-            -- Ensure request is available
-            if not request then
-                warn("`request` function is not available. Cannot fetch servers.")
+            -- NEW: Use HttpGet as a fallback if request() is not available
+            local httpFetch
+            if typeof(request) == "function" then
+                httpFetch = function(url)
+                    local res = request({ Url = url, Method = "GET", Headers = { ["Accept"] = "application/json" } })
+                    if res and res.Success then
+                        return res.Body
+                    else
+                        warn("request() failed:", res.StatusCode, res.StatusMessage)
+                        return nil
+                    end
+                end
+            elseif typeof(game.HttpGet) == "function" then
+                warn("`request` not found. Falling back to HttpGet for Server Browser.")
+                httpFetch = function(url)
+                    return game:HttpGet(url)
+                end
+            else
+                warn("No HTTP function (request or HttpGet) is available. Cannot fetch servers.")
                 return nil
             end
-            
+
+            -- Use a proxy to bypass Roblox's request limitations
             local url = string.format(
                 "https://roproxy-production-0200.up.railway.app/games/v1/games/%d/servers/0?sortOrder=2&excludeFullGames=false&limit=100",
                 CONFIG.SERVER_BROWSER.GAME_ID
             )
             
-            return request({
-                Url = url,
-                Method = "GET",
-                Headers = {
-                    ["Accept"] = "application/json"
-                }
-            })
+            return httpFetch(url)
         end)
         
         sbui.IsFetching = false
@@ -374,12 +484,7 @@ local function sb_fetchServers()
             return
         end
         
-        if not response.Success then
-            if sbui.StatusLabel then sbui.StatusLabel:SetText(string.format("Error: %d %s", response.StatusCode, response.StatusMessage)) end
-            return
-        end
-        
-        local decodeSuccess, serverData = safeCall(HttpService.JSONDecode, HttpService, response.Body)
+        local decodeSuccess, serverData = safeCall(HttpService.JSONDecode, HttpService, response)
         
         if not decodeSuccess or not serverData or not serverData.data then
             if sbui.StatusLabel then sbui.StatusLabel:SetText("Error: Failed to parse server data.") end
@@ -965,13 +1070,18 @@ local function createPuppyHubTabs(tabs, fovManager)
     end
     connMgr:add(UserInputService.InputBegan:Connect(checkToggleKey))
     
+    -- ===================================
     -- NEW: Server Browser Tab Setup
+    -- ===================================
+    local sbui = CONFIG.SERVER_BROWSER.UI_ELEMENTS
+    
+    -- Left Group: Server List
     local sbGroup = tabs.ServerBrowser:AddLeftGroupbox('Server List')
     
     sbGroup:AddButton('Refresh', sb_fetchServers)
     
     -- Store UI elements in the config
-    CONFIG.SERVER_BROWSER.UI_ELEMENTS.StatusLabel = sbGroup:AddLabel("Click 'Refresh' to load servers.")
+    sbui.StatusLabel = sbGroup:AddLabel("Click 'Refresh' to load servers.")
     
     -- Add a small blank space
     sbGroup:AddBlank(5)
@@ -979,7 +1089,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     local scrollingFrame = Library:Create('ScrollingFrame', {
         Name = "ServerListScroll",
         Size = UDim2.new(1, -4, 0, 400), -- FIXED: Use fixed height and account for padding
-        -- Position = UDim2.new(0, 0, 0, 50), -- REMOVED: Let UIListLayout handle position
+        ZIndex = 6, -- ZINDEX FIX
         Parent = sbGroup.Container,
         BackgroundColor3 = Library.BackgroundColor,
         BorderColor3 = Library.OutlineColor,
@@ -996,7 +1106,24 @@ local function createPuppyHubTabs(tabs, fovManager)
         Parent = scrollingFrame,
     })
     
-    CONFIG.SERVER_BROWSER.UI_ELEMENTS.ServerListFrame = scrollingFrame
+    sbui.ServerListFrame = scrollingFrame
+
+    -- Right Group: Server Info
+    local infoGroup = tabs.ServerBrowser:AddRightGroupbox('Server Info')
+    sbui.InfoGroup = infoGroup -- Store reference to groupbox
+    
+    sbui.PlayerLabel = infoGroup:AddLabel("Select a server")
+    sbui.PingLabel = infoGroup:AddLabel("Ping: N/A")
+    sbui.FPSLabel = infoGroup:AddLabel("Server FPS: N/A")
+    
+    infoGroup:AddBlank(10) -- Add spacing
+    
+    sbui.TeleportButton = infoGroup:AddButton('Teleport to Server', function()
+        sb_teleportToJob(sbui.SelectedJobId)
+    end)
+    
+    -- Hide teleport button initially
+    sbui.TeleportButton.Outer.Visible = false
 
 
     -- Apply initial default states from 'features' table to UI
