@@ -973,10 +973,13 @@ local function createPuppyHubTabs(tabs, fovManager)
     -- Store UI elements in the config
     CONFIG.SERVER_BROWSER.UI_ELEMENTS.StatusLabel = sbGroup:AddLabel("Click 'Refresh' to load servers.")
     
+    -- Add a small blank space
+    sbGroup:AddBlank(5)
+    
     local scrollingFrame = Library:Create('ScrollingFrame', {
         Name = "ServerListScroll",
-        Size = UDim2.new(1, 0, 1, -60), -- Adjust size to fit in groupbox
-        Position = UDim2.new(0, 0, 0, 50),
+        Size = UDim2.new(1, -4, 0, 400), -- FIXED: Use fixed height and account for padding
+        -- Position = UDim2.new(0, 0, 0, 50), -- REMOVED: Let UIListLayout handle position
         Parent = sbGroup.Container,
         BackgroundColor3 = Library.BackgroundColor,
         BorderColor3 = Library.OutlineColor,
