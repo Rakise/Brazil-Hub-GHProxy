@@ -184,7 +184,7 @@ function AutoAim:GetClosestPlayer(localChar)
                                      
                                      if screenDistance < closestDist then
                                          closestDist = screenDistance
-Â                                       closestPlayerChar = character -- Return the Character model
+                                       closestPlayerChar = character -- Return the Character model
                                      end
                                  -- else
                                      -- print("[AutoAim Debug] Player " .. player.Name .. " is visible but not on screen?")
