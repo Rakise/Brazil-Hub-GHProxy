@@ -14,7 +14,7 @@
     - Mob ESP
     - Server Browser
     - Auto Demon Step
-    - Auto Potion (NEW)
+    - Auto Potion
     
     Uses LinoriaLib for UI management with theme and save support.
 ]]
@@ -996,7 +996,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     -- NEW: Auto Potion Group
     if ModuleInstances.autoPotion then
         potionGroup:AddDropdown('AutoPotionSelect', {
-            Title = "Select Potion",
+            -- Title = "Select Potion", -- 'Title' is not a valid prop for Dropdown, 'Text' is, but it's compact
             Values = ModuleInstances.autoPotion.potionnames,
             Default = ModuleInstances.autoPotion.selectedPotion,
             Multi = false,
@@ -1006,16 +1006,27 @@ local function createPuppyHubTabs(tabs, fovManager)
                 end
             end
         })
+
+        potionGroup:AddInput('AutoPotionAmount', {
+            Text = "Amount to craft",
+            Placeholder = "1",
+            Default = "1",
+            Numeric = true,
+            Finished = true, -- Updates when user presses Enter
+            Callback = function(val)
+                if ModuleInstances.autoPotion then
+                    ModuleInstances.autoPotion:setCraftAmount(val)
+                end
+            end
+        })
         
         potionGroup:AddButton('BrewPotion', {
-            Title = "Brew Potion",
-            Description = "Must be near an Alchemy Station",
-            Callback = function()
+            Text = "Start / Stop Crafting", -- CORRECTED: Was Title
+            Tooltip = "Must be near an Alchemy Station. Click to start, click again to stop.", -- CORRECTED: Added Tooltip
+            Func = function() -- CORRECTED: Was Callback
                 if ModuleInstances.autoPotion then
-                    -- Run in a new thread so it doesn't freeze the UI
-                    task.spawn(function()
-                        ModuleInstances.autoPotion:makepotion()
-                    end)
+                    -- The toggle logic will be inside the module
+                    ModuleInstances.autoPotion:toggleCrafting()
                 end
             end
         })
