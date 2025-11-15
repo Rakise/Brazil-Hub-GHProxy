@@ -17,7 +17,7 @@ function AutoPotion.new()
         ["Health Potion"] = {"Scroom", "Scroom","Lava Flower"},
         ["Tespian Elixir"] = {"Moss Plant", "Moss Plant", "Lava Flower", "Scroom"},
         ["Bone Growth"] = {"Trote", "Uncanny Tentacle", "Strange Tentacle"},
-        ["Switch Witch"] = {"Dire Flower", "Glowshroom", "Glowshroom"},
+        ["Switch Witch"] = {"Dire Flower", "Glow Shroom", "Glow Shroom"},
         ["Silver Sun"] = {"Desert Mist", "Freeleaf", "Polar Plant"},
         ["Kingsbane"] ={"Crown Flower", "Vile Seed", "Vile Seed"},
         ["Lordsbane"] = {"Crown Flower", "Crown Flower","Crown Flower"},
