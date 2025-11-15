@@ -1,0 +1,170 @@
+-- AutoPotion.lua
+-- Module for handling automatic potion crafting, based on user-provided logic.
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local AutoPotion = {}
+AutoPotion.__index = AutoPotion
+
+function AutoPotion.new()
+    local self = setmetatable({}, AutoPotion)
+    
+    self.enabled = false
+    self.localPlayer = Players.LocalPlayer
+    
+    -- Table mapping potion names to their required ingredients (from a.lua)
+    self.potions = {
+        ["Health Potion"] = {"Scroom", "Scroom","Lava Flower"},
+        ["Tespian Elixir"] = {"Moss Plant", "Moss Plant", "Lava Flower", "Scroom"},
+        ["Bone Growth"] = {"Trote", "Uncanny Tentacle", "Strange Tentacle"},
+        ["Switch Witch"] = {"Dire Flower", "Glowshroom", "Glowshroom"},
+        ["Silver Sun"] = {"Desert Mist", "Freeleaf", "Polar Plant"},
+        ["Kingsbane"] ={"Crown Flower", "Vile Seed", "Vile Seed"},
+        ["Lordsbane"] = {"Crown Flower", "Crown Flower","Crown Flower"},
+        ["Feather Feet"] = {"Creely", "Dire Flower", "Polar Plant"}
+    }
+    
+    -- List of potion names used for the UI dropdown (from a.lua)
+    self.potionnames = {
+        "Health Potion",
+        "Tespian Elixir",
+        "Bone Growth",
+        "Switch Witch",
+        "Silver Sun",
+        "Kingsbane",
+        "Lordsbane",
+        "Feather Feet"
+    }
+    
+    self.selectedPotion = "Health Potion" -- Default potion
+    
+    return self
+end
+
+-- Finds the closest station (e.g., "AlchemyStation") (from a.lua)
+function AutoPotion:getcloseststation(stationname)
+    local closest = nil
+    local closestmag = 99999999999999999999
+
+    if Workspace:FindFirstChild("Stations") and self.localPlayer.Character and self.localPlayer.Character:FindFirstChild("HumanoidRootPart") then 
+        for i, v in pairs(Workspace.Stations:GetChildren()) do 
+            if v.ClassName == "Model" and v:FindFirstChildOfClass("Part") and v.Name == stationname then 
+                local mag = (self.localPlayer.Character:FindFirstChild("HumanoidRootPart").Position - v:FindFirstChildOfClass("Part").Position).Magnitude
+                if mag < closestmag then 
+                    closestmag = mag
+                    closest = v
+                end
+            end
+        end
+    end
+    return {["Closest"] = closest, ["Distance"] = closestmag}
+end
+
+-- Main function to craft a potion (from a.lua)
+function AutoPotion:makepotion()
+    local recipe = self.potions[self.selectedPotion]
+    local potion = self.selectedPotion
+    print("Selected Potion: " .. potion)
+    
+    if recipe then 
+        local newrec = table.clone(recipe)
+        
+        -- First pass: Check if player has all ingredients
+        for i, v in pairs(self.localPlayer.Backpack:GetChildren()) do 
+            if table.find(newrec, v.Name) and v:FindFirstChild("Quantity") then 
+                local quantity = v.Quantity.Value
+                repeat 
+                    task.wait() 
+                    quantity = quantity - 1
+                    table.remove(newrec, table.find(newrec,v.Name))
+                until not table.find(newrec, v.Name)
+                print("Checked Ingredient: "..v.Name..". Ingredients still needed: "..#newrec)
+            end
+        end
+        
+        -- If newrec is empty, the player has all ingredients
+        if #newrec == 0 then
+            print("Ingredients Found. Attempting to craft " .. potion)
+            
+            -- Second pass: Use the ingredients
+            newrec = table.clone(recipe) -- Reset recipe list for use
+            for i, v in pairs(self.localPlayer.Backpack:GetChildren()) do 
+                if table.find(newrec, v.Name) then 
+                    local quantity = v.Quantity.Value
+
+                    repeat 
+                        task.wait()  
+                        quantity = quantity - 1 
+                        table.remove(newrec, table.find(newrec,v.Name))
+                        
+                        if self.localPlayer.Character and self.localPlayer.Character:FindFirstChild("Humanoid") then 
+                            local humanoid = self.localPlayer.Character:FindFirstChild("Humanoid")
+                            humanoid:UnequipTools()
+                            humanoid:EquipTool(v)
+                            
+                            local rem = v:FindFirstChild("RemoteEvent") 
+                            local pot = self:getcloseststation("AlchemyStation")
+                            task.wait(.1)
+
+                            if rem and type(pot) == "table" and pot.Closest ~= nil and pot.Distance < 10 then 
+                                print("Using ingredient: " .. v.Name)
+                                local args = {
+                                    [1] = pot.Closest.Water.CFrame,
+                                    [2] = pot.Closest.Water
+                                }
+                                rem:FireServer(unpack(args))
+                                
+                                -- If this was the last ingredient, use the ladle
+                                if #newrec == 0 then 
+                                    print("All ingredients added. Using ladle.")
+                                    -- This assumes 'fireclickdetector' is a global function in your environment
+                                    fireclickdetector(pot.Closest.Ladle:FindFirstChildOfClass("ClickDetector"))
+                                    humanoid:UnequipTools()
+                                end
+                            elseif pot.Distance > 10 then 
+                                warn("Error: You are too far from the Alchemy Station.")
+                                return -- Stop crafting if too far
+                            end
+                        end 
+                    until not table.find(newrec, v.Name)
+                end
+            end
+        else 
+            -- Notify player of missing ingredients
+            local missing = ""
+            for i, v in pairs(newrec) do 
+                missing = missing..v..", "
+            end
+            
+            -- Clean up trailing comma
+            if string.sub(missing, -2) == ", " then
+                missing = string.sub(missing, 1, -3)
+            end
+            
+            warn("Missing Ingredients: You are missing: "..missing)
+        end
+    end
+end
+
+-- Called by the UI dropdown
+function AutoPotion:setSelectedPotion(potionName)
+    self.selectedPotion = potionName
+end
+
+-- Standard module functions
+function AutoPotion:enable()
+    self.enabled = true
+end
+
+function AutoPotion:disable()
+    self.enabled = false
+end
+
+function AutoPotion:destroy()
+    self:disable()
+    self.potions = nil
+    self.potionnames = nil
+end
+
+return AutoPotion

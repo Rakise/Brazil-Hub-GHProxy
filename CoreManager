@@ -13,7 +13,8 @@
     - Combo Counter
     - Mob ESP
     - Server Browser
-    - Auto Demon Step (NEW)
+    - Auto Demon Step
+    - Auto Potion (NEW)
     
     Uses LinoriaLib for UI management with theme and save support.
 ]]
@@ -96,6 +97,7 @@ local MobESP = safeRequire(BRAZIL_HUB_BASE_URL .. "MobESPHandler") -- NEW: Load 
 local CooldownIndicator = safeRequire(BRAZIL_HUB_BASE_URL .. "CooldownIndicator") -- NEW: Load Cooldown Indicator
 local NoFog = safeRequire(BRAZIL_HUB_BASE_URL .. "NoFog") -- NEW: Load simplified NoFog
 local AutoDemonStep = safeRequire(BRAZIL_HUB_BASE_URL .. "AutoDemonStep") -- NEW: Load Auto Demon Step
+local AutoPotion = safeRequire(BRAZIL_HUB_BASE_URL .. "AutoPotion") -- NEW: Load Auto Potion
 
 -- Load sub-modules
 local FOVCircleManager = safeRequire(BRAZIL_HUB_BASE_URL .. "FOVCircleManager")
@@ -141,6 +143,7 @@ local ModuleInstances = {
     cooldownIndicator = safeNew(CooldownIndicator, "CooldownIndicator", playerGui), -- NEW: Instantiate Cooldown Indicator
     noFog = safeNew(NoFog, "NoFog"), -- NEW: Instantiate NoFog
     autoDemonStep = safeNew(AutoDemonStep, "AutoDemonStep"), -- NEW: Instantiate Auto Demon Step
+    autoPotion = safeNew(AutoPotion, "AutoPotion"), -- NEW: Instantiate Auto Potion
     -- ServerBrowser is not a module, it's built into the UI tabs
 }
 
@@ -767,7 +770,6 @@ function UICallbacks.onToggleAutoDemonStep(enabled)
     end
 end
 
-
 -- ========================================
 -- UI COMPONENT CREATION
 -- ========================================
@@ -962,6 +964,7 @@ local function createPuppyHubTabs(tabs, fovManager)
     local triggersGroup = tabs.Misc:AddRightGroupbox('Triggers') -- Move triggers here
     local observeGroup = tabs.Misc:AddLeftGroupbox('Observe & Chat') -- Group Observe/Chat
     local connectionsGroup = tabs.Misc:AddRightGroupbox('System Info') -- Move connections here
+    local potionGroup = tabs.Misc:AddLeftGroupbox('Auto Potion') -- NEW: Potion Group
 
     miscGroup:AddToggle('BetterLeaderboard', {
         Text = 'Better Leaderboard', Default = false, Tooltip = 'Use enhanced leaderboard',
@@ -989,6 +992,36 @@ local function createPuppyHubTabs(tabs, fovManager)
         Text = 'Show Chat Log UI', Default = features.ShowChatLogGui, Tooltip = 'Toggle the chat log UI',
         Callback = UICallbacks.onToggleChatLogUI
     })
+
+    -- NEW: Auto Potion Group
+    if ModuleInstances.autoPotion then
+        potionGroup:AddDropdown('AutoPotionSelect', {
+            Title = "Select Potion",
+            Values = ModuleInstances.autoPotion.potionnames,
+            Default = ModuleInstances.autoPotion.selectedPotion,
+            Multi = false,
+            Callback = function(val)
+                if ModuleInstances.autoPotion then
+                    ModuleInstances.autoPotion:setSelectedPotion(val)
+                end
+            end
+        })
+        
+        potionGroup:AddButton('BrewPotion', {
+            Title = "Brew Potion",
+            Description = "Must be near an Alchemy Station",
+            Callback = function()
+                if ModuleInstances.autoPotion then
+                    -- Run in a new thread so it doesn't freeze the UI
+                    task.spawn(function()
+                        ModuleInstances.autoPotion:makepotion()
+                    end)
+                end
+            end
+        })
+    else
+        potionGroup:AddLabel("Auto Potion module failed to load.")
+    end
 
     -- Connections Info group
     local espLabel = connectionsGroup:AddLabel('PlayerESP: ...')
