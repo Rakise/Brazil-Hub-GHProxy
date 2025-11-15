@@ -1,6 +1,3 @@
--- AutoPotion.lua
--- Module for handling automatic potion crafting, based on user-provided logic.
-
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
@@ -76,97 +73,82 @@ function AutoPotion:_doSingleCraft()
     
     if not recipe then return "NO_RECIPE" end
     
-    local newrec = table.clone(recipe)
+    --[[
+        REMOVED THE FIRST PASS.
+        We will now check for ingredients one-by-one as we use them.
+        This prevents trying to use items that have been destroyed.
+    ]]
     
-    -- First pass: Check if player has all ingredients
-    for i, v in pairs(self.localPlayer.Backpack:GetChildren()) do 
-        if table.find(newrec, v.Name) and v:FindFirstChild("Quantity") then 
-            local quantity = v.Quantity.Value
-            repeat 
-                task.wait() 
-                quantity = quantity - 1
-                table.remove(newrec, table.find(newrec,v.Name))
-            until not table.find(newrec, v.Name)
-            print("Checked Ingredient: "..v.Name..". Ingredients still needed: "..#newrec)
-        end
+    print("Checking ingredients as we go...")
+    
+    -- Get character and humanoid ONCE.
+    local char = self.localPlayer.Character
+    local humanoid = char and char:FindFirstChild("Humanoid")
+    if not humanoid then
+        warn("Error: Character or Humanoid not found. Stopping.")
+        return "ERROR"
     end
     
-    -- If newrec is not empty, we are missing ingredients
-    if #newrec > 0 then
-        local missing = ""
-        for i, v in pairs(newrec) do 
-            missing = missing..v..", "
-        end
-        if string.sub(missing, -2) == ", " then
-            missing = string.sub(missing, 1, -3)
-        end
-        warn("Missing Ingredients: You are missing: "..missing)
-        return "MISSING_INGREDIENTS"
+    -- Get the station ONCE.
+    local pot = self:getcloseststation("AlchemyStation")
+    if not pot or not pot.Closest or pot.Distance > 10 then
+        warn("Error: You are too far from the Alchemy Station.")
+        return "TOO_FAR"
     end
     
-    print("Ingredients Found. Proceeding with craft...")
-    
-    -- Second pass: Use the ingredients
-    newrec = table.clone(recipe) -- Reset recipe list for use
-    for i, v in pairs(self.localPlayer.Backpack:GetChildren()) do 
-        if not self.isCrafting then return "CANCELLED" end -- Check if user cancelled during loop
+    -- NEW LOGIC: Iterate through the RECIPE, not the backpack.
+    for i, ingredientName in ipairs(recipe) do
+        if not self.isCrafting then return "CANCELLED" end -- Check if user cancelled
 
-        if table.find(newrec, v.Name) then 
-            local quantity = v.Quantity.Value
-
-            repeat 
-                if not self.isCrafting then return "CANCELLED" end -- Check again
-                
-                task.wait()  
-                quantity = quantity - 1 
-                table.remove(newrec, table.find(newrec,v.Name))
-                
-                local char = self.localPlayer.Character
-                local humanoid = char and char:FindFirstChild("Humanoid")
-                
-                if humanoid then 
-                    humanoid:UnequipTools()
-                    humanoid:EquipTool(v)
-                    
-                    local rem = v:FindFirstChild("RemoteEvent") 
-                    local pot = self:getcloseststation("AlchemyStation")
-                    task.wait(0.2) -- Increased wait after equip
-
-                    if rem and type(pot) == "table" and pot.Closest ~= nil and pot.Distance < 10 then 
-                        print("Using ingredient: " .. v.Name)
-                        local args = {
-                            [1] = pot.Closest.Water.CFrame,
-                            [2] = pot.Closest.Water
-                        }
-                        rem:FireServer(unpack(args))
-                        task.wait(0.2) -- Wait for server to process event
-                        
-                        -- If this was the last ingredient, use the ladle
-                        if #newrec == 0 then 
-                            print("All ingredients added. Using ladle.")
-                            -- This assumes 'fireclickdetector' is a global function in your environment
-                            if fireclickdetector then
-                                fireclickdetector(pot.Closest.Ladle:FindFirstChildOfClass("ClickDetector"))
-                            else
-                                warn("fireclickdetector is not available!")
-                            end
-                            humanoid:UnequipTools()
-                            task.wait(0.5) -- Wait for ladle animation
-                        end
-                    elseif pot.Distance > 10 then 
-                        warn("Error: You are too far from the Alchemy Station.")
-                        return "TOO_FAR" -- Stop crafting if too far
-                    else
-                         warn("Error: Could not find remote or station. Stopping.")
-                         return "ERROR"
-                    end
-                else
-                    warn("Error: Character or Humanoid not found. Stopping.")
-                    return "ERROR"
-                end 
-            until not table.find(newrec, v.Name)
+        -- Find a valid tool in the backpack that matches the ingredient name
+        local v = self.localPlayer.Backpack:FindFirstChild(ingredientName)
+        
+        -- If 'v' is nil, we've run out of this ingredient.
+        if not v then
+            warn("Missing Ingredient: Cannot find '" .. ingredientName .. "' in backpack.")
+            return "MISSING_INGREDIENTS"
         end
+        
+        -- We found the ingredient. Now equip and use it.
+        humanoid:EquipTool(v)
+        
+        local rem = v:FindFirstChild("RemoteEvent") 
+        task.wait(0.2) -- Increased wait after equip
+
+        if rem then 
+            print("Using ingredient: " .. v.Name)
+            local args = {
+                [1] = pot.Closest.Water.CFrame,
+                [2] = pot.Closest.Water
+            }
+            rem:FireServer(unpack(args))
+            -- Wait for the game to use the item and auto-unequip
+            task.wait(0.3) 
+        else
+             warn("Error: Could not find remote on item '" .. v.Name .. "'. Stopping.")
+             return "ERROR"
+        end
+        
+        -- The loop will now continue to the next item in the recipe.
+        -- If it needs "Scroom" again, it will find the *next* "Scroom" in the backpack.
     end
+    
+    -- If the loop finished, all ingredients were added. Now use the ladle.
+    print("All ingredients added. Using ladle.")
+    
+    if fireclickdetector then
+        local ladleDetector = pot.Closest.Ladle:FindFirstChildOfClass("ClickDetector")
+        if ladleDetector then
+            fireclickdetector(ladleDetector)
+        else
+            warn("Could not find Ladle ClickDetector!")
+        end
+    else
+        warn("fireclickdetector is not available!")
+    end
+    
+    -- We don't need to unequip, the game/ladle does it.
+    task.wait(0.5) -- Wait for ladle animation
     
     return "SUCCESS"
 end
