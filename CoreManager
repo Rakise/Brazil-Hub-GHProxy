@@ -1020,16 +1020,15 @@ local function createPuppyHubTabs(tabs, fovManager)
             end
         })
         
-        potionGroup:AddButton('BrewPotion', {
-            Text = "Start / Stop Crafting", -- CORRECTED: Was Title
-            Tooltip = "Must be near an Alchemy Station. Click to start, click again to stop.", -- CORRECTED: Added Tooltip
-            Func = function() -- CORRECTED: Was Callback
-                if ModuleInstances.autoPotion then
-                    -- The toggle logic will be inside the module
-                    ModuleInstances.autoPotion:toggleCrafting()
-                end
+        local brewButton = potionGroup:AddButton("Start / Stop Crafting", function()
+            if ModuleInstances.autoPotion then
+                -- The toggle function already spawns a new thread
+                ModuleInstances.autoPotion:toggleCrafting()
             end
-        })
+        end)
+        
+        -- Add the tooltip separately to the returned button object
+        brewButton:AddTooltip("Must be near an Alchemy Station. Click to start, click again to stop.")
     else
         potionGroup:AddLabel("Auto Potion module failed to load.")
     end
